@@ -9,11 +9,11 @@ jobs:
   main:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Check out repository
         uses: actions/checkout@v4
-      - name: Setup Rust
+      - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
-      - name: Setup cache
+      - name: Set up cache
         uses: Swatinem/rust-cache@v2
       - name: Run Clippy
         run: cargo clippy -- -W clippy::pedantic -D warnings
