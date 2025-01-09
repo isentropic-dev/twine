@@ -1,0 +1,21 @@
+name: CI
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  main:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Setup cache
+        uses: Swatinem/rust-cache@v2
+      - name: Run Clippy
+        run: cargo clippy -- -W clippy::pedantic -D warnings
+      - name: Run tests
+        run: cargo test
