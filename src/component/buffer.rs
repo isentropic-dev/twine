@@ -123,6 +123,7 @@ impl Drop for HeapBuffer {
 /// - The buffer's size is statically allocated and cannot change at runtime.
 /// - Alignment checks ensure that the buffer meets the specified requirements,
 ///   but padding for misalignment is not yet supported.
+#[repr(align(8))]
 pub(crate) struct StackBuffer<const N: usize> {
     data: [u8; N],
     size: usize,
@@ -195,7 +196,7 @@ mod tests {
 
     #[test]
     fn stack_buffer_ok() {
-        let mut buffer = StackBuffer::<256>::new(128, 16).expect("Failed to create StackBuffer");
+        let mut buffer = StackBuffer::<256>::new(128, 8).expect("Failed to create StackBuffer");
         assert_eq!(buffer.as_slice().len(), 128);
 
         let ptr = buffer.as_ptr();
