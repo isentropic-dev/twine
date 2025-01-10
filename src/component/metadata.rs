@@ -1,3 +1,5 @@
+use super::ValueKind;
+
 /// Represents the metadata for a component's input and output structures.
 ///
 /// This struct defines the memory layout and field information for both input
@@ -30,21 +32,8 @@ pub(crate) struct Struct {
 #[derive(Debug, Clone)]
 pub(crate) struct Field {
     pub(crate) name: String,
-    pub(crate) kind: FieldKind,
+    pub(crate) kind: ValueKind,
     pub(crate) offset: usize,
-}
-
-/// Enumerates the kinds of data a field can represent.
-///
-/// This defines the basic types of supported fields.
-#[derive(Debug, Clone, Copy)]
-pub(crate) enum FieldKind {
-    /// A boolean value (`true` or `false`).
-    Boolean,
-    /// An integer value (`i32`).
-    Integer,
-    /// A floating-point number (`f64`).
-    Number,
 }
 
 /// Errors that can occur during metadata validation.
@@ -119,22 +108,22 @@ impl Struct {
     }
 }
 
-impl FieldKind {
-    /// Returns the alignment of this field kind in bytes.
+impl ValueKind {
+    /// Returns the alignment of this value kind in bytes.
     fn alignment(self) -> usize {
         match self {
-            FieldKind::Boolean => std::mem::align_of::<bool>(),
-            FieldKind::Integer => std::mem::align_of::<i32>(),
-            FieldKind::Number => std::mem::align_of::<f64>(),
+            ValueKind::Boolean => std::mem::align_of::<bool>(),
+            ValueKind::Integer => std::mem::align_of::<i32>(),
+            ValueKind::Number => std::mem::align_of::<f64>(),
         }
     }
 
-    /// Returns the size of this field kind in bytes.
+    /// Returns the size of this value kind in bytes.
     fn size(self) -> usize {
         match self {
-            FieldKind::Boolean => std::mem::size_of::<bool>(),
-            FieldKind::Integer => std::mem::size_of::<i32>(),
-            FieldKind::Number => std::mem::size_of::<f64>(),
+            ValueKind::Boolean => std::mem::size_of::<bool>(),
+            ValueKind::Integer => std::mem::size_of::<i32>(),
+            ValueKind::Number => std::mem::size_of::<f64>(),
         }
     }
 }
@@ -143,10 +132,10 @@ impl FieldKind {
 mod tests {
     use super::*;
 
-    /// Creates a `Vec<Field>` from an iterator of `(FieldKind, &str, usize)`.
+    /// Creates a `Vec<Field>` from an iterator of `(ValueKind, &str, usize)`.
     fn create_fields<I>(iter: I) -> Vec<Field>
     where
-        I: IntoIterator<Item = (FieldKind, &'static str, usize)>,
+        I: IntoIterator<Item = (ValueKind, &'static str, usize)>,
     {
         iter.into_iter()
             .map(|(kind, name, offset)| Field {
@@ -161,11 +150,11 @@ mod tests {
     fn validate_metadata() {
         let valid_struct = Struct {
             fields: create_fields(vec![
-                (FieldKind::Boolean, "flag", 0),
-                (FieldKind::Integer, "count", 4),
-                (FieldKind::Number, "value", 8),
-                (FieldKind::Integer, "mode", 16),
-                (FieldKind::Number, "average", 24),
+                (ValueKind::Boolean, "flag", 0),
+                (ValueKind::Integer, "count", 4),
+                (ValueKind::Number, "value", 8),
+                (ValueKind::Integer, "mode", 16),
+                (ValueKind::Number, "average", 24),
             ]),
             alignment: 8,
             size: 32,
@@ -182,8 +171,8 @@ mod tests {
             (
                 Struct {
                     fields: create_fields(vec![
-                        (FieldKind::Boolean, "flag", 0),
-                        (FieldKind::Integer, "overlap", 0), // Overlaps with 'flag'
+                        (ValueKind::Boolean, "flag", 0),
+                        (ValueKind::Integer, "overlap", 0), // Overlaps with 'flag'
                     ]),
                     alignment: 8,
                     size: 8,
@@ -197,8 +186,8 @@ mod tests {
             (
                 Struct {
                     fields: create_fields(vec![
-                        (FieldKind::Boolean, "flag", 0),
-                        (FieldKind::Integer, "misaligned", 5), // Misaligned offset
+                        (ValueKind::Boolean, "flag", 0),
+                        (ValueKind::Integer, "misaligned", 5), // Misaligned offset
                     ]),
                     alignment: 8,
                     size: 16,
@@ -211,8 +200,8 @@ mod tests {
             (
                 Struct {
                     fields: create_fields(vec![
-                        (FieldKind::Boolean, "flag", 0),
-                        (FieldKind::Number, "out_of_bounds", 24), // Ends at 32, exceeds size
+                        (ValueKind::Boolean, "flag", 0),
+                        (ValueKind::Number, "out_of_bounds", 24), // Ends at 32, exceeds size
                     ]),
                     alignment: 8,
                     size: 28,
@@ -225,8 +214,8 @@ mod tests {
             (
                 Struct {
                     fields: create_fields(vec![
-                        (FieldKind::Boolean, "flag", 0),
-                        (FieldKind::Integer, "count", 4),
+                        (ValueKind::Boolean, "flag", 0),
+                        (ValueKind::Integer, "count", 4),
                     ]),
                     alignment: 3, // Invalid alignment (must be power of two)
                     size: 16,
