@@ -1,79 +1,33 @@
 mod buffer;
 mod metadata;
-mod processor;
+mod provider;
+mod value;
 
-use processor::Processor;
+pub(crate) use value::{Value, ValueKind};
 
-pub(crate) struct Component<P: Processor> {
-    pub(crate) inputs: Box<[Value]>,
-    pub(crate) outputs: Box<[Value]>,
-    processor: P,
+/// A boxed function that computes outputs from inputs.
+///
+/// # Requirements
+///
+/// - If an error (`Err`) is returned, the `outputs` slice remains unchanged.
+/// - On success (`Ok(())`), the function fully overwrites the `outputs` slice.
+pub(crate) type CallFn = Box<dyn Fn(&[Value], &mut [Value]) -> Result<(), String>>;
+
+/// Represents a component with inputs, outputs, and a computation function.
+///
+/// Maintains the current inputs and outputs, and uses `CallFn` to compute new
+/// outputs based on the inputs.
+pub(crate) struct Component {
+    call_fn: CallFn,
+    inputs: Box<[Value]>,
+    outputs: Box<[Value]>,
 }
 
-impl<P: Processor> Component<P> {
-    /// Creates a new `Component` instance.
+impl Component {
+    /// Updates the component with new input values and computes outputs.
     ///
-    /// Initializes the component's inputs and outputs based on the processor's
-    /// expected input and output kinds. Performs an initial update using the
-    /// processor to populate the outputs.
-    ///
-    /// In debug builds, verifies that the processor defines at least one
-    /// expected input and output kind and validates that the provided inputs
-    /// match the processor's expected input kinds.
-    ///
-    /// # Parameters
-    ///
-    /// - `inputs`: A slice containing the initial input values.
-    /// - `processor`: Defines input/output kinds and performs the computation.
-    ///
-    /// # Returns
-    ///
-    /// - `Ok(Self)`: A new `Component` instance.
-    /// - `Err(String)`: Returned if the processor's initial computation fails.
-    ///
-    /// # Debug Assertions
-    ///
-    /// - In debug builds, panics if:
-    ///   - The processor does not define at least one input and one output kind.
-    ///   - The provided `inputs` do not match the processor's expected input kinds.
-    ///   - The computed `outputs` do not match the processor's expected output kinds.
-    ///
-    /// # Undefined Behavior
-    ///
-    /// - In release builds, it is the responsibility of the system using the
-    ///   `Component` to ensure that:
-    ///   - The processor defines at least one input and output kind.
-    ///   - The `inputs` match the processor's expected input kinds.
-    ///
-    /// Failure to adhere to these requirements results in undefined behavior.
-    pub(crate) fn new(inputs: &[Value], processor: P) -> Result<Self, String> {
-        debug_assert!(
-            !processor.expected_input_kinds().is_empty(),
-            "Processor must have at least one expected input kind."
-        );
-        debug_assert!(
-            !processor.expected_output_kinds().is_empty(),
-            "Processor must have at least one expected output kind."
-        );
-
-        let mut component = Self {
-            inputs: default_values_from_kinds(processor.expected_input_kinds()),
-            outputs: default_values_from_kinds(processor.expected_output_kinds()),
-            processor,
-        };
-
-        component.update(inputs)?;
-
-        Ok(component)
-    }
-
-    /// Updates the component with new input values.
-    ///
-    /// Computes new outputs using the processor and updates the component's
-    /// state atomically. In debug builds, validates that the inputs match the
-    /// processor's expected input kinds and that the computed outputs match the
-    /// expected output kinds. If an error occurs, the component's state (inputs
-    /// and outputs) remains unchanged.
+    /// If an error occurs during computation, the component’s inputs and
+    /// outputs remain unchanged; otherwise, both are updated atomically.
     ///
     /// # Parameters
     ///
@@ -81,114 +35,82 @@ impl<P: Processor> Component<P> {
     ///
     /// # Returns
     ///
-    /// - `Ok(())`: If the update completes successfully.
-    /// - `Err(String)`: If the processor's computation fails during the update.
+    /// - `Ok(())` if the computation is successful.
+    /// - `Err(String)` if the computation fails.
     ///
-    /// # Debug Assertions
+    /// # Panics (Debug Build Only)
     ///
-    /// - In debug builds, panics if:
-    ///   - The provided `inputs` do not match the processor's expected input kinds.
-    ///   - The computed `outputs` do not match the processor's expected output kinds.
+    /// - If `inputs` do not match the expected kinds.
+    /// - If computed outputs do not match the expected kinds.
     ///
-    /// # Undefined Behavior
+    /// # Behavior (Release Build)
     ///
-    /// - In release builds, it is the responsibility of the system using the
-    ///   `Component` to ensure that:
-    ///   - The `inputs` match the processor's expected input kinds.
-    ///   - The `outputs` are consumed in a manner consistent with the
-    ///     processor's expected output kinds.
-    ///
-    /// Failure to adhere to these requirements results in undefined behavior.
-    pub(crate) fn update(&mut self, inputs: &[Value]) -> Result<(), String> {
+    /// Caller must ensure `inputs` match the expected kinds; otherwise,
+    /// behavior is unspecified.
+    pub(crate) fn call(&mut self, inputs: &[Value]) -> Result<(), String> {
         if cfg!(debug_assertions) {
-            assert_value_kinds(inputs, self.processor.expected_input_kinds(), "Input");
+            value::validate_kinds(
+                inputs.iter().map(ValueKind::from),
+                self.inputs.iter().map(ValueKind::from),
+            )
+            .expect("Input kinds do not match the expected kinds.");
+
+            let mut outputs = self.outputs.clone();
+            (self.call_fn)(inputs, &mut outputs)?;
+
+            value::validate_kinds(
+                outputs.iter().map(ValueKind::from),
+                self.outputs.iter().map(ValueKind::from),
+            )
+            .expect("Output kinds do not match the expected kinds.");
+
+            self.outputs.copy_from_slice(&outputs);
+        } else {
+            (self.call_fn)(inputs, &mut self.outputs)?;
         }
 
-        self.processor.compute(inputs, &mut self.outputs)?;
         self.inputs.copy_from_slice(inputs);
-
-        if cfg!(debug_assertions) {
-            assert_value_kinds(
-                &self.outputs,
-                self.processor.expected_output_kinds(),
-                "Output",
-            );
-        }
-
         Ok(())
     }
-}
 
-/// A value used as input or output by a `Component`.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) enum Value {
-    /// A boolean value (`true` or `false`).
-    Boolean(bool),
-    /// A 32-bit signed integer.
-    Integer(i32),
-    /// A 64-bit floating-point number.
-    Number(f64),
-}
-
-/// Describes the type of a `Value`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ValueKind {
-    /// A boolean.
-    Boolean,
-    /// A 32-bit signed integer.
-    Integer,
-    /// A 64-bit floating-point number.
-    Number,
-}
-
-impl From<&Value> for ValueKind {
-    fn from(value: &Value) -> Self {
-        match value {
-            Value::Boolean(_) => ValueKind::Boolean,
-            Value::Integer(_) => ValueKind::Integer,
-            Value::Number(_) => ValueKind::Number,
-        }
+    /// Returns a copy of the input at the given index, or `None` if out of bounds.
+    pub(crate) fn get_input(&self, index: usize) -> Option<Value> {
+        self.inputs.get(index).copied()
     }
-}
 
-/// Creates default `Value` instances for each `ValueKind` in the provided slice.
-fn default_values_from_kinds(kinds: &[ValueKind]) -> Box<[Value]> {
-    kinds
-        .iter()
-        .map(|kind| match kind {
-            ValueKind::Boolean => Value::Boolean(false),
-            ValueKind::Integer => Value::Integer(0),
-            ValueKind::Number => Value::Number(0.0),
-        })
-        .collect::<Vec<_>>()
-        .into_boxed_slice()
-}
+    /// Returns a copy of the input at the given index without bounds checks.
+    ///
+    /// # Safety
+    ///
+    /// Caller must ensure the input index is within valid range; otherwise this is
+    /// undefined behavior.
+    pub(crate) unsafe fn get_input_unchecked(&self, index: usize) -> Value {
+        *self.inputs.get_unchecked(index)
+    }
 
-/// Validates that a slice of `Value` matches the expected kinds.
-///
-/// # Parameters
-///
-/// - `values`: A slice of `Value` to validate.
-/// - `expected_kinds`: A slice of `ValueKind` representing the expected kinds.
-/// - `context`: A string describing the validation context (e.g., "Input" or "Output").
-///
-/// # Panics
-///
-/// Panics if the number of values does not match the number of expected kinds,
-/// or if the kinds of `values` do not match `expected_kinds`.
-fn assert_value_kinds(values: &[Value], expected_kinds: &[ValueKind], context: &str) {
-    let kinds: Vec<_> = values.iter().map(ValueKind::from).collect();
-    assert_eq!(
-        kinds, expected_kinds,
-        "{context} validation failed: expected {expected_kinds:?}, but received {kinds:?}.",
-    );
+    /// Returns a copy of the output at the given index, or `None` if out of bounds.
+    pub(crate) fn get_output(&self, index: usize) -> Option<Value> {
+        self.outputs.get(index).copied()
+    }
+
+    /// Returns a copy of the output at the given index without bounds checks.
+    ///
+    /// # Safety
+    ///
+    /// Caller must ensure the output index is within valid range; otherwise this is
+    /// undefined behavior.
+    pub(crate) unsafe fn get_output_unchecked(&self, index: usize) -> Value {
+        *self.outputs.get_unchecked(index)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// A mock implementation of the `Processor` trait for testing.
+    use provider::{Error as ProviderError, Provider};
+
+    /// A mock component provider for testing purposes.
     ///
     /// - Expects two inputs: an integer and a boolean.
     /// - Produces one output: a floating-point number.
@@ -197,105 +119,127 @@ mod tests {
     ///     it returns an error: `"Invalid input combination: 26 and true"`.
     ///   - Otherwise, it computes the output as:
     ///     - `inputs[0]` cast to `f64`, doubled if `inputs[1]` is `true`.
-    struct MockProcessor;
+    struct MockProvider;
 
-    impl Processor for MockProcessor {
-        fn expected_input_kinds(&self) -> &[ValueKind] {
+    impl Provider for MockProvider {
+        fn expected_inputs(&self) -> &[ValueKind] {
             &[ValueKind::Integer, ValueKind::Boolean]
         }
 
-        fn expected_output_kinds(&self) -> &[ValueKind] {
+        fn expected_outputs(&self) -> &[ValueKind] {
             &[ValueKind::Number]
         }
 
-        fn compute(&mut self, inputs: &[Value], outputs: &mut [Value]) -> Result<(), String> {
-            let i = match &inputs[0] {
-                Value::Integer(val) => *val,
-                _ => unreachable!("Expected an integer as the first input"),
-            };
-            let b = match &inputs[1] {
-                Value::Boolean(val) => *val,
-                _ => unreachable!("Expected a boolean as the second input"),
-            };
+        fn provide_call_fn(&self) -> CallFn {
+            Box::new(|inputs, outputs| {
+                let i = match inputs.first() {
+                    Some(Value::Integer(val)) => *val,
+                    _ => return Err("Expected an integer as the first input.".to_string()),
+                };
+                let b = match inputs.get(1) {
+                    Some(Value::Boolean(val)) => *val,
+                    _ => return Err("Expected a boolean as the second input.".to_string()),
+                };
 
-            if i == 26 && b {
-                return Err("Invalid input combination: 26 and true".into());
-            }
+                if i == 26 && b {
+                    return Err("Invalid input combination: 26 and true".to_string());
+                }
 
-            outputs[0] = Value::Number(if b { (i * 2).into() } else { (i).into() });
-
-            Ok(())
+                outputs[0] = Value::Number(if b { (i * 2).into() } else { i.into() });
+                Ok(())
+            })
         }
     }
 
-    fn create_mock_component(inputs: &[Value]) -> Result<Component<MockProcessor>, String> {
-        Component::new(inputs, MockProcessor)
+    #[test]
+    fn create_component() {
+        let component = MockProvider
+            .create_component(vec![5.into(), true.into()])
+            .unwrap();
+
+        assert_eq!(component.inputs.len(), 2);
+        assert_eq!(component.outputs.len(), 1);
+
+        assert_eq!(component.get_input(0), Some(5.into()));
+        assert_eq!(component.get_input(1), Some(true.into()));
+        assert_eq!(component.get_output(0), Some(10.0.into()));
+
+        assert_eq!(unsafe { component.get_input_unchecked(0) }, 5.into());
+        assert_eq!(unsafe { component.get_input_unchecked(1) }, true.into());
+        assert_eq!(unsafe { component.get_output_unchecked(0) }, 10.0.into());
     }
 
     #[test]
-    fn valid_initialization() -> Result<(), String> {
-        let component = create_mock_component(&[Value::Integer(5), Value::Boolean(true)])?;
-        assert_eq!(component.outputs[0], Value::Number(10.0));
+    fn create_component_with_invalid_initial_inputs() {
+        assert!(matches!(
+            MockProvider.create_component(vec![5.into()]),
+            Err(ProviderError::IncorrectInputs(_))
+        ));
 
-        let component = create_mock_component(&[Value::Integer(2), Value::Boolean(false)])?;
-        assert_eq!(component.outputs[0], Value::Number(2.0));
+        assert!(matches!(
+            MockProvider.create_component(vec![true.into()]),
+            Err(ProviderError::IncorrectInputs(_))
+        ));
 
-        Ok(())
+        assert!(matches!(
+            MockProvider.create_component(vec![true.into(), 5.into()]),
+            Err(ProviderError::IncorrectInputs(_))
+        ));
     }
 
     #[test]
-    #[should_panic(expected = "Input validation failed")]
-    fn invalid_initialization_due_to_length_mismatch() {
-        create_mock_component(&[Value::Integer(0)]).unwrap();
+    fn create_component_with_first_call_failure() {
+        let result = MockProvider.create_component(vec![26.into(), true.into()]);
+
+        assert!(result.is_err());
+        if let Err(provider::Error::InitialCallFailed(message)) = result {
+            assert_eq!(message, "Invalid input combination: 26 and true");
+        } else {
+            panic!("Unexpected error type");
+        }
     }
 
     #[test]
-    #[should_panic(expected = "Input validation failed")]
-    fn invalid_initialization_due_to_kind_mismatch() {
-        create_mock_component(&[Value::Boolean(true), Value::Integer(0)]).unwrap();
+    fn multiple_updates_with_valid_inputs() {
+        let mut component = MockProvider
+            .create_component(vec![10.into(), false.into()])
+            .unwrap();
+        assert_eq!(component.get_input(0), Some(10.into()));
+        assert_eq!(component.get_input(1), Some(false.into()));
+        assert_eq!(component.get_output(0), Some(10.0.into()));
+
+        component.call(&[7.into(), true.into()]).unwrap();
+        assert_eq!(unsafe { component.get_input_unchecked(0) }, 7.into());
+        assert_eq!(unsafe { component.get_input_unchecked(1) }, true.into());
+        assert_eq!(unsafe { component.get_output_unchecked(0) }, 14.0.into());
+
+        component.call(&[3.into(), false.into()]).unwrap();
+        assert_eq!(component.get_output(0), Some(3.0.into()));
     }
 
     #[test]
-    fn multiple_updates_with_valid_inputs() -> Result<(), String> {
-        let mut component = create_mock_component(&[Value::Integer(1), Value::Boolean(true)])?;
-        assert_eq!(component.outputs[0], Value::Number(2.0));
-
-        component.update(&[Value::Integer(15), Value::Boolean(false)])?;
-        assert_eq!(component.outputs[0], Value::Number(15.0));
-
-        component.update(&[Value::Integer(10), Value::Boolean(false)])?;
-        assert_eq!(component.outputs[0], Value::Number(10.0));
-
-        component.update(&[Value::Integer(7), Value::Boolean(true)])?;
-        assert_eq!(component.outputs[0], Value::Number(14.0));
-
-        component.update(&[Value::Integer(100), Value::Boolean(false)])?;
-        assert_eq!(component.outputs[0], Value::Number(100.0));
-
-        Ok(())
-    }
-
-    #[test]
-    fn inputs_and_outputs_remain_unchanged_on_error() -> Result<(), String> {
-        let mut component = create_mock_component(&[Value::Integer(10), Value::Boolean(false)])?;
+    fn inputs_and_outputs_remain_unchanged_on_error() {
+        let mut component = MockProvider
+            .create_component(vec![1.into(), false.into()])
+            .unwrap();
 
         let original_inputs = component.inputs.clone();
         let original_outputs = component.outputs.clone();
 
-        let result = component.update(&[Value::Integer(26), Value::Boolean(true)]);
+        let result = component.call(&[26.into(), true.into()]);
         assert!(result.is_err());
-        assert_eq!(component.inputs, original_inputs);
-        assert_eq!(component.outputs, original_outputs);
 
-        Ok(())
+        assert_eq!(component.inputs.as_ref(), original_inputs.as_ref());
+        assert_eq!(component.outputs.as_ref(), original_outputs.as_ref());
     }
 
     #[test]
-    #[should_panic(expected = "Input validation failed")]
-    fn update_with_invalid_input_kinds() {
-        create_mock_component(&[Value::Integer(10), Value::Boolean(false)])
-            .unwrap()
-            .update(&[Value::Boolean(true), Value::Integer(10)])
+    #[should_panic(expected = "Input kinds do not match the expected kinds.")]
+    fn call_with_invalid_input_length() {
+        let mut component = MockProvider
+            .create_component(vec![1.into(), false.into()])
             .unwrap();
+
+        component.call(&[5.into()]).unwrap();
     }
 }
