@@ -29,10 +29,10 @@ pub fn define_component(input: TokenStream) -> TokenStream {
     // Generate the code.
     let module_name = syn::Ident::new(&name, proc_macro2::Span::call_site());
     let generated_code = quote! {
-        pub mod #module_name {
-            pub struct Config;
-            pub struct Input;
-            pub struct Output;
+        pub(crate) mod #module_name {
+            pub(crate) struct Config;
+            pub(crate) struct Input;
+            pub(crate) struct Output;
         }
     };
 
