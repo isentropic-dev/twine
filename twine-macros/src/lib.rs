@@ -77,7 +77,7 @@ impl Parse for InputsSection {
             let field_name: Ident = input.parse()?;
             input.parse::<Token![:]>()?;
 
-            // Check if the user didn't provide a type for this input.
+            // Check if a type wasn't provided.
             if input.is_empty() || (input.peek(Ident) && input.peek2(Token![:])) {
                 return Err(syn::Error::new(
                     field_name.span(),
