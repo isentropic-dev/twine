@@ -41,13 +41,26 @@ impl Parse for NameSection {
         }
         input.parse::<Token![:]>()?;
 
-        match input.parse::<Ident>() {
-            Ok(name) => Ok(NameSection { name }),
-            Err(e) => Err(syn::Error::new(
-                e.span(),
-                "expected a component name after `name:`",
-            )),
+        // Parse whatever token comes next.
+        let potential_name: Ident = match input.parse::<Ident>() {
+            Ok(id) => id,
+            Err(e) => {
+                return Err(syn::Error::new(e.span(), "expected a valid component name"));
+            }
+        };
+
+        // Check that the next token isn't the start of the inputs section,
+        // which would indicate a name wasn't actually provided.
+        if potential_name == "inputs" && input.peek(Token![:]) {
+            return Err(syn::Error::new_spanned(
+                potential_name,
+                "expected a component name, but found `inputs:` (start of next section)",
+            ));
         }
+
+        Ok(NameSection {
+            name: potential_name,
+        })
     }
 }
 
@@ -115,6 +128,18 @@ mod tests {
     use super::*;
     use syn::{parse_quote, parse_str};
 
+    fn assert_error_message<T: syn::parse::Parse + std::fmt::Debug>(
+        input: &str,
+        expected_msg: &str,
+    ) {
+        let err = syn::parse_str::<T>(input).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains(expected_msg),
+            "Got unexpected error message: {msg}"
+        );
+    }
+
     #[test]
     fn parse_name_succeeds() {
         let input = "name: test_component";
@@ -124,15 +149,27 @@ mod tests {
 
     #[test]
     fn parse_name_fails_with_bad_input() {
-        let bad_input = "nam: test_component";
-        let err = parse_str::<NameSection>(bad_input).unwrap_err();
-        let msg = err.to_string();
-        assert!(msg.contains("expected `name:`"));
+        assert_error_message::<NameSection>(
+            "
+            nam: test_component
+            ",
+            "expected `name:`",
+        );
 
-        let bad_input = "name:";
-        let err = parse_str::<NameSection>(bad_input).unwrap_err();
-        let msg = err.to_string();
-        assert!(msg.contains("expected a component name after `name:`"));
+        assert_error_message::<NameSection>(
+            "
+            name: 42
+            ",
+            "expected a valid component name",
+        );
+
+        assert_error_message::<NameSection>(
+            "
+            name:
+            inputs:
+            ",
+            "expected a component name, but found `inputs:` (start of next section)",
+        );
     }
 
     #[test]
@@ -154,16 +191,7 @@ mod tests {
 
     #[test]
     fn parse_inputs_section_fails_with_bad_input() {
-        fn assert_error_message(input: &str, expected_msg: &str) {
-            let err = syn::parse_str::<InputsSection>(input).unwrap_err();
-            let msg = err.to_string();
-            assert!(
-                msg.contains(expected_msg),
-                "Got unexpected error message: {msg}"
-            );
-        }
-
-        assert_error_message(
+        assert_error_message::<InputsSection>(
             "
             inputss:
                 something: i32
@@ -171,7 +199,7 @@ mod tests {
             "expected `inputs:`",
         );
 
-        assert_error_message(
+        assert_error_message::<InputsSection>(
             "
             inputs:
                 missing_first:
@@ -180,7 +208,7 @@ mod tests {
             "expected a type for this input",
         );
 
-        assert_error_message(
+        assert_error_message::<InputsSection>(
             "
             inputs:
                 something: i32
@@ -189,7 +217,7 @@ mod tests {
             "expected a type for this input",
         );
 
-        assert_error_message(
+        assert_error_message::<InputsSection>(
             "
             inputs:
                 something: i32
