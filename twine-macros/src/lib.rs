@@ -14,7 +14,7 @@ struct ComponentDefinition {
 
 #[derive(Debug)]
 struct NameSection {
-    pub name: Ident,
+    name: Ident,
 }
 
 #[allow(dead_code)]
