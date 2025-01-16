@@ -97,10 +97,10 @@ impl Parse for InputsSection {
 #[proc_macro]
 pub fn define_component(input: TokenStream) -> TokenStream {
     let ComponentDefinition { name, inputs: _ } = parse_macro_input!(input as ComponentDefinition);
-    let mod_name = name.name;
+    let module_name = name.name;
 
     let generated_code = quote! {
-        pub(crate) mod #mod_name {
+        pub(crate) mod #module_name {
             pub(crate) struct Config;
             pub(crate) struct Input;
             pub(crate) struct Output;
