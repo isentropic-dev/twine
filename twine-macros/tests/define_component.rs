@@ -4,6 +4,10 @@ use twine_macros::define_component;
 fn test_define_component() {
     define_component! {
         name: example
+        inputs:
+          first: f64
+          second: i32
+          third: bool
     }
 
     // Verify that these structs now exist.
