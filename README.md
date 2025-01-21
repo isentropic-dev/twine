@@ -10,8 +10,9 @@ Twine is an open-source Rust framework for functional and composable system mode
 
 Twine provides a structured framework where systems are modeled as compositions of pure functions. Every initialized component in Twine adheres to a strict contract: it receives a typed input, computes a typed output, and always produces the same output for the same input. This deterministic behavior ensures:
 
+- **Testability:** Pure functions are easier to test in isolation since they have no hidden state or side effects.
+- **Parallelism:** Independent components can be executed concurrently without race conditions, enabling efficient parallel computation.
 - **Composability:** Systems can be built hierarchically, with composed components acting just like basic components.
-- **Predictability:** Given the same input, a component will always produce the same output.
 - **Extensibility:** Higher-order components can encapsulate complex behavior without introducing side effects.
 
 ## Configurable Pure Components
@@ -19,7 +20,7 @@ Twine provides a structured framework where systems are modeled as compositions 
 Every Twine component follows a structured configuration process. Each component provides a factory function:
 
 ```rust
-fn create(config: Config) -> Result<impl Fn(Input) -> Result<Output>>
+fn create(Config) -> Result<impl Fn(Input) -> Result<Output>>
 ```
 
 This function takes a `Config`, which defines the component’s static parameters, and returns a function that transforms `Input` into `Output`. This ensures that once configured, the component remains purely functional and free of side effects. By handling initialization once, the resulting function can focus on computing its outputs as efficiently as possible.
