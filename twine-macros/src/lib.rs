@@ -26,7 +26,7 @@ use proc_macro::TokenStream;
 ///
 ///         second => math_component {
 ///             x: first.z,
-///             y: a,
+///             y: 26,
 ///         }
 ///     }
 /// }
