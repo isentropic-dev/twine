@@ -1,135 +1,65 @@
-# Twine: A Composable Engine for Transient System Modeling
+# Twine
 
-**Note:** This README describes the proposed design and approach for Twine. The details, including the component plugin API and system architecture, are subject to change as development progresses. The initial repository is simply a Rust library scaffold, and this document outlines the vision for the project.
+**Note:** Twine has evolved beyond its original design. This README reflects its current direction, focusing on composability, a functional approach, and system abstraction.
 
 ## What is Twine?
 
-Twine is an open-source Rust library designed to model transient systems using a composable, component-based approach. It aims to provide a powerful, flexible engine for engineers and developers, enabling efficient and modular simulation of dynamic systems.
+Twine is an open-source Rust framework for functional and composable system modeling. In Twine, every component, from the simplest building block to the most complex higher-order system, is just another function. It provides a declarative, functionally pure modeling framework where all components, whether simple or higher-order, are pure functions that transform structured inputs into outputs.
 
-## What isn't Twine?
+## A Functional Approach to System Modeling
 
-Twine focuses purely on the simulation engine. It does not handle user interfaces, data visualization, or input/output management. These responsibilities are left to the users, who can integrate Twine into their broader workflows.
+Twine provides a structured framework where systems are modeled as compositions of pure functions. Every initialized component in Twine adheres to a strict contract: it receives a typed input and returns a typed output. This approach ensures:
 
-## Goals
+- **Composability:** Systems can be built hierarchically, with composed components acting just like basic components.
+- **Predictability:** Given the same input, a component will always produce the same output.
+- **Extensibility:** Higher-order components can encapsulate complex behavior without introducing side effects.
 
-- Model transient systems using connected components where each component operates as a pure function.
-- Ensure extensibility through a plugin-like system for adding custom components.
-- Separate numerical integration concerns (the "engine") from the system's structural representation (the "system").
+## Configurable Pure Components
 
----
-
-## How it Works
-
-### Components
-
-Components are the building blocks of a Twine system. Each component is conceptually a pure function: given the same inputs, it always produces the same outputs.
-
-#### Inputs and Outputs
-
-- **Regular Inputs:** Immutable values representing external factors at a specific moment (e.g., flow rates, ambient temperature). The component reads these values but does not influence them.
-
-- **State Inputs:** Immutable values representing the component's state at a specific moment. For each state input, the component must provide its time derivative, describing how the value changes over time.
-
-- **Regular Outputs:** Values derived from the current inputs, representing results or computed properties at the same moment in time. These outputs do not influence the evolution of state inputs.
-
-- **State Derivatives:** The time derivatives of the state inputs, provided by the component to predict how the system evolves.
-
-### System
-
-A system represents the graph of connected components, tracking how outputs feed into inputs. The system ensures all components are in a consistent state at each simulation step through an iterative convergence process.
-
-### Engine
-
-The engine advances the system forward in time using numerical integration. It supports various methods (e.g., Euler, Runge-Kutta) that are swappable via traits, allowing users to choose or implement integration strategies suitable for their needs.
-
----
-
-## Plugin System
-
-Twine supports dynamically loaded components (plugins) written in any language compatible with the C ABI. Plugins follow a standardized lifecycle and implement specific functions.
-
-### Required Functions (C)
-
-Plugins must export the following functions with the specified C ABI, implementing their equivalent behavior in the chosen programming language:
-
-```c
-// A structure to describe the component's metadata.
-typedef struct {
-    uint32_t num_inputs;    // Number of regular inputs.
-    uint32_t num_states;    // Number of state inputs.
-    uint32_t num_outputs;   // Number of regular outputs.
-} ComponentMetadata;
-
-// Initialize the component using a configuration string.
-void* create(const char* config);
-
-// Provide metadata about the component.
-ComponentMetadata describe(const void* instance);
-
-// Evaluate the component's outputs and state derivatives.
-void evaluate(
-    const void* instance,
-    const double* inputs,
-    const double* states,
-    double* outputs,
-    double* state_derivatives
-);
-
-// Clean up and free memory associated with the component.
-void destroy(void* instance);
-```
-
-### Rust Component Trait
-
-For Rust plugins, the `Component` trait must be implemented. It provides equivalent functionality:
+Every Twine component follows a structured configuration process. Each component provides a factory function:
 
 ```rust
-/// A struct to describe the component's metadata.
-pub struct ComponentMetadata {
-    /// Number of regular inputs.
-    pub num_inputs: usize,
-    /// Number of state inputs.
-    pub num_states: usize,
-    /// Number of regular outputs.
-    pub num_outputs: usize,
-}
-
-/// A trait representing a Twine component, with lifecycle methods for initialization, evaluation, and cleanup.
-pub trait Component {
-    /// Creates a new instance of the component using the provided configuration string.
-    ///
-    /// # Parameters
-    /// - `config`: A string containing the configuration for the component.
-    ///
-    /// # Returns
-    /// A raw pointer to the newly created component instance.
-    fn create(config: &str) -> *mut Self;
-
-    /// Describes the component's metadata, including the number of inputs, states, and outputs.
-    ///
-    /// # Returns
-    /// A `ComponentMetadata` struct containing the component's metadata.
-    fn describe(&self) -> ComponentMetadata;
-
-    /// Evaluates the component's outputs and state derivatives based on the current inputs and states.
-    ///
-    /// # Parameters
-    /// - `inputs`: A slice of the current regular inputs.
-    /// - `states`: A slice of the current state inputs.
-    /// - `outputs`: A mutable slice for storing the computed regular outputs.
-    /// - `state_derivatives`: A mutable slice for storing the computed state derivatives.
-    fn evaluate(
-        &self,
-        inputs: &[f64],
-        states: &[f64],
-        outputs: &mut [f64],
-        state_derivatives: &mut [f64],
-    );
-
-    /// Cleans up and destroys the component instance, freeing any associated resources.
-    ///
-    /// # Parameters
-    /// - `instance`: A raw pointer to the component instance to be destroyed.
-    fn destroy(instance: *mut Self);
-}
+fn create(config: Config) -> Result<impl Fn(Input) -> Result<Output>>;
 ```
+
+This function takes a `Config`, which defines the component’s static parameters, and returns a pure function that transforms `Input` into `Output`. This ensures that once configured, the component remains purely functional and free of side effects. By handling initialization once, the resulting function can focus on computing its outputs as efficiently as possible.
+
+## Declarative Composition with `compose!`
+
+Twine's `compose!` macro enables users to define higher-order components by declaratively wiring together individual components. This eliminates boilerplate and guarantees type correctness at compile time.
+
+#### Example Usage
+
+```rust
+compose!(simulated_home, {
+    Input {
+        time: f64,
+        indoor: {
+            occupancy: u32,
+            temp_setpoint: f64,
+        },
+    }
+
+    weather => hourly_weather {
+        time,
+    }
+
+    house => building {
+        occupancy: indoor.occupancy,
+        outdoor_temp: weather.temperature,
+        thermostat: building::Thermostat {
+            setpoint: indoor.temp_setpoint,
+        },
+    }
+});
+```
+
+Here, `simulated_home` itself becomes a higher-order component that can be used in further compositions just like a primitive component.
+
+## Dependency Resolution & State Integration
+
+Twine automatically detects and resolves dependency cycles within composed components by wrapping them into iterative solvers that converge on a consistent state. Twine embraces a purely functional framework for system modeling, enabling users to construct modular and predictable simulations.
+
+Additionally, Twine provides built-in numerical integration to evolve system states over time, ensuring seamless simulation of dynamic systems while maintaining a functionally pure interface.
+
+Every component—whether atomic or a complex system—is just a function, making composition, analysis, and reasoning straightforward and scalable.
