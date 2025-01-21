@@ -2,10 +2,11 @@ mod compose;
 
 use proc_macro::TokenStream;
 
-/// Composes multiple components into a single pure function.
+/// Composes multiple components into a higher-order component.
 ///
-/// This macro takes a structured definition of inputs and components and
-/// generates a module representing the composed component.
+/// This macro generates a module representing the composed component based on a
+/// structured definition of inputs and components. It simplifies the process of
+/// wiring inputs, outputs, and dependencies between components.
 ///
 /// # Example
 ///
@@ -21,7 +22,7 @@ use proc_macro::TokenStream;
 ///
 ///         first => math_component {
 ///             x: a,
-///             y: b * 2,
+///             y: b * 6,
 ///         }
 ///
 ///         second => math_component {
