@@ -33,27 +33,26 @@ Twine's `compose!` macro enables users to define higher-order components by decl
 
 ```rust
 compose!(simulated_home, {
-    // Define the structured inputs for the composed component.
+    // Define the inputs for this composed component.
     Input {
-        time: f64,
+        simulation_time: f64,
         indoor: {
             occupancy: u32,
             temp_setpoint: f64,
         },
     }
 
-    // Initialize a weather provider component that generates weather data
-    // based on the given time input.
+    // A weather component that provides conditions for a given time.
     weather => hourly_weather {
-        time,
+        time: simulation_time,
     }
 
-    // Initialize a building model component.
+    // A building component that models the home.
     house => building {
-        // Provided directly as an input to the composed component.
+        // Occupancy comes from the composed component's input.
         occupancy: indoor.occupancy,
 
-        // Comes from the weather component's computed output.
+        // Outdoor temperature comes from the weather component's output.
         outdoor_temp: weather.temperature,
 
         thermostat: building::Thermostat {
