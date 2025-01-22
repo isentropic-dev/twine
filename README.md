@@ -17,13 +17,13 @@ Twine models systems as compositions of pure functions. Every component in Twine
 
 ## Configurable Pure Components
 
-Every Twine component follows a structured configuration process. Each component provides a factory function:
+Twine components are initialized with a factory function:
 
 ```rust
 fn create(Config) -> Result<impl Fn(Input) -> Result<Output>>
 ```
 
-This function takes a `Config`, which defines the component’s static parameters, and returns a function that transforms `Input` into `Output`. This ensures that once configured, the component remains purely functional and free of side effects. By handling initialization once, the resulting function can focus on computing its outputs as efficiently as possible.
+This function takes a `Config`, which defines the component’s static parameters, and returns a function that transforms `Input` into `Output`. This approach ensures that once configured, the component remains purely functional and free of side effects. By performing initialization only once, the resulting function can focus on computing its outputs as efficiently as possible.
 
 ## Declarative Composition with `compose!`
 
