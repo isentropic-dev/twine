@@ -4,7 +4,7 @@
 
 ## What is Twine?
 
-Twine is an open-source Rust framework for functional and composable system modeling. Every component—whether a simple building block or a sophisticated higher-order system—is just a function. Because these functions are pure, they can be safely composed, making it easy to build and understand larger systems from simple, reusable parts. Twine provides the tools to support this composition while ensuring type safety and enforcing valid connections between components, making models more maintainable and reliable.
+Twine is an open-source Rust framework for functional and composable system modeling. Every component—whether a simple building block or a sophisticated higher-order system—is just a function. By requiring these functions to be deterministic—meaning they always return the same output for the same input—Twine makes it easy to safely compose components, allowing users to build and understand larger systems from simple, reusable parts. Twine provides the tools to support this composition while ensuring type safety and enforcing valid connections between components, making models more maintainable and reliable.
 
 ## A Functional Approach to System Modeling
 
