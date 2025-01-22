@@ -8,7 +8,7 @@ Twine is an open-source Rust framework for functional and composable system mode
 
 ## A Functional Approach to System Modeling
 
-Twine provides a structured framework where systems are modeled as compositions of pure functions. Every initialized component in Twine adheres to a strict contract: it receives a typed input, computes a typed output, and always produces the same output for the same input. This deterministic behavior ensures:
+Twine models systems as compositions of pure functions. Every component in Twine is a function that follows a strict contract: it receives a typed input, computes a typed output, and always produces the same output for the same input. This deterministic behavior ensures:
 
 - **Testability:** Pure functions are easier to test in isolation since they have no hidden state or side effects.
 - **Parallelism:** Independent components can be executed concurrently without race conditions, enabling efficient parallel computation.
