@@ -66,6 +66,6 @@ Here, `simulated_home` itself becomes a higher-order component that can be used 
 
 ## Dependency Resolution & State Integration
 
-Twine automatically detects and resolves dependency cycles in composed components using iterative solvers that converge on a consistent state. This ensures modular and predictable simulations within Twine’s purely functional modeling framework.
+Twine automatically detects and resolves dependency cycles in composed components using iterative solvers that converge on a consistent state. It also identifies opportunities to execute independent components in parallel, improving performance without compromising modularity or reliability.
 
 Additionally, Twine provides built-in numerical integration to evolve system states over time, ensuring seamless simulation of dynamic systems while maintaining a functionally pure interface.
