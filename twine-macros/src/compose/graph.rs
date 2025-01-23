@@ -20,8 +20,28 @@ pub(crate) struct Connection {
 
 /// Builds a directed dependency graph from a list of component instances.
 ///
-/// Each component instance is represented as a node, and edges are created
-/// based on field references.
+/// Each component instance is represented as a node in the graph, indexed by
+/// its position in the input list (`components`). Directed edges represent
+/// dependencies between components based on their input structures.
+///
+/// How It Works:
+///
+/// - Each component has an input struct that defines its field assignments.
+/// - If a field references another component's output (e.g., if `first_house`
+///   has an input field using `weather.temperature`), a directed edge is
+///   created from `weather` to `first_house`.
+/// - Nested field accesses (e.g., `component_name.with.nested.output`) are
+///   stored as `"with.nested.output"` in the graph, preserving the full path
+///   to the output.
+/// - Some input fields resemble component names but are actually inputs to a
+///   larger composed system (defined by the macro). These are not treated as
+///   dependencies and are ignored when constructing the graph.
+///
+/// Returns:
+///
+/// A `DiGraph<usize, Connection>` where:
+/// - Nodes are component indices.
+/// - Edges represent dependencies between components, labeled with `Connection`.
 pub(crate) fn build_graph(components: &[ComponentInstance]) -> DiGraph<usize, Connection> {
     let mut graph = DiGraph::new();
 
@@ -44,20 +64,19 @@ pub(crate) fn build_graph(components: &[ComponentInstance]) -> DiGraph<usize, Co
 
 /// Extracts connections for a component based on its input field expressions.
 ///
-/// This function identifies component-to-component dependencies by parsing
-/// field expressions and linking a component's input fields to output fields
-/// from other components.
+/// This function determines dependencies between components by parsing input
+/// field expressions and linking each input to an output field from another
+/// component.
 ///
 /// # Arguments
 ///
-/// - `component`: The `ComponentInstance` whose connections are to be extracted.
+/// - `component`: The `ComponentInstance` whose connections are being extracted.
 ///
 /// # Returns
 ///
 /// A vector of `(component_name, Connection)` pairs, where:
 /// - `component_name` is the source component's name.
-/// - `Connection` specifies the field mapping from the source output to the
-///                current component's input.
+/// - `Connection` maps the source component's output to this component's input.
 fn find_connections(component: &ComponentInstance) -> Vec<(String, Connection)> {
     iter_named_fields(component)
         .flat_map(|(field_name, field_expr)| {
@@ -78,7 +97,7 @@ fn find_connections(component: &ComponentInstance) -> Vec<(String, Connection)> 
 
 /// Iterates over the named fields of a component.
 ///
-/// Ignores unnamed (tuple) fields, focusing only on explicitly named fields.
+/// Only explicitly named fields are returned, while unnamed (tuple) fields are ignored.
 ///
 /// # Arguments
 ///
@@ -89,12 +108,11 @@ fn find_connections(component: &ComponentInstance) -> Vec<(String, Connection)> 
 /// An iterator yielding `(field_name, field_expr)` pairs, where:
 /// - `field_name` is the field’s name as a `String`.
 /// - `field_expr` is a reference to the field's expression (`&Expr`).
-fn iter_named_fields(component: &ComponentInstance) -> impl Iterator<Item = (String, &Expr)> + '_ {
+fn iter_named_fields(component: &ComponentInstance) -> impl Iterator<Item = (String, &Expr)> {
     component.input_struct.fields.iter().filter_map(|field| {
         if let Member::Named(ident) = &field.member {
             Some((ident.to_string(), &field.expr))
         } else {
-            // Ignore tuple fields.
             None
         }
     })
@@ -104,19 +122,19 @@ fn iter_named_fields(component: &ComponentInstance) -> impl Iterator<Item = (Str
 ///
 /// # Arguments
 ///
-/// - `expr`: A reference to an expression (`&Expr`).
+/// - `expr`: The expression to analyze.
 ///
 /// # Returns
 ///
-/// A `Vec<(String, String)>`, where each tuple represents:
-/// - The referenced `component` name.
-/// - The corresponding `output_field` accessed from that component.
+/// A `Vec<(String, String)>`, where each tuple contains:
+/// - The referenced component's name.
+/// - The accessed output field.
 fn find_component_outputs(expr: &Expr) -> Vec<(String, String)> {
     traverse_expression(expr).collect()
 }
 
-/// Traverses an expression recursively to collect `(component, field)` references.
-fn traverse_expression(expr: &Expr) -> impl Iterator<Item = (String, String)> + '_ {
+/// Recursively traverses an expression to extract `(component, field)` references.
+fn traverse_expression(expr: &Expr) -> impl Iterator<Item = (String, String)> {
     let mut results = Vec::new();
 
     match expr {
@@ -150,15 +168,14 @@ fn traverse_expression(expr: &Expr) -> impl Iterator<Item = (String, String)> + 
     results.into_iter()
 }
 
-/// Extracts a single `(component, fields)` pair from deeply nested field accesses.
+/// Extracts a single `(component, field)` pair from a deeply nested field access.
 ///
-/// This function helps break down nested field references like
-/// `some_component.some_field.sub_value` into a structured `(component,
-/// "some_field.sub_value")` format.
+/// Converts a reference like `some_component.some_field.sub_value` into a
+/// structured `(component, "some_field.sub_value")` format.
 ///
 /// # Arguments
 ///
-/// - `expr`: A reference to an expression (`&Expr`).
+/// - `expr`: The expression (`&Expr`) to analyze.
 ///
 /// # Returns
 ///
@@ -191,23 +208,16 @@ mod tests {
     use quote::quote;
     use syn::{parse2, parse_str};
 
-    fn expected_map(entries: &[(&str, &[&str])]) -> HashMap<String, Vec<String>> {
-        entries
-            .iter()
-            .map(|&(key, values)| (key.into(), values.iter().map(|&v| v.into()).collect()))
-            .collect()
-    }
-
     #[test]
     fn find_component_outputs_works() {
         let cases = vec![
             (
-                quote! { indoor.occupancy },
-                vec![("indoor".to_string(), "occupancy".to_string())],
+                quote! { first_house.indoor_temp },
+                vec![("first_house", "indoor_temp")],
             ),
             (
-                quote! { first_house.indoor_temp },
-                vec![("first_house".to_string(), "indoor_temp".to_string())],
+                quote! { indoor.occupancy + 10 },
+                vec![("indoor", "occupancy")],
             ),
             (
                 quote! { building::Thermostat { setpoint: 20.0, auto: false } },
@@ -215,10 +225,7 @@ mod tests {
             ),
             (
                 quote! { some_component.some_field.sub_value },
-                vec![(
-                    "some_component".to_string(),
-                    "some_field.sub_value".to_string(),
-                )],
+                vec![("some_component", "some_field.sub_value")],
             ),
             (
                 quote! {
@@ -227,28 +234,29 @@ mod tests {
                     + another.output_b
                 },
                 vec![
-                    (
-                        "some_component".to_string(),
-                        "some_field.sub_value".to_string(),
-                    ),
-                    ("another".to_string(), "output_a".to_string()),
-                    ("another".to_string(), "output_b".to_string()),
+                    ("some_component", "some_field.sub_value"),
+                    ("another", "output_a"),
+                    ("another", "output_b"),
                 ],
             ),
         ];
 
-        for (input_expr, expected) in cases {
-            let extracted = find_component_outputs(&parse2::<Expr>(input_expr).unwrap());
+        for (input, expected) in cases {
+            let extracted = find_component_outputs(&parse2(input).unwrap());
+            let expected: Vec<_> = expected
+                .iter()
+                .map(|&(comp, field)| (comp.to_string(), field.to_string()))
+                .collect();
 
             assert_eq!(
                 extracted, expected,
-                "Extracted input references did not match expected values."
+                "Extracted component outputs did not match expected values."
             );
         }
     }
 
     #[test]
-    fn build_a_graph() -> Result<(), Box<dyn Error>> {
+    fn build_graph_works() -> Result<(), Box<dyn Error>> {
         let graph = build_graph(&[
             ComponentInstance {
                 name: parse_str("weather")?,
