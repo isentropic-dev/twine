@@ -1,4 +1,5 @@
 mod generate;
+mod graph;
 mod parse;
 
 use std::collections::HashMap;
