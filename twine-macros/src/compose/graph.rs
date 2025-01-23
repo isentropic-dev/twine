@@ -152,11 +152,14 @@ fn extract_component_outputs(expr: &Expr, outputs: &mut Vec<(String, String)>) {
         Expr::Field(ExprField { base, member, .. }) => {
             let field_name = member.to_token_stream().to_string();
 
-            if let Expr::Path(ExprPath { path, .. }) = &**base {
+            if let Expr::Path(ExprPath { path, .. }) = base.as_ref() {
                 if let Some(ident) = path.get_ident() {
                     outputs.push((ident.to_string(), field_name));
+                    return;
                 }
-            } else if let Some((base, nested)) = extract_single_component_field(base) {
+            }
+
+            if let Some((base, nested)) = extract_single_component_field(base) {
                 outputs.push((base, format!("{nested}.{field_name}")));
             }
         }
@@ -164,19 +167,15 @@ fn extract_component_outputs(expr: &Expr, outputs: &mut Vec<(String, String)>) {
             extract_component_outputs(&bin.left, outputs);
             extract_component_outputs(&bin.right, outputs);
         }
-        Expr::Paren(paren) => {
-            extract_component_outputs(&paren.expr, outputs);
-        }
-        Expr::Call(call) => {
-            for arg in &call.args {
-                extract_component_outputs(arg, outputs);
-            }
-        }
-        Expr::Tuple(tuple) => {
-            for elem in &tuple.elems {
-                extract_component_outputs(elem, outputs);
-            }
-        }
+        Expr::Paren(paren) => extract_component_outputs(&paren.expr, outputs),
+        Expr::Call(call) => call
+            .args
+            .iter()
+            .for_each(|arg| extract_component_outputs(arg, outputs)),
+        Expr::Tuple(tuple) => tuple
+            .elems
+            .iter()
+            .for_each(|elem| extract_component_outputs(elem, outputs)),
         _ => {}
     }
 }
