@@ -80,7 +80,7 @@ pub(crate) fn build_graph(components: &[ComponentInstance]) -> DiGraph<usize, Co
 fn find_connections(component: &ComponentInstance) -> Vec<(String, Connection)> {
     iter_named_fields(component)
         .flat_map(|(field_name, field_expr)| {
-            find_component_outputs(field_expr).into_iter().map(
+            get_component_outputs(field_expr).into_iter().map(
                 move |(component_name, output_name)| {
                     (
                         component_name,
@@ -118,7 +118,10 @@ fn iter_named_fields(component: &ComponentInstance) -> impl Iterator<Item = (Str
     })
 }
 
-/// Extracts all `component.output_field` references from an expression.
+/// Gets all `component.output_field` references from an expression.
+///
+/// Initializes an empty `Vec` and recursively traverses the expression
+/// tree using `extract_component_outputs`.
 ///
 /// # Arguments
 ///
@@ -129,43 +132,53 @@ fn iter_named_fields(component: &ComponentInstance) -> impl Iterator<Item = (Str
 /// A `Vec<(String, String)>`, where each tuple contains:
 /// - The referenced component's name.
 /// - The accessed output field.
-fn find_component_outputs(expr: &Expr) -> Vec<(String, String)> {
-    traverse_expression(expr).collect()
+fn get_component_outputs(expr: &Expr) -> Vec<(String, String)> {
+    let mut outputs = Vec::new();
+    extract_component_outputs(expr, &mut outputs);
+    outputs
 }
 
-/// Recursively traverses an expression to extract `(component, field)` references.
-fn traverse_expression(expr: &Expr) -> impl Iterator<Item = (String, String)> {
-    let mut results = Vec::new();
-
+/// Recursively extracts `component.output_field` references into `outputs`.
+///
+/// Performs a depth-first traversal of the expression tree, collecting
+/// component output references into a single `Vec` to minimize allocations.
+///
+/// # Arguments
+///
+/// - `expr`: The expression to analyze.
+/// - `outputs`: A mutable `Vec` that stores the extracted output references.
+fn extract_component_outputs(expr: &Expr, outputs: &mut Vec<(String, String)>) {
     match expr {
         Expr::Field(ExprField { base, member, .. }) => {
             let field_name = member.to_token_stream().to_string();
 
             if let Expr::Path(ExprPath { path, .. }) = &**base {
                 if let Some(ident) = path.get_ident() {
-                    results.push((ident.to_string(), field_name));
+                    outputs.push((ident.to_string(), field_name));
                 }
             } else if let Some((base, nested)) = extract_single_component_field(base) {
-                results.push((base, format!("{nested}.{field_name}")));
+                outputs.push((base, format!("{nested}.{field_name}")));
             }
         }
         Expr::Binary(bin) => {
-            results.extend(traverse_expression(&bin.left));
-            results.extend(traverse_expression(&bin.right));
+            extract_component_outputs(&bin.left, outputs);
+            extract_component_outputs(&bin.right, outputs);
         }
         Expr::Paren(paren) => {
-            results.extend(traverse_expression(&paren.expr));
+            extract_component_outputs(&paren.expr, outputs);
         }
         Expr::Call(call) => {
-            results.extend(call.args.iter().flat_map(traverse_expression));
+            for arg in &call.args {
+                extract_component_outputs(arg, outputs);
+            }
         }
         Expr::Tuple(tuple) => {
-            results.extend(tuple.elems.iter().flat_map(traverse_expression));
+            for elem in &tuple.elems {
+                extract_component_outputs(elem, outputs);
+            }
         }
         _ => {}
     }
-
-    results.into_iter()
 }
 
 /// Extracts a single `(component, field)` pair from a deeply nested field access.
@@ -209,7 +222,7 @@ mod tests {
     use syn::{parse2, parse_str};
 
     #[test]
-    fn find_component_outputs_works() {
+    fn get_component_outputs_works() {
         let cases = vec![
             (
                 quote! { first_house.indoor_temp },
@@ -242,7 +255,7 @@ mod tests {
         ];
 
         for (input, expected) in cases {
-            let extracted = find_component_outputs(&parse2(input).unwrap());
+            let extracted = get_component_outputs(&parse2(input).unwrap());
             let expected: Vec<_> = expected
                 .iter()
                 .map(|&(comp, field)| (comp.to_string(), field.to_string()))
