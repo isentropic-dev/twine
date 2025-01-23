@@ -274,60 +274,61 @@ mod tests {
                 name: parse_str("weather")?,
                 module: parse_str("hourly_weather")?,
                 input_struct: parse_str(
-                    "hourly_weather::Input {
-                                 time
-                             }",
+                    r"
+                    hourly_weather::Input {
+                        time
+                    }",
                 )?,
             },
             ComponentInstance {
                 name: parse_str("first_house")?,
                 module: parse_str("building")?,
                 input_struct: parse_str(
-                    "building::Input { 
-                                 occupancy: indoor.occupancy,
-                                 outdoor_temp: weather.temperature,
-                                 wind_speed: weather.wind_speed,
-                                 thermostat: building::Thermostat {
-                                     setpoint: indoor.temp_setpoint,
-                                     auto: thermostat_control.is_auto,
-                                 }
-                             }",
+                    r"
+                    building::Input { 
+                        occupancy: indoor.occupancy,
+                        outdoor_temp: weather.temperature,
+                        wind_speed: weather.wind_speed,
+                        thermostat: building::Thermostat {
+                            setpoint: indoor.temp_setpoint,
+                            auto: thermostat_control.is_auto,
+                        }
+                    }",
                 )?,
             },
             ComponentInstance {
                 name: parse_str("second_house")?,
                 module: parse_str("building")?,
                 input_struct: parse_str(
-                    "building::Input { 
-                             occupancy: indoor.occupancy,
-                             outdoor_temp: first_house.indoor_temp,
-                             wind_speed: weather.wind_speed,
-                             thermostat: building::Thermostat {
-                                 setpoint: indoor.temp_setpoint,
-                                 auto: thermostat_control.is_auto,
-                             }
-                         }",
+                    r"
+                    building::Input { 
+                        occupancy: indoor.occupancy,
+                        outdoor_temp: first_house.indoor_temp,
+                        wind_speed: weather.wind_speed,
+                        thermostat: building::Thermostat {
+                            setpoint: indoor.temp_setpoint,
+                            auto: thermostat_control.is_auto,
+                        }
+                    }",
                 )?,
             },
             ComponentInstance {
                 name: parse_str("another_component")?,
                 module: parse_str("model")?,
                 input_struct: parse_str(
-                    "model::Input { 
-                    x: weather.temperature,
-                    y: first_house.nested.room_temp,
-                    z: second_house.indoor_temp,
-                         }",
+                    r"
+                    model::Input { 
+                        x: weather.temperature,
+                        y: first_house.nested.room_temp,
+                        z: second_house.indoor_temp,
+                    }",
                 )?,
             },
         ]);
 
         let expected_nodes = vec![0, 1, 2, 3];
         let actual_nodes: Vec<_> = graph.node_indices().map(|idx| graph[idx]).collect();
-        assert_eq!(
-            actual_nodes, expected_nodes,
-            "Graph nodes do not match expected indices."
-        );
+        assert_eq!(actual_nodes, expected_nodes);
 
         let expected_edges = vec![
             (0, 1, "temperature", "outdoor_temp"),
@@ -350,10 +351,7 @@ mod tests {
             .sorted()
             .collect();
 
-        assert_eq!(
-            actual_edges, expected_edges,
-            "Graph edges do not match expected dependencies"
-        );
+        assert_eq!(actual_edges, expected_edges);
 
         Ok(())
     }
