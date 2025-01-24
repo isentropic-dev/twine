@@ -12,14 +12,11 @@ use super::{ComponentDefinition, ComponentGraph, InputField, InputSchema};
 /// - `Output`: Represents the output schema for component instances.
 /// - `check_types`: A function that provides compile-time type validation.
 pub(crate) fn expand(graph: &ComponentGraph) -> TokenStream {
-    // We don't do anything with the dependencies graph yet.
-    let ComponentGraph { definition, .. } = graph;
-
-    let name = &definition.name;
-    let config = generate_config(definition);
-    let input = generate_input(definition);
-    let output = generate_output(definition);
-    let type_check_fn = generate_type_check_fn(definition);
+    let name = &graph.definition.name;
+    let config = generate_config(&graph.definition);
+    let input = generate_input(&graph.definition);
+    let output = generate_output(&graph.definition);
+    let type_check_fn = generate_type_check_fn(graph);
 
     quote! {
         mod #name {
@@ -119,8 +116,9 @@ fn generate_output(definition: &ComponentDefinition) -> TokenStream {
 }
 
 /// Generates a function for compile-time input validation.
-fn generate_type_check_fn(definition: &ComponentDefinition) -> TokenStream {
-    let input_fields = definition
+fn generate_type_check_fn(graph: &ComponentGraph) -> TokenStream {
+    let input_fields = graph
+        .definition
         .input_schema
         .keys()
         .sorted()
@@ -132,11 +130,15 @@ fn generate_type_check_fn(definition: &ComponentDefinition) -> TokenStream {
     };
 
     // Bring required outputs into scope.
-    let component_outputs: Vec<_> = definition
+    println!("{:?}", graph.definition);
+    println!("{:#?}", graph.dependencies);
+    let component_outputs: Vec<_> = graph
+        .definition
         .components
         .iter()
-        .filter(|instance| definition.is_used_as_input(&instance.name))
-        .map(|instance| {
+        .enumerate()
+        .filter(|(index, _instance)| graph.is_used_as_input(*index))
+        .map(|(_index, instance)| {
             let name = &instance.name;
             let mod_input = &instance.module;
             quote! { let #name = #mod_input::Output::default(); }
@@ -144,7 +146,8 @@ fn generate_type_check_fn(definition: &ComponentDefinition) -> TokenStream {
         .collect();
 
     // Check each component's input expression.
-    let component_inputs: Vec<_> = definition
+    let component_inputs: Vec<_> = graph
+        .definition
         .components
         .iter()
         .map(|instance| {
@@ -289,29 +292,29 @@ mod tests {
 
     #[test]
     fn generate_type_check_fn_works() {
-        let generated = generate_type_check_fn(
-            &(parse_quote! {
-                test {
-                    Input {
-                        x: bool,
-                        y: i32,
-                        z: f64,
-                        extra: {
-                            verbose: bool,
-                        },
-                    }
-
-                    first_one => first {
-                        x,
-                    }
-
-                    second_one => second {
-                        y: first_one.y,
-                        z: extra.verbose,
-                    }
+        let definition: ComponentDefinition = parse_quote! {
+            test {
+                Input {
+                    x: bool,
+                    y: i32,
+                    z: f64,
+                    extra: {
+                        verbose: bool,
+                    },
                 }
-            }),
-        );
+
+                first_one => first {
+                    x,
+                }
+
+                second_one => second {
+                    y: first_one.y,
+                    z: extra.verbose,
+                }
+            }
+        };
+        let graph = definition.into();
+        let generated = generate_type_check_fn(&graph);
         let expected = quote! {
             fn check_types() {
                 let Input { extra, x, y, z } = Input::default();
