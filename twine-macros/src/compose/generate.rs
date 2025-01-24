@@ -12,10 +12,11 @@ use super::{ComponentDefinition, ComponentGraph, InputField, InputSchema};
 /// - `Output`: Represents the output schema for component instances.
 /// - `check_types`: A function that provides compile-time type validation.
 pub(crate) fn expand(graph: &ComponentGraph) -> TokenStream {
-    let name = &graph.definition.name;
-    let config = generate_config(&graph.definition);
-    let input = generate_input(&graph.definition);
-    let output = generate_output(&graph.definition);
+    let definition = &graph.definition;
+    let name = &definition.name;
+    let config = generate_config(definition);
+    let input = generate_input(definition);
+    let output = generate_output(definition);
     let type_check_fn = generate_type_check_fn(graph);
 
     quote! {
