@@ -1,0 +1,17 @@
+[package]
+name = "twine-core"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Isentropic Development <info@isentropic.dev>"]
+description = "A Rust framework for functional and composable system modeling."
+repository = "https://github.com/isentropic-dev/twine"
+readme = "../README.md"
+keywords = ["twine", "framework", "functional", "composable", "modeling"]
+
+[dependencies]
+twine-macros = { workspace = true, optional = true }
+
+[features]
+default = ["macros"]
+macros = ["dep:twine-macros"]

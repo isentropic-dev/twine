@@ -201,6 +201,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "twine-core"
+version = "0.1.0"
+dependencies = [
+ "twine-macros",
+]
+
+[[package]]
 name = "twine-engine"
 version = "0.1.0"
 

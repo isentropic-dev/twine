@@ -1,7 +1,11 @@
 [workspace]
 members = [
+    "twine-core",
     "twine-engine",
     "twine-macros"
 ]
 
 resolver = "2"
+
+[workspace.dependencies]
+twine-macros = { version = "0.1", path = "twine-macros" }
