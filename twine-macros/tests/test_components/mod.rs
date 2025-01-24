@@ -39,6 +39,10 @@ pub mod building {
         pub setpoint: f64,
         pub auto: bool,
     }
+
+    pub fn create(_config: Config) -> impl Fn(Input) -> Output {
+        |_input| Output::default()
+    }
 }
 
 /// A mock hourly weather provider, used for integration tests.
@@ -105,5 +109,9 @@ pub mod hourly_weather {
                 interpolate: Interpolate::default(),
             }
         }
+    }
+
+    pub fn create(_config: Config) -> impl Fn(Input) -> Output {
+        |_input| Output::default()
     }
 }
