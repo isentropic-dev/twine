@@ -2,21 +2,24 @@ use itertools::Itertools;
 use proc_macro2::TokenStream;
 use quote::quote;
 
-use super::{ComponentDefinition, InputField, InputSchema};
+use super::{ComponentDefinition, ComponentGraph, InputField, InputSchema};
 
-/// Expands a `ComponentDefinition` into a Rust module.
+/// Expands a `ComponentGraph` into a Rust module.
 ///
 /// This function generates a module containing:
 /// - `Config`: Stores configuration values for component instances.
 /// - `Input`: Defines the structured input schema.
 /// - `Output`: Represents the output schema for component instances.
 /// - `check_types`: A function that provides compile-time type validation.
-pub(crate) fn expand(component: &ComponentDefinition) -> TokenStream {
-    let name = &component.name;
-    let config = generate_config(component);
-    let input = generate_input(component);
-    let output = generate_output(component);
-    let type_check_fn = generate_type_check_fn(component);
+pub(crate) fn expand(graph: &ComponentGraph) -> TokenStream {
+    // We don't do anything with the dependencies graph yet.
+    let ComponentGraph { definition, .. } = graph;
+
+    let name = &definition.name;
+    let config = generate_config(definition);
+    let input = generate_input(definition);
+    let output = generate_output(definition);
+    let type_check_fn = generate_type_check_fn(definition);
 
     quote! {
         mod #name {
@@ -30,8 +33,8 @@ pub(crate) fn expand(component: &ComponentDefinition) -> TokenStream {
 }
 
 /// Generates a `Config` struct with configuration fields for each component instance.
-fn generate_config(component: &ComponentDefinition) -> TokenStream {
-    let fields = component.components.iter().map(|instance| {
+fn generate_config(definition: &ComponentDefinition) -> TokenStream {
+    let fields = definition.components.iter().map(|instance| {
         let name = &instance.name;
         let module = &instance.module;
         quote! { pub #name: #module::Config, }
@@ -46,9 +49,9 @@ fn generate_config(component: &ComponentDefinition) -> TokenStream {
 }
 
 /// Generates an `Input` struct and nested modules for hierarchical input fields.
-fn generate_input(component: &ComponentDefinition) -> TokenStream {
-    let fields = generate_input_fields(&component.input_schema);
-    let nested_modules = generate_nested_modules(&component.input_schema);
+fn generate_input(definition: &ComponentDefinition) -> TokenStream {
+    let fields = generate_input_fields(&definition.input_schema);
+    let nested_modules = generate_nested_modules(&definition.input_schema);
 
     quote! {
         #[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
@@ -100,8 +103,8 @@ fn generate_nested_modules(input_schema: &InputSchema) -> Vec<TokenStream> {
 }
 
 /// Generates an `Output` struct with output fields for each component instance.
-fn generate_output(component: &ComponentDefinition) -> TokenStream {
-    let fields = component.components.iter().map(|instance| {
+fn generate_output(definition: &ComponentDefinition) -> TokenStream {
+    let fields = definition.components.iter().map(|instance| {
         let name = &instance.name;
         let module = &instance.module;
         quote! { pub #name: #module::Output, }
@@ -116,8 +119,8 @@ fn generate_output(component: &ComponentDefinition) -> TokenStream {
 }
 
 /// Generates a function for compile-time input validation.
-fn generate_type_check_fn(component: &ComponentDefinition) -> TokenStream {
-    let input_fields = component
+fn generate_type_check_fn(definition: &ComponentDefinition) -> TokenStream {
+    let input_fields = definition
         .input_schema
         .keys()
         .sorted()
@@ -129,10 +132,10 @@ fn generate_type_check_fn(component: &ComponentDefinition) -> TokenStream {
     };
 
     // Bring required outputs into scope.
-    let component_outputs: Vec<_> = component
+    let component_outputs: Vec<_> = definition
         .components
         .iter()
-        .filter(|instance| component.is_used_as_input(&instance.name))
+        .filter(|instance| definition.is_used_as_input(&instance.name))
         .map(|instance| {
             let name = &instance.name;
             let mod_input = &instance.module;
@@ -141,7 +144,7 @@ fn generate_type_check_fn(component: &ComponentDefinition) -> TokenStream {
         .collect();
 
     // Check each component's input expression.
-    let component_inputs: Vec<_> = component
+    let component_inputs: Vec<_> = definition
         .components
         .iter()
         .map(|instance| {

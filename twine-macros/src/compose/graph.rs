@@ -1,5 +1,3 @@
-#![allow(dead_code)] // Just for now...
-
 use std::collections::HashMap;
 
 use petgraph::graph::{DiGraph, NodeIndex};

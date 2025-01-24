@@ -4,12 +4,14 @@ mod parse;
 
 use std::collections::HashMap;
 
+use petgraph::graph::DiGraph;
 use proc_macro::TokenStream;
 use syn::{parse_macro_input, ExprStruct, Ident, Path, Type};
 
 pub(crate) fn expand(input: TokenStream) -> TokenStream {
-    let component = parse_macro_input!(input as ComponentDefinition);
-    generate::expand(&component).into()
+    let definition = parse_macro_input!(input as ComponentDefinition);
+    let graph = definition.into();
+    generate::expand(&graph).into()
 }
 
 /// Defines a composed component.
@@ -22,6 +24,22 @@ struct ComponentDefinition {
 
     /// Inner component instances.
     components: Vec<ComponentInstance>,
+}
+
+struct ComponentGraph {
+    definition: ComponentDefinition,
+    #[allow(dead_code)] // Just for now...
+    dependencies: DiGraph<usize, graph::Connection>,
+}
+
+impl From<ComponentDefinition> for ComponentGraph {
+    fn from(definition: ComponentDefinition) -> Self {
+        let dependencies = graph::build_graph(&definition.components);
+        Self {
+            definition,
+            dependencies,
+        }
+    }
 }
 
 /// Maps field identifiers to their corresponding input types or structures.
