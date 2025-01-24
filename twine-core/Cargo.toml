@@ -11,7 +11,9 @@ keywords = ["twine", "framework", "functional", "composable", "modeling"]
 
 [dependencies]
 twine-macros = { workspace = true, optional = true }
+serde = { version = "1.0", optional = true, features = ["derive"] }
 
 [features]
-default = ["macros"]
+default = ["macros", "serde-derive"]
 macros = ["dep:twine-macros"]
+serde-derive = ["dep:serde", "twine-macros?/serde-derive"]
