@@ -5,6 +5,7 @@ mod parse;
 use std::collections::HashMap;
 
 use petgraph::{
+    algo::toposort,
     graph::{DiGraph, NodeIndex},
     Direction,
 };
@@ -14,7 +15,7 @@ use syn::{parse_macro_input, ExprStruct, Ident, Path, Type};
 pub(crate) fn expand(input: TokenStream) -> TokenStream {
     let definition = parse_macro_input!(input as ComponentDefinition);
     let graph = definition.into();
-    generate::expand(&graph).into()
+    generate::generate_module(&graph).into()
 }
 
 /// Defines a composed component.
@@ -73,5 +74,15 @@ impl ComponentGraph {
             .neighbors_directed(node_index, Direction::Outgoing)
             .next()
             .is_some()
+    }
+
+    /// Returns the components in the proper call order.
+    pub fn call_order(&self) -> Vec<usize> {
+        toposort(&self.dependencies, None)
+            // https://github.com/isentropic-dev/twine/issues/29
+            .expect("Cycle detected in component dependencies")
+            .into_iter()
+            .map(|node_index| self.dependencies[node_index])
+            .collect()
     }
 }
