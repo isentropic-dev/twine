@@ -86,4 +86,11 @@ mod tests {
             "Output JSON serialization failed."
         );
     }
+
+    #[test]
+    fn call_demo_component() {
+        let demo_fn = demo::create(demo::Config::default());
+        let output = demo_fn(demo::Input::default());
+        println!("{output:#?}");
+    }
 }
