@@ -130,8 +130,6 @@ fn generate_type_check_fn(graph: &ComponentGraph) -> TokenStream {
     };
 
     // Bring required outputs into scope.
-    println!("{:?}", graph.definition);
-    println!("{:#?}", graph.dependencies);
     let component_outputs: Vec<_> = graph
         .definition
         .components

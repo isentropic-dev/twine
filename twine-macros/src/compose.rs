@@ -32,7 +32,6 @@ struct ComponentDefinition {
 
 struct ComponentGraph {
     definition: ComponentDefinition,
-    #[allow(dead_code)] // Just for now...
     dependencies: DiGraph<usize, graph::Connection>,
 }
 
