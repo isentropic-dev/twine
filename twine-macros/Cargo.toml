@@ -15,6 +15,7 @@ petgraph = "0.7.1"
 proc-macro2 = "1.0"
 quote = "1.0"
 syn = { version = "2.0", features = ["extra-traits"] }
+serde = { version = "1.0", features = ["derive"], optional = true }
 
 [lib]
 proc-macro = true
@@ -22,7 +23,13 @@ doctest = false
 
 [dev-dependencies]
 prettyplease = "0.2.29"
-serde = { version = "1.0.217", features = ["derive"] }
 serde_json = "1.0.136"
 serde_yaml = "0.9.34"
 toml = "0.8.19"
+
+[features]
+serde-derive = ["dep:serde"]
+
+[[test]]
+name = "compose_demo"
+required-features = ["serde-derive"]
