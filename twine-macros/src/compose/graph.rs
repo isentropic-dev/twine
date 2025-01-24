@@ -8,40 +8,29 @@ use syn::{Expr, ExprField, ExprPath, Member};
 
 use super::ComponentInstance;
 
-/// Represents a directed connection between components in the graph.
+/// Builds a directed dependency graph from component instances.
 ///
-/// - `from_output`: The name of the output field of the source component.
-/// - `to_input`: The name of the input field of the destination component.
-#[derive(Debug, PartialEq)]
-pub(crate) struct Connection {
-    from_output: String,
-    to_input: String,
-}
-
-/// Builds a directed dependency graph from a list of component instances.
-///
-/// Each component instance is represented as a node in the graph, indexed by
-/// its position in the input list (`components`). Directed edges represent
-/// dependencies between components based on their input structures.
+/// Each component becomes a node in the graph, indexed by its position in the
+/// `components` list. Directed edges represent dependencies inferred from input
+/// field references.
 ///
 /// How It Works:
 ///
-/// - Each component has an input struct that defines its field assignments.
-/// - If a field references another component's output (e.g., if `first_house`
-///   has an input field using `weather.temperature`), a directed edge is
-///   created from `weather` to `first_house`.
-/// - Nested field accesses (e.g., `component_name.with.nested.output`) are
-///   stored as `"with.nested.output"` in the graph, preserving the full path
-///   to the output.
-/// - Some input fields resemble component names but are actually inputs to a
-///   larger composed system (defined by the macro). These are not treated as
-///   dependencies and are ignored when constructing the graph.
+/// - Each component's input struct defines its field assignments.
+/// - If an input field references another component's output, a directed edge
+///   is added from the source component to the dependent (target) component.
+///   For example, `weather.temperature` used by `first_house` results in an
+///   edge from `weather` to `first_house`.
+/// - Nested field accesses, such as `component.with.nested.output`, are stored
+///   as `"with.nested.output"` to preserve full paths.
+/// - References that resemble component names but refer to external inputs
+///   are ignored.
 ///
-/// Returns:
+/// # Returns
 ///
 /// A `DiGraph<usize, Connection>` where:
 /// - Nodes are component indices.
-/// - Edges represent dependencies between components, labeled with `Connection`.
+/// - Edges represent dependencies, labeled with `Connection`.
 pub(crate) fn build_graph(components: &[ComponentInstance]) -> DiGraph<usize, Connection> {
     let mut graph = DiGraph::new();
 
@@ -51,10 +40,10 @@ pub(crate) fn build_graph(components: &[ComponentInstance]) -> DiGraph<usize, Co
         .map(|(index, component)| (component.name.to_string(), graph.add_node(index)))
         .collect();
 
-    for (to_index, component) in components.iter().enumerate() {
-        for (from_component, connection) in find_connections(component) {
-            if let Some(&from_index) = node_map.get(&from_component) {
-                graph.add_edge(from_index, NodeIndex::new(to_index), connection);
+    for (target_index, target_component) in components.iter().enumerate() {
+        for (source_component, connection) in find_incoming_connections(target_component) {
+            if let Some(&source_index) = node_map.get(&source_component) {
+                graph.add_edge(source_index, NodeIndex::new(target_index), connection);
             }
         }
     }
@@ -62,22 +51,31 @@ pub(crate) fn build_graph(components: &[ComponentInstance]) -> DiGraph<usize, Co
     graph
 }
 
-/// Extracts connections for a component based on its input field expressions.
+/// Represents a directed connection between two components.
 ///
-/// This function determines dependencies between components by parsing input
-/// field expressions and linking each input to an output field from another
-/// component.
+/// This struct defines an input-output field pair, tracking dependencies
+/// between components. Each connection represents data flow from a source
+/// component’s output field to a target component’s input field.
 ///
-/// # Arguments
+/// It is primarily used for dependency resolution and graph visualization.
+#[derive(Debug, PartialEq)]
+pub(crate) struct Connection {
+    /// Name of the output field on the source component.
+    source: String,
+    /// Name of the input field on the target component.
+    target: String,
+}
+
+/// Finds dependencies by analyzing input field expressions.
 ///
-/// - `component`: The `ComponentInstance` whose connections are being extracted.
+/// Extracts references to outputs from other components.
 ///
 /// # Returns
 ///
-/// A vector of `(component_name, Connection)` pairs, where:
-/// - `component_name` is the source component's name.
-/// - `Connection` maps the source component's output to this component's input.
-fn find_connections(component: &ComponentInstance) -> Vec<(String, Connection)> {
+/// A `Vec<(String, Connection)>`, where:
+/// - `String` is the source component providing an output.
+/// - `Connection` maps the source component's output to the current component's input.
+fn find_incoming_connections(component: &ComponentInstance) -> Vec<(String, Connection)> {
     iter_named_fields(component)
         .flat_map(|(field_name, field_expr)| {
             get_component_outputs(field_expr).into_iter().map(
@@ -85,8 +83,8 @@ fn find_connections(component: &ComponentInstance) -> Vec<(String, Connection)> 
                     (
                         component_name,
                         Connection {
-                            from_output: output_name,
-                            to_input: field_name.clone(),
+                            source: output_name,
+                            target: field_name.clone(),
                         },
                     )
                 },
@@ -95,13 +93,7 @@ fn find_connections(component: &ComponentInstance) -> Vec<(String, Connection)> 
         .collect()
 }
 
-/// Iterates over the named fields of a component.
-///
-/// Only explicitly named fields are returned, while unnamed (tuple) fields are ignored.
-///
-/// # Arguments
-///
-/// - `component`: A reference to a `ComponentInstance`.
+/// Iterates over a component's named fields, ignoring unnamed (tuple) fields.
 ///
 /// # Returns
 ///
@@ -118,35 +110,25 @@ fn iter_named_fields(component: &ComponentInstance) -> impl Iterator<Item = (Str
     })
 }
 
-/// Gets all `component.output_field` references from an expression.
+/// Extracts all `component.output_field` references from an expression.
 ///
-/// Initializes an empty `Vec` and recursively traverses the expression
-/// tree using `extract_component_outputs`.
-///
-/// # Arguments
-///
-/// - `expr`: The expression to analyze.
+/// Recursively traverses the expression tree and collects references into
+/// a `Vec`.
 ///
 /// # Returns
 ///
 /// A `Vec<(String, String)>`, where each tuple contains:
-/// - The referenced component's name.
-/// - The accessed output field.
+/// - The name of the referenced component.
+/// - The name of the accessed output field.
 fn get_component_outputs(expr: &Expr) -> Vec<(String, String)> {
     let mut outputs = Vec::new();
     extract_component_outputs(expr, &mut outputs);
     outputs
 }
 
-/// Recursively extracts `component.output_field` references into `outputs`.
+/// Recursively extracts `component.output_field` references from an expression.
 ///
-/// Performs a depth-first traversal of the expression tree, collecting
-/// component output references into a single `Vec` to minimize allocations.
-///
-/// # Arguments
-///
-/// - `expr`: The expression to analyze.
-/// - `outputs`: A mutable `Vec` that stores the extracted output references.
+/// Uses depth-first traversal to collect references efficiently.
 fn extract_component_outputs(expr: &Expr, outputs: &mut Vec<(String, String)>) {
     match expr {
         Expr::Field(ExprField { base, member, .. }) => {
@@ -180,14 +162,10 @@ fn extract_component_outputs(expr: &Expr, outputs: &mut Vec<(String, String)>) {
     }
 }
 
-/// Extracts a single `(component, field)` pair from a deeply nested field access.
+/// Extracts a `(component, field)` pair from a nested field access.
 ///
-/// Converts a reference like `some_component.some_field.sub_value` into a
-/// structured `(component, "some_field.sub_value")` format.
-///
-/// # Arguments
-///
-/// - `expr`: The expression (`&Expr`) to analyze.
+/// Converts expressions like `some_component.some_field.sub_value` into
+/// `(some_component, "some_field.sub_value")`, preserving full paths.
 ///
 /// # Returns
 ///
@@ -328,7 +306,7 @@ mod tests {
 
         let expected_nodes = vec![0, 1, 2, 3];
         let actual_nodes: Vec<_> = graph.node_indices().map(|idx| graph[idx]).collect();
-        assert_eq!(actual_nodes, expected_nodes);
+        assert_eq!(actual_nodes, expected_nodes, "Nodes do not match.");
 
         let expected_edges = vec![
             (0, 1, "temperature", "outdoor_temp"),
@@ -343,15 +321,15 @@ mod tests {
         let actual_edges: Vec<_> = graph
             .edge_references()
             .map(|edge| {
-                let from = graph[edge.source()];
-                let to = graph[edge.target()];
+                let source = edge.source().index();
+                let target = edge.target().index();
                 let conn = edge.weight();
-                (from, to, conn.from_output.as_str(), conn.to_input.as_str())
+                (source, target, conn.source.as_str(), conn.target.as_str())
             })
             .sorted()
             .collect();
 
-        assert_eq!(actual_edges, expected_edges);
+        assert_eq!(actual_edges, expected_edges, "Edges do not match.");
 
         Ok(())
     }
