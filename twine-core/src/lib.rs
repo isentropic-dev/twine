@@ -23,7 +23,7 @@ pub use twine_macros::compose;
 /// # Implementing a Component
 ///
 /// To define a component, a type must implement the `Component` trait by
-/// specifying its configuration, input, and output types, and providing a
+/// specifying its configuration, input, and output structs, and providing a
 /// `create` function that returns a pure function mapping input to output.
 ///
 /// # Example
