@@ -204,6 +204,7 @@ dependencies = [
 name = "twine-core"
 version = "0.1.0"
 dependencies = [
+ "serde",
  "twine-macros",
 ]
 
