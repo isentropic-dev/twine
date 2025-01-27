@@ -2,7 +2,8 @@
 members = [
     "twine-core",
     "twine-engine",
-    "twine-macros"
+    "twine-macros",
+    "integration-tests",
 ]
 
 resolver = "2"
