@@ -35,6 +35,7 @@ pub(crate) fn generate_module(graph: &ComponentGraph) -> TokenStream {
 
 /// Generates a `Config` struct holding each component’s configuration.
 fn generate_config(definition: &ComponentDefinition) -> TokenStream {
+    let derive_attrs = create_derive_attributes();
     let fields = definition.components.iter().map(|instance| {
         let name = &instance.name;
         let module = &instance.module;
@@ -42,8 +43,7 @@ fn generate_config(definition: &ComponentDefinition) -> TokenStream {
     });
 
     quote! {
-        #[derive(Debug, Default)]
-        #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
+        #derive_attrs
         pub struct Config {
             #(#fields)*
         }
@@ -52,12 +52,12 @@ fn generate_config(definition: &ComponentDefinition) -> TokenStream {
 
 /// Generates an `Input` struct with nested modules for hierarchical fields.
 fn generate_input(definition: &ComponentDefinition) -> TokenStream {
+    let derive_attrs = create_derive_attributes();
     let fields = create_input_fields(&definition.input_schema);
     let nested_modules = create_nested_module(&definition.input_schema);
 
     quote! {
-        #[derive(Debug, Default)]
-        #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
+        #derive_attrs
         pub struct Input {
             #(#fields)*
         }
@@ -84,6 +84,7 @@ fn create_input_fields(input_schema: &InputSchema) -> Vec<TokenStream> {
 ///
 /// Each module includes an `Input` struct.
 fn create_nested_module(input_schema: &InputSchema) -> Vec<TokenStream> {
+    let derive_attrs = create_derive_attributes();
     input_schema
         .iter()
         .sorted_by_key(|(ident, _)| ident.to_string())
@@ -94,8 +95,7 @@ fn create_nested_module(input_schema: &InputSchema) -> Vec<TokenStream> {
 
                 Some(quote! {
                     pub mod #mod_name {
-                        #[derive(Debug, Default)]
-                        #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
+                        #derive_attrs
                         pub struct Input {
                             #(#nested_fields)*
                         }
@@ -112,6 +112,7 @@ fn create_nested_module(input_schema: &InputSchema) -> Vec<TokenStream> {
 
 /// Generates an `Output` struct collecting component outputs.
 fn generate_output(definition: &ComponentDefinition) -> TokenStream {
+    let derive_attrs = create_derive_attributes();
     let fields = definition.components.iter().map(|instance| {
         let name = &instance.name;
         let module = &instance.module;
@@ -119,8 +120,7 @@ fn generate_output(definition: &ComponentDefinition) -> TokenStream {
     });
 
     quote! {
-        #[derive(Debug, Default)]
-        #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
+        #derive_attrs
         pub struct Output {
             #(#fields)*
         }
@@ -248,6 +248,15 @@ fn generate_create_fn(graph: &ComponentGraph) -> TokenStream {
     }
 }
 
+/// Generates derive attributes based on the enabled features.
+fn create_derive_attributes() -> TokenStream {
+    if cfg!(feature = "serde-derive") {
+        quote! { #[derive(Debug, Default, serde::Serialize, serde::Deserialize)] }
+    } else {
+        quote! { #[derive(Debug, Default)] }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -287,13 +296,19 @@ mod tests {
                 }
             }),
         );
-        let expected = quote! {
-            #[derive(Debug, Default)]
-            #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
-            pub struct Config {
-                pub first: example::Config,
-                pub second: example::Config,
-                pub third: another::Config,
+        let expected = {
+            let derive_attr = if cfg!(feature = "serde-derive") {
+                quote! { #[derive(Debug, Default, serde::Serialize, serde::Deserialize)] }
+            } else {
+                quote! { #[derive(Debug, Default)] }
+            };
+            quote! {
+                #derive_attr
+                pub struct Config {
+                    pub first: example::Config,
+                    pub second: example::Config,
+                    pub third: another::Config,
+                }
             }
         };
         assert_eq_pretty(&expected, &generated);
@@ -319,31 +334,35 @@ mod tests {
                 }
             }),
         );
-        let expected = quote! {
-            #[derive(Debug, Default)]
-            #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
-            pub struct Input {
-                pub hour: usize,
-                pub indoor: indoor::Input,
-                pub thermostat_control: thermostat_control::Input,
-                pub time: f64,
-            }
-
-            pub mod indoor {
-                #[derive(Debug, Default)]
-                #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
+        let expected = {
+            let derive_attr = if cfg!(feature = "serde-derive") {
+                quote! { #[derive(Debug, Default, serde::Serialize, serde::Deserialize)] }
+            } else {
+                quote! { #[derive(Debug, Default)] }
+            };
+            quote! {
+                #derive_attr
                 pub struct Input {
-                    pub occupancy: u32,
-                    pub pressure: f64,
-                    pub temp_setpoint: f64,
+                    pub hour: usize,
+                    pub indoor: indoor::Input,
+                    pub thermostat_control: thermostat_control::Input,
+                    pub time: f64,
                 }
-            }
 
-            pub mod thermostat_control {
-                #[derive(Debug, Default)]
-                #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
-                pub struct Input {
-                    pub auto_mode: bool,
+                pub mod indoor {
+                    #derive_attr
+                    pub struct Input {
+                        pub occupancy: u32,
+                        pub pressure: f64,
+                        pub temp_setpoint: f64,
+                    }
+                }
+
+                pub mod thermostat_control {
+                    #derive_attr
+                    pub struct Input {
+                        pub auto_mode: bool,
+                    }
                 }
             }
         };
@@ -365,12 +384,18 @@ mod tests {
                 }
             }),
         );
-        let expected = quote! {
-            #[derive(Debug, Default)]
-            #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
-            pub struct Output {
-                pub first_one: first::Output,
-                pub second_one: second::Output,
+        let expected = {
+            let derive_attr = if cfg!(feature = "serde-derive") {
+                quote! { #[derive(Debug, Default, serde::Serialize, serde::Deserialize)] }
+            } else {
+                quote! { #[derive(Debug, Default)] }
+            };
+            quote! {
+                #derive_attr
+                pub struct Output {
+                    pub first_one: first::Output,
+                    pub second_one: second::Output,
+                }
             }
         };
         assert_eq_pretty(&expected, &generated);
