@@ -23,13 +23,7 @@ doctest = false
 
 [dev-dependencies]
 prettyplease = "0.2.29"
-serde_json = "1.0.136"
-serde_yaml = "0.9.34"
-toml = "0.8.19"
 
 [features]
 serde-derive = ["dep:serde"]
-
-[[test]]
-name = "compose_demo"
-required-features = ["serde-derive"]
+default = ["serde-derive"]

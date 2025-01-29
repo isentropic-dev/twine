@@ -1,8 +1,5 @@
-mod test_components;
-
-use twine_macros::compose;
-
-use test_components::{building, hourly_weather};
+use integration_tests::test_components::{building, hourly_weather};
+use twine_core::compose;
 
 compose!(demo, {
     Input {
