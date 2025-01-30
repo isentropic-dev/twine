@@ -2,9 +2,9 @@ use std::collections::HashSet;
 
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
-use syn::{parse_quote_spanned, Path};
+use syn::{parse_quote_spanned, Ident, Path};
 
-use super::{ComponentDefinition, ComponentGraph};
+use super::{ComponentDefinition, ComponentGraph, ComponentInstance};
 
 pub(crate) fn code(graph: &ComponentGraph) -> TokenStream {
     let definition = &graph.definition;
@@ -88,6 +88,7 @@ fn generate_aggregate_fields(
 ///
 /// This function:
 ///
+/// - Creates type aliases to work around qualified path limitations.
 /// - Instantiates each component using its configuration from `Config`.
 /// - Returns a closure that:
 ///   - Receives an `Input` struct.
@@ -95,77 +96,10 @@ fn generate_aggregate_fields(
 ///   - Passes component outputs as inputs to dependent components.
 ///   - Assembles the computed results into an `Output` struct.
 fn generate_create_fn(graph: &ComponentGraph) -> TokenStream {
-    let definition = &graph.definition;
-    let call_order = graph.call_order();
-
-    // Instantiate each component.
-    let instantiate_components: Vec<_> = call_order
-        .iter()
-        .map(|&index| {
-            let component = &definition.components[index];
-            let comp_name = &component.name;
-            let comp_type = &component.component_type;
-            let comp_fn = format_ident!("{}_fn", comp_name);
-            quote! {
-                let #comp_fn = #comp_type::create(config.#comp_name);
-            }
-        })
-        .collect();
-
-    // Create input type aliases.
-    let mut seen_types = HashSet::new();
-    let create_type_aliases: Vec<_> = call_order
-        .iter()
-        .filter_map(|&index| {
-            let component = &definition.components[index];
-            let comp_type = &component.component_type;
-            let last_segment = comp_type
-                .segments
-                .last()
-                .expect("Component type path must not be empty");
-            let alias_name = format_ident!("{}Input", last_segment.ident);
-            if seen_types.insert(last_segment.ident.to_string()) {
-                Some(quote! {
-                    type #alias_name = <#comp_type as twine_core::Component>::Input;
-                })
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    // Call each component.
-    let call_components: Vec<_> = call_order
-        .iter()
-        .map(|&index| {
-            let component = &definition.components[index];
-            let comp_name = &component.name;
-            let comp_type = &component.component_type;
-            let last_segment = comp_type
-                .segments
-                .last()
-                .expect("Component type path must not be empty");
-            let input_alias = format_ident!("{}Input", last_segment.ident);
-            let name_fn = format_ident!("{}_fn", comp_name);
-
-            let mut input_expr = component.input_struct.clone();
-            input_expr.path = parse_quote_spanned!(Span::call_site() => #input_alias);
-
-            quote! {
-                let #comp_name = #name_fn(#input_expr);
-            }
-        })
-        .collect();
-
-    // Build output struct.
-    let output_fields: Vec<_> = call_order
-        .iter()
-        .map(|&index| {
-            let component = &definition.components[index];
-            let name = &component.name;
-            quote! { #name, }
-        })
-        .collect();
+    let create_type_aliases = generate_type_aliases(graph);
+    let instantiate_components = generate_instantiations(graph);
+    let call_components = generate_calls(graph);
+    let build_output = generate_output_struct(graph);
 
     quote! {
         fn create(config: Self::Config) -> impl Fn(Self::Input) -> Self::Output {
@@ -173,12 +107,91 @@ fn generate_create_fn(graph: &ComponentGraph) -> TokenStream {
             #(#instantiate_components)*
             move |input| {
                 #(#call_components)*
-                Self::Output {
-                    #(#output_fields)*
-                }
+                #build_output
             }
         }
     }
+}
+
+/// Generates type aliases for component inputs.
+fn generate_type_aliases(graph: &ComponentGraph) -> Vec<TokenStream> {
+    let mut seen_types = HashSet::new();
+    graph
+        .iter_components()
+        .filter_map(|ComponentInstance { component_type, .. }| {
+            let input_alias = generate_input_alias(component_type);
+            if seen_types.insert(input_alias.to_string()) {
+                Some(quote! {
+                    type #input_alias = <#component_type as twine_core::Component>::Input;
+                })
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+/// Generates component instantiations.
+fn generate_instantiations(graph: &ComponentGraph) -> Vec<TokenStream> {
+    graph
+        .iter_components()
+        .map(
+            |ComponentInstance {
+                 name,
+                 component_type,
+                 ..
+             }| {
+                let component_fn = format_ident!("{name}_fn");
+                quote! {
+                    let #component_fn = #component_type::create(config.#name);
+                }
+            },
+        )
+        .collect()
+}
+
+/// Generates calls to each component.
+fn generate_calls(graph: &ComponentGraph) -> Vec<TokenStream> {
+    graph
+        .iter_components()
+        .map(
+            |ComponentInstance {
+                 name,
+                 component_type,
+                 input_struct,
+             }| {
+                // This bit allows rust-analyzer to work as expected.
+                let mut input_expr = input_struct.clone();
+                let input_alias = generate_input_alias(component_type);
+                input_expr.path = parse_quote_spanned!(Span::call_site() => #input_alias);
+
+                let component_fn = format_ident!("{name}_fn");
+                quote! {
+                    let #name = #component_fn(#input_expr);
+                }
+            },
+        )
+        .collect()
+}
+
+/// Generates the `Self::Output { ... }` struct.
+fn generate_output_struct(graph: &ComponentGraph) -> TokenStream {
+    let output_fields = graph
+        .iter_components()
+        .map(|ComponentInstance { name, .. }| {
+            quote! { #name, }
+        });
+    quote! {
+        Self::Output { #(#output_fields)* }
+    }
+}
+
+fn generate_input_alias(component_type: &Path) -> Ident {
+    let last_segment = component_type
+        .segments
+        .last()
+        .expect("Component type path must not be empty");
+    format_ident!("{}Input", last_segment.ident)
 }
 
 /// Represents whether we're generating `Config` or `Output`.
