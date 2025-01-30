@@ -248,20 +248,20 @@ mod tests {
         let graph = build_graph(&[
             ComponentInstance {
                 name: parse_str("weather")?,
-                component_type: parse_str("hourly_weather")?,
+                component_type: parse_str("HourlyWeather")?,
                 input_struct: parse_str(
                     r"
-                    hourly_weather::Input {
-                        time
+                    HourlyWeather {
+                        time: input.time
                     }",
                 )?,
             },
             ComponentInstance {
                 name: parse_str("first_house")?,
-                component_type: parse_str("building")?,
+                component_type: parse_str("BuildingModel")?,
                 input_struct: parse_str(
                     r"
-                    building::Input { 
+                    BuildingModel { 
                         occupancy: indoor.occupancy,
                         outdoor_temp: weather.temperature,
                         wind_speed: weather.wind_speed,
@@ -274,10 +274,10 @@ mod tests {
             },
             ComponentInstance {
                 name: parse_str("second_house")?,
-                component_type: parse_str("building")?,
+                component_type: parse_str("BuildingModel")?,
                 input_struct: parse_str(
                     r"
-                    building::Input { 
+                    BuildingModel { 
                         occupancy: indoor.occupancy,
                         outdoor_temp: first_house.indoor_temp,
                         wind_speed: weather.wind_speed,
@@ -290,10 +290,10 @@ mod tests {
             },
             ComponentInstance {
                 name: parse_str("another_component")?,
-                component_type: parse_str("model")?,
+                component_type: parse_str("MyComponent")?,
                 input_struct: parse_str(
                     r"
-                    model::Input { 
+                    MyComponent { 
                         x: weather.temperature,
                         y: first_house.nested.room_temp,
                         z: second_house.indoor_temp,
