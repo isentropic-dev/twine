@@ -1,6 +1,21 @@
-/// A mock model of a building, used for integration tests.
 pub mod building {
     use serde::{Deserialize, Serialize};
+    use twine_core::Component;
+
+    /// A mock model of a building, used for integration tests.
+    struct BuildingModel;
+
+    impl Component for BuildingModel {
+        type Config = Config;
+
+        type Input = Input;
+
+        type Output = Output;
+
+        fn create(_config: Self::Config) -> impl Fn(Self::Input) -> Self::Output {
+            |_input| Output::default()
+        }
+    }
 
     /// Configuration settings for the building model.
     #[derive(Debug, Default, Serialize, Deserialize)]
@@ -39,15 +54,26 @@ pub mod building {
         pub setpoint: f64,
         pub auto: bool,
     }
-
-    pub fn create(_config: Config) -> impl Fn(Input) -> Output {
-        |_input| Output::default()
-    }
 }
 
-/// A mock hourly weather provider, used for integration tests.
 pub mod hourly_weather {
     use serde::{Deserialize, Serialize};
+    use twine_core::Component;
+
+    /// A mock hourly weather provider, used for integration tests.
+    struct HourlyWeather;
+
+    impl Component for HourlyWeather {
+        type Config = Config;
+
+        type Input = Input;
+
+        type Output = Output;
+
+        fn create(_config: Self::Config) -> impl Fn(Self::Input) -> Self::Output {
+            |_input| Output::default()
+        }
+    }
 
     /// Configuration settings for the weather provider.
     #[derive(Debug, Serialize, Deserialize)]
@@ -109,9 +135,5 @@ pub mod hourly_weather {
                 interpolate: Interpolate::default(),
             }
         }
-    }
-
-    pub fn create(_config: Config) -> impl Fn(Input) -> Output {
-        |_input| Output::default()
     }
 }
