@@ -105,7 +105,7 @@ fn validate_and_extract_instance(stmt: &Stmt) -> Result<ComponentInstance> {
             return Ok(ComponentInstance {
                 name: pat_ident.ident.clone(),
                 component_type: expr_struct.path.clone(),
-                input_expr: expr_struct.clone(),
+                input_struct: expr_struct.clone(),
             });
         }
     }

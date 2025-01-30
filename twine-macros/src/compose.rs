@@ -29,7 +29,7 @@ struct ComponentDefinition {
 struct ComponentInstance {
     name: Ident,
     component_type: Path,
-    input_expr: ExprStruct,
+    input_struct: ExprStruct,
 }
 
 struct ComponentGraph {
