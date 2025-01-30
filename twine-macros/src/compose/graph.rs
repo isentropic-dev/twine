@@ -99,7 +99,7 @@ fn find_incoming_connections(component: &ComponentInstance) -> Vec<(String, Conn
 /// - `field_name` is the field’s name as a `String`.
 /// - `field_expr` is a reference to the field's expression (`&Expr`).
 fn iter_named_fields(component: &ComponentInstance) -> impl Iterator<Item = (String, &Expr)> {
-    component.input_struct.fields.iter().filter_map(|field| {
+    component.input_expr.fields.iter().filter_map(|field| {
         if let Member::Named(ident) = &field.member {
             Some((ident.to_string(), &field.expr))
         } else {
@@ -248,8 +248,8 @@ mod tests {
         let graph = build_graph(&[
             ComponentInstance {
                 name: parse_str("weather")?,
-                module: parse_str("hourly_weather")?,
-                input_struct: parse_str(
+                component_type: parse_str("hourly_weather")?,
+                input_expr: parse_str(
                     r"
                     hourly_weather::Input {
                         time
@@ -258,8 +258,8 @@ mod tests {
             },
             ComponentInstance {
                 name: parse_str("first_house")?,
-                module: parse_str("building")?,
-                input_struct: parse_str(
+                component_type: parse_str("building")?,
+                input_expr: parse_str(
                     r"
                     building::Input { 
                         occupancy: indoor.occupancy,
@@ -274,8 +274,8 @@ mod tests {
             },
             ComponentInstance {
                 name: parse_str("second_house")?,
-                module: parse_str("building")?,
-                input_struct: parse_str(
+                component_type: parse_str("building")?,
+                input_expr: parse_str(
                     r"
                     building::Input { 
                         occupancy: indoor.occupancy,
@@ -290,8 +290,8 @@ mod tests {
             },
             ComponentInstance {
                 name: parse_str("another_component")?,
-                module: parse_str("model")?,
-                input_struct: parse_str(
+                component_type: parse_str("model")?,
+                input_expr: parse_str(
                     r"
                     model::Input { 
                         x: weather.temperature,

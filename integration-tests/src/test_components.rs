@@ -3,7 +3,7 @@ pub mod building {
     use twine_core::Component;
 
     /// A mock model of a building, used for integration tests.
-    struct BuildingModel;
+    pub struct BuildingModel;
 
     impl Component for BuildingModel {
         type Config = Config;
@@ -61,7 +61,7 @@ pub mod hourly_weather {
     use twine_core::Component;
 
     /// A mock hourly weather provider, used for integration tests.
-    struct HourlyWeather;
+    pub struct HourlyWeather;
 
     impl Component for HourlyWeather {
         type Config = Config;
