@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-// use integration_tests::test_components::{building::BuildingModel, hourly_weather::HourlyWeather};
+use integration_tests::test_components::{building::BuildingModel, hourly_weather::HourlyWeather};
 use twine_core::compose;
 
 struct Demo;
@@ -22,7 +22,7 @@ impl Demo {
             occupancy: input.occupancy,
             outdoor_temp: weather.temperature,
             wind_speed: weather.wind_speed,
-            thermostat: building::Thermostat {
+            thermostat: Thermostat {
                 setpoint: input.temp_setpoint,
                 auto: true,
             },
@@ -32,7 +32,7 @@ impl Demo {
             occupancy: input.occupancy,
             outdoor_temp: first_house.indoor_temp,
             wind_speed: 0.0,
-            thermostat: building::Thermostat {
+            thermostat: Thermostat {
                 setpoint: 20.0,
                 auto: false,
             },
