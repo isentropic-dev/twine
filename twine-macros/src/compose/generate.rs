@@ -1,6 +1,8 @@
-use proc_macro2::TokenStream;
+use std::collections::HashSet;
+
+use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
-use syn::Path;
+use syn::{parse_quote_spanned, Path};
 
 use super::{ComponentDefinition, ComponentGraph};
 
@@ -110,6 +112,28 @@ fn generate_create_fn(graph: &ComponentGraph) -> TokenStream {
         })
         .collect();
 
+    // Create input type aliases.
+    let mut seen_types = HashSet::new();
+    let create_type_aliases: Vec<_> = call_order
+        .iter()
+        .filter_map(|&index| {
+            let component = &definition.components[index];
+            let comp_type = &component.component_type;
+            let last_segment = comp_type
+                .segments
+                .last()
+                .expect("Component type path must not be empty");
+            let alias_name = format_ident!("{}InputAlias", last_segment.ident);
+            if seen_types.insert(last_segment.ident.to_string()) {
+                Some(quote! {
+                    type #alias_name = <#comp_type as twine_core::Component>::Input;
+                })
+            } else {
+                None
+            }
+        })
+        .collect();
+
     // Call each component.
     let call_components: Vec<_> = call_order
         .iter()
@@ -117,11 +141,18 @@ fn generate_create_fn(graph: &ComponentGraph) -> TokenStream {
             let component = &definition.components[index];
             let comp_name = &component.name;
             let comp_type = &component.component_type;
+            let last_segment = comp_type
+                .segments
+                .last()
+                .expect("Component type path must not be empty");
+            let input_alias = format_ident!("{}InputAlias", last_segment.ident);
             let name_fn = format_ident!("{}_fn", comp_name);
-            let input_fields = &component.input_struct.fields;
+
+            let mut input_expr = component.input_struct.clone();
+            input_expr.path = parse_quote_spanned!(Span::call_site() => #input_alias);
 
             quote! {
-                let #comp_name = #name_fn(<#comp_type as twine_core::Component>::Input { #input_fields });
+                let #comp_name = #name_fn(#input_expr);
             }
         })
         .collect();
@@ -138,6 +169,7 @@ fn generate_create_fn(graph: &ComponentGraph) -> TokenStream {
 
     quote! {
         fn create(config: Self::Config) -> impl Fn(Self::Input) -> Self::Output {
+            #(#create_type_aliases)*
             #(#instantiate_components)*
             move |input| {
                 #(#call_components)*
@@ -261,13 +293,19 @@ mod tests {
         let graph = definition.into();
         let generated = generate_create_fn(&graph);
         let expected = quote! {
-            pub fn create(config: Self::Config) -> impl Fn(Self::Input) -> Self::Output {
+            fn create(config: Self::Config) -> impl Fn(Self::Input) -> Self::Output {
+                type call_firstInputAlias = <AnotherType as twine_core::Component>::Input;
+                type call_secondInputAlias = <ExampleType as twine_core::Component>::Input;
                 let call_first_fn = AnotherType::create(config.call_first);
                 let call_second_fn = ExampleType::create(config.call_second);
 
                 move |input| {
-                    let call_first = call_first_fn(<AnotherType as twine_core::Component>::Input { y: 2.0 });
-                    let call_second = call_second_fn(<ExampleType as twine_core::Component>::Input { x: call_first.z });
+                    let call_first = call_first_fn(call_firstInputAlias { y: 2.0 });
+                    let call_second = call_second_fn(call_secondInputAlias { x: call_first.z });
+                    Self::Output {
+                        call_first,
+                        call_second,
+                    }
                 }
             }
         };
