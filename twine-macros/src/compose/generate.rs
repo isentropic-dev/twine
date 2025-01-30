@@ -123,7 +123,7 @@ fn generate_create_fn(graph: &ComponentGraph) -> TokenStream {
                 .segments
                 .last()
                 .expect("Component type path must not be empty");
-            let alias_name = format_ident!("{}InputAlias", last_segment.ident);
+            let alias_name = format_ident!("{}Input", last_segment.ident);
             if seen_types.insert(last_segment.ident.to_string()) {
                 Some(quote! {
                     type #alias_name = <#comp_type as twine_core::Component>::Input;
@@ -145,7 +145,7 @@ fn generate_create_fn(graph: &ComponentGraph) -> TokenStream {
                 .segments
                 .last()
                 .expect("Component type path must not be empty");
-            let input_alias = format_ident!("{}InputAlias", last_segment.ident);
+            let input_alias = format_ident!("{}Input", last_segment.ident);
             let name_fn = format_ident!("{}_fn", comp_name);
 
             let mut input_expr = component.input_struct.clone();
@@ -294,14 +294,14 @@ mod tests {
         let generated = generate_create_fn(&graph);
         let expected = quote! {
             fn create(config: Self::Config) -> impl Fn(Self::Input) -> Self::Output {
-                type call_firstInputAlias = <AnotherType as twine_core::Component>::Input;
-                type call_secondInputAlias = <ExampleType as twine_core::Component>::Input;
+                type AnotherTypeInput = <AnotherType as twine_core::Component>::Input;
+                type ExampleTypeInput = <ExampleType as twine_core::Component>::Input;
                 let call_first_fn = AnotherType::create(config.call_first);
                 let call_second_fn = ExampleType::create(config.call_second);
 
                 move |input| {
-                    let call_first = call_first_fn(call_firstInputAlias { y: 2.0 });
-                    let call_second = call_second_fn(call_secondInputAlias { x: call_first.z });
+                    let call_first = call_first_fn(AnotherTypeInput { y: 2.0 });
+                    let call_second = call_second_fn(ExampleTypeInput { x: call_first.z });
                     Self::Output {
                         call_first,
                         call_second,
