@@ -23,7 +23,7 @@ impl Demo {
             outdoor_temp: weather.temperature,
             wind_speed: weather.wind_speed,
             thermostat: building::Thermostat {
-                setpoint: input.sure,
+                setpoint: input.temp_setpoint,
                 auto: true,
             },
         };
