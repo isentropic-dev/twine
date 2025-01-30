@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-// use integration_tests::test_components::{building::BuildingModel, hourly_weather::HourlyWeather};
+use integration_tests::test_components::{building::BuildingModel, hourly_weather::HourlyWeather};
 use twine_core::compose;
 
 struct Demo;
@@ -22,7 +22,7 @@ impl Demo {
             occupancy: input.occupancy,
             outdoor_temp: weather.temperature,
             wind_speed: weather.wind_speed,
-            thermostat: building::Thermostat {
+            thermostat: Thermostat {
                 setpoint: input.temp_setpoint,
                 auto: true,
             },
@@ -32,10 +32,50 @@ impl Demo {
             occupancy: input.occupancy,
             outdoor_temp: first_house.indoor_temp,
             wind_speed: 0.0,
-            thermostat: building::Thermostat {
+            thermostat: Thermostat {
                 setpoint: 20.0,
                 auto: false,
             },
         };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Serializes and prints the given struct in JSON, TOML, and YAML formats.
+    fn print_serialized<T: serde::Serialize + std::fmt::Debug>(label: &str, value: &T) {
+        println!("\n==================== {label} ====================");
+        println!("{value:#?}");
+
+        println!("---------------------- JSON ----------------------");
+        println!("{}", serde_json::to_string_pretty(value).unwrap());
+
+        println!("---------------------- TOML ----------------------");
+        println!("{}", toml::to_string(value).unwrap());
+
+        println!("---------------------- YAML ----------------------");
+        println!("{}", serde_yaml::to_string(value).unwrap());
+
+        println!("=================================================\n");
+    }
+
+    #[test]
+    fn inspect_demo_component() {
+        let demo_config = DemoConfig::default();
+        let demo_output = DemoOutput::default();
+
+        print_serialized("Config", &demo_config);
+        print_serialized("Output", &demo_output);
+
+        assert!(
+            serde_json::to_string(&demo_config).is_ok(),
+            "Config JSON serialization failed."
+        );
+        assert!(
+            serde_json::to_string(&demo_output).is_ok(),
+            "Output JSON serialization failed."
+        );
     }
 }
