@@ -1,6 +1,9 @@
 #![allow(dead_code)]
 
-use integration_tests::test_components::{building::BuildingModel, hourly_weather::HourlyWeather};
+use integration_tests::test_components::{
+    building::{BuildingModel, Thermostat},
+    hourly_weather::HourlyWeather,
+};
 use twine_core::compose;
 
 struct Demo;
