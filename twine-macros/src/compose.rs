@@ -1,8 +1,8 @@
+#![allow(dead_code)] // Just for now...
+
 mod generate;
 mod graph;
 mod parse;
-
-use std::collections::HashMap;
 
 use petgraph::{
     algo::toposort,
@@ -10,25 +10,26 @@ use petgraph::{
     Direction,
 };
 use proc_macro::TokenStream;
-use syn::{parse_macro_input, ExprStruct, Ident, Path, Type};
+use syn::{parse_macro_input, ExprStruct, Ident, Path};
 
-pub(crate) fn expand(input: TokenStream) -> TokenStream {
-    let definition = parse_macro_input!(input as ComponentDefinition);
+pub(crate) fn expand(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let definition = parse_macro_input!(item as ComponentDefinition);
     let graph = definition.into();
-    generate::generate_module(&graph).into()
+    generate::code(&graph).into()
 }
 
 /// Defines a composed component.
-#[derive(Debug)]
 struct ComponentDefinition {
-    /// Component name.
-    name: Ident,
-
-    /// Schema defining the `Input` type.
-    input_schema: InputSchema,
-
-    /// Inner component instances.
+    component_type: Path,
+    input_type: Path,
     components: Vec<ComponentInstance>,
+}
+
+/// Represents an instance of an inner component.
+struct ComponentInstance {
+    name: Ident,
+    component_type: Path,
+    input_expr: ExprStruct,
 }
 
 struct ComponentGraph {
@@ -44,24 +45,6 @@ impl From<ComponentDefinition> for ComponentGraph {
             dependencies,
         }
     }
-}
-
-/// Maps field identifiers to their corresponding input types or structures.
-type InputSchema = HashMap<Ident, InputField>;
-
-/// Represents an input field as a type or nested schema.
-#[derive(Debug)]
-enum InputField {
-    Type(Type),
-    Struct(InputSchema),
-}
-
-/// Represents an instance of an inner component.
-#[derive(Debug)]
-struct ComponentInstance {
-    name: Ident,
-    module: Path,
-    input_struct: ExprStruct,
 }
 
 impl ComponentGraph {
