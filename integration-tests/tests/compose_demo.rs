@@ -39,3 +39,43 @@ impl Demo {
         };
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Serializes and prints the given struct in JSON, TOML, and YAML formats.
+    fn print_serialized<T: serde::Serialize + std::fmt::Debug>(label: &str, value: &T) {
+        println!("\n==================== {label} ====================");
+        println!("{value:#?}");
+
+        println!("---------------------- JSON ----------------------");
+        println!("{}", serde_json::to_string_pretty(value).unwrap());
+
+        println!("---------------------- TOML ----------------------");
+        println!("{}", toml::to_string(value).unwrap());
+
+        println!("---------------------- YAML ----------------------");
+        println!("{}", serde_yaml::to_string(value).unwrap());
+
+        println!("=================================================\n");
+    }
+
+    #[test]
+    fn inspect_demo_component() {
+        let demo_config = DemoConfig::default();
+        let demo_output = DemoOutput::default();
+
+        print_serialized("Config", &demo_config);
+        print_serialized("Output", &demo_output);
+
+        assert!(
+            serde_json::to_string(&demo_config).is_ok(),
+            "Config JSON serialization failed."
+        );
+        assert!(
+            serde_json::to_string(&demo_output).is_ok(),
+            "Output JSON serialization failed."
+        );
+    }
+}
