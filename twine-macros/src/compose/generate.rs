@@ -6,24 +6,36 @@ use super::{ComponentDefinition, ComponentGraph};
 
 pub(crate) fn code(graph: &ComponentGraph) -> TokenStream {
     let definition = &graph.definition;
+    let comp_type = &definition.component_type;
+    let input_type = &definition.input_type;
 
-    let config_name = generate_aggregate_path(definition, AggregateKind::Config);
+    let config_type = generate_aggregate_path(definition, AggregateKind::Config);
     let config_fields = generate_aggregate_fields(definition, AggregateKind::Config);
 
-    let output_name = generate_aggregate_path(definition, AggregateKind::Output);
+    let output_type = generate_aggregate_path(definition, AggregateKind::Output);
     let output_fields = generate_aggregate_fields(definition, AggregateKind::Output);
+
+    let create_fn = generate_create_fn(graph);
 
     let derive_attrs = generate_derive_attributes();
 
     quote! {
         #derive_attrs
-        pub struct #config_name {
+        pub struct #config_type {
             #(#config_fields)*
         }
 
         #derive_attrs
-        pub struct #output_name {
+        pub struct #output_type {
             #(#output_fields)*
+        }
+
+        impl twine_core::Component for #comp_type {
+            type Config = #config_type;
+            type Input = #input_type;
+            type Output = #output_type;
+
+            #create_fn
         }
     }
 }
@@ -68,6 +80,73 @@ fn generate_aggregate_fields(
             quote! { pub #name: <#ty as twine_core::Component>::#field_type, }
         })
         .collect()
+}
+
+/// Generates the `create` function for this composed component.
+///
+/// This function:
+///
+/// - Instantiates each component using its configuration from `Config`.
+/// - Returns a closure that:
+///   - Receives an `Input` struct.
+///   - Calls each component in the correct order.
+///   - Passes component outputs as inputs to dependent components.
+///   - Assembles the computed results into an `Output` struct.
+fn generate_create_fn(graph: &ComponentGraph) -> TokenStream {
+    let definition = &graph.definition;
+    let call_order = graph.call_order();
+
+    // Instantiate each component.
+    let instantiate_components: Vec<_> = call_order
+        .iter()
+        .map(|&index| {
+            let component = &definition.components[index];
+            let comp_name = &component.name;
+            let comp_type = &component.component_type;
+            let comp_fn = format_ident!("{}_fn", comp_name);
+            quote! {
+                let #comp_fn = #comp_type::create(config.#comp_name);
+            }
+        })
+        .collect();
+
+    // Call each component.
+    let call_components: Vec<_> = call_order
+        .iter()
+        .map(|&index| {
+            let component = &definition.components[index];
+            let comp_name = &component.name;
+            let comp_type = &component.component_type;
+            let name_fn = format_ident!("{}_fn", comp_name);
+            let input_fields = &component.input_struct.fields;
+
+            quote! {
+                let #comp_name = #name_fn(<#comp_type as twine_core::Component>::Input { #input_fields });
+            }
+        })
+        .collect();
+
+    // Build output struct.
+    let output_fields: Vec<_> = call_order
+        .iter()
+        .map(|&index| {
+            let component = &definition.components[index];
+            let name = &component.name;
+            quote! { #name, }
+        })
+        .collect();
+
+    quote! {
+        fn create(config: Self::Config) -> impl Fn(Self::Input) -> Self::Output {
+            #(#instantiate_components)*
+            move |input| {
+                #(#call_components)*
+                Self::Output {
+                    #(#output_fields)*
+                }
+            }
+        }
+    }
 }
 
 /// Represents whether we're generating `Config` or `Output`.
@@ -159,5 +238,39 @@ mod tests {
         };
 
         let _ = generate_aggregate_path(&definition, AggregateKind::Config);
+    }
+
+    #[test]
+    fn generate_create_fn_works() {
+        let definition = ComponentDefinition {
+            component_type: parse_quote! { MyComponent },
+            input_type: parse_quote! { MyInput },
+            components: vec![
+                ComponentInstance {
+                    name: parse_quote! { call_second },
+                    component_type: parse_quote! { ExampleType },
+                    input_struct: parse_quote! { ExampleInput { x: call_first.z } },
+                },
+                ComponentInstance {
+                    name: parse_quote! { call_first },
+                    component_type: parse_quote! { AnotherType },
+                    input_struct: parse_quote! { AnotherInput { y: 2.0 } },
+                },
+            ],
+        };
+        let graph = definition.into();
+        let generated = generate_create_fn(&graph);
+        let expected = quote! {
+            pub fn create(config: Self::Config) -> impl Fn(Self::Input) -> Self::Output {
+                let call_first_fn = AnotherType::create(config.call_first);
+                let call_second_fn = ExampleType::create(config.call_second);
+
+                move |input| {
+                    let call_first = call_first_fn(<AnotherType as twine_core::Component>::Input { y: 2.0 });
+                    let call_second = call_second_fn(<ExampleType as twine_core::Component>::Input { x: call_first.z });
+                }
+            }
+        };
+        assert_eq!(quote! { #generated }.to_string(), expected.to_string());
     }
 }
