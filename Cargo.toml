@@ -1,8 +1,9 @@
 [workspace]
 members = [
     "twine-core",
-    "twine-engine",
     "twine-macros",
+    "twine-components",
+    "twine-engine",
     "integration-tests",
 ]
 
