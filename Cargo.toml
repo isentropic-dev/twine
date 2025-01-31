@@ -1,10 +1,10 @@
 [workspace]
 members = [
-    "twine-core",
-    "twine-macros",
-    "twine-components",
-    "twine-engine",
-    "integration-tests",
+  "twine-core",
+  "twine-macros",
+  "twine-components",
+  "twine-engine",
+  "integration-tests",
 ]
 
 resolver = "2"
