@@ -25,5 +25,5 @@ doctest = false
 prettyplease = "0.2.29"
 
 [features]
-serde-derive = ["dep:serde"]
 default = ["serde-derive"]
+serde-derive = ["dep:serde"]
