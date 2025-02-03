@@ -1,0 +1,18 @@
+[package]
+name = "twine-components"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Isentropic Development <info@isentropic.dev>"]
+description = "A collection of components for Twine, a Rust framework for functional and composable system modeling."
+repository = "https://github.com/isentropic-dev/twine"
+readme = "../README.md"
+keywords = ["twine", "components", "functional", "composable", "modeling"]
+
+[dependencies]
+twine-core = { version = "0.1", path = "../twine-core" }
+serde = { version = "1.0", features = ["derive"] }
+uom = { version = "0.36.0", features = ["serde"] }
+
+[dev-dependencies]
+approx = "0.5.1"

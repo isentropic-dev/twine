@@ -5,3 +5,7 @@ auto-format = true
 [language-server.rust-analyzer.config.check]
 command = "clippy"
 extraArgs = ["--", "-W", "clippy::pedantic"]
+
+[[language]]
+name = "toml"
+auto-format = true
