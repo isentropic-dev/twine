@@ -5,9 +5,16 @@
 /// produce the same output.
 ///
 /// Any `Callable` can be tied to another `Callable` using `.then()`, as long
-/// as the output of the first component can be used as the input for the next.
-/// This functionality is provided automatically via a blanket implementation of
-/// the `Then` trait.
+/// as the output of the first component is compatible with the input of the
+/// next. If the input type implements `From` for the previous output type, the
+/// conversion happens automatically.
+///
+/// The `.then()` method is provided by the `Then` trait, which is implemented
+/// automatically for all compatible `Callable` types. You do not need to
+/// implement `Then` manually—any `Callable` will support `.then()` as long as
+/// its output can be converted into the next component’s input.
+///
+/// # Example
 ///
 /// ```rust
 /// use twine_core::{Callable, Then};

@@ -6,13 +6,62 @@ use crate::Callable;
 /// the output of the first component can be used as the input for the next.
 ///
 /// Instead of requiring an exact type match (`A::Output == B::Input`), this
-/// trait allows conversions between output and input types using Rust’s
-/// `From` trait. If `B::Input` implements `From<A::Output>`, the conversion
-/// happens automatically, enabling seamless chaining of components that return
-/// different but convertible types.
+/// trait leverages Rust’s `From` trait to allow seamless conversion between
+/// output and input types. If `B::Input` implements `From<A::Output>`, the
+/// conversion happens automatically, enabling flexible chaining of components.
 ///
-/// This allows chaining even when components have different output and input
-/// types, as long as the conversion exists.
+/// When working with standard library types, you may need to define a wrapper
+/// type instead of implementing `From` directly due to Rust’s orphan rule.
+///
+/// # Blanket Implementation
+///
+/// You do not need to implement `Then` manually. Any `Callable` type that
+/// produces an output convertible to another’s input will automatically support
+/// `.then()`. This keeps composition seamless and eliminates boilerplate code.
+///
+/// # Example
+///
+/// ```rust
+/// use twine_core::{Callable, Then};
+///
+/// // Why do we need this?
+/// // Rust’s orphan rule prevents implementing `From<String>` for `i32`
+/// // directly, so we use a newtype wrapper.
+/// struct MyInteger(i32);
+///
+/// impl From<String> for MyInteger {
+///     fn from(value: String) -> Self {
+///         MyInteger(value.parse::<i32>().unwrap_or(0))
+///     }
+/// }
+///
+/// struct ToStringDoubled;
+///
+/// impl Callable for ToStringDoubled {
+///     type Input = i32;
+///     type Output = String;
+///
+///     fn call(&self, input: i32) -> String {
+///         (input * 2).to_string()
+///     }
+/// }
+///
+/// struct ParseToInteger;
+///
+/// impl Callable for ParseToInteger {
+///     type Input = MyInteger;
+///     type Output = i32;
+///
+///     fn call(&self, input: MyInteger) -> i32 {
+///         input.0
+///     }
+/// }
+///
+/// let chain = ToStringDoubled.then(ParseToInteger);
+/// let result = chain.call(21);
+/// assert_eq!(result, 42);
+///
+/// ```
 pub trait Then<C>
 where
     Self: Callable,
@@ -32,7 +81,7 @@ where
 ///
 /// `Twine<A, B>` ties two `Callable` components together, passing the output
 /// of `A` as the input to `B`. It is automatically created when `.then()` is
-/// called, making composition intuitive and seamless.
+/// called, making composition intuitive.
 pub struct Twine<A, B> {
     first: A,
     second: B,
@@ -56,7 +105,7 @@ where
 /// Blanket implementation of `Then` for any compatible `Callable` components.
 ///
 /// This implementation allows any `Callable` component to be tied together with
-/// another using `.then()`, as long as their input and output types match.
+/// another using `.then()`, as long as their output and input types are compatible.
 impl<A, B> Then<B> for A
 where
     A: Callable,
