@@ -4,18 +4,28 @@ use crate::Callable;
 ///
 /// The `Then` trait allows one `Callable` to be tied to another, ensuring that
 /// the output of the first component can be used as the input for the next.
-pub trait Then<Component>
+///
+/// Instead of requiring an exact type match (`A::Output == B::Input`), this
+/// trait allows conversions between output and input types using Rust’s
+/// `From` trait. If `B::Input` implements `From<A::Output>`, the conversion
+/// happens automatically, enabling seamless chaining of components that return
+/// different but convertible types.
+///
+/// This allows chaining even when components have different output and input
+/// types, as long as the conversion exists.
+pub trait Then<C>
 where
     Self: Callable,
-    Component: Callable<Input = Self::Output>,
+    C: Callable<Input: From<Self::Output>>,
 {
-    type Then: Callable<Input = Self::Input, Output = Component::Output>;
+    type Then: Callable<Input = Self::Input, Output = C::Output>;
 
     /// Ties the current `Callable` to another, producing a new composed component.
     ///
-    /// The returned `Self::Then` ensures that the overall sequence maintains a
-    /// consistent input-output flow.
-    fn then(self, component: Component) -> Self::Then;
+    /// The returned `Self::Then` ensures that the overall sequence maintains
+    /// a consistent input-output flow, automatically converting `A::Output` to
+    /// `B::Input` when possible.
+    fn then(self, component: C) -> Self::Then;
 }
 
 /// A `Callable` that represents the sequential execution of two components.
@@ -31,14 +41,15 @@ pub struct Twine<A, B> {
 impl<A, B> Callable for Twine<A, B>
 where
     A: Callable,
-    B: Callable<Input = A::Output>,
+    B: Callable<Input: From<A::Output>>,
 {
     type Input = A::Input;
     type Output = B::Output;
 
     fn call(&self, input: Self::Input) -> Self::Output {
-        let intermediate = self.first.call(input);
-        self.second.call(intermediate)
+        let first_output = self.first.call(input);
+        let second_input = first_output.into();
+        self.second.call(second_input)
     }
 }
 
@@ -49,7 +60,7 @@ where
 impl<A, B> Then<B> for A
 where
     A: Callable,
-    B: Callable<Input = A::Output>,
+    B: Callable<Input: From<A::Output>>,
 {
     type Then = Twine<A, B>;
 
