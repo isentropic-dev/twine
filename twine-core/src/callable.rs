@@ -1,18 +1,18 @@
 /// A trait representing a function-like component in Twine.
 ///
-/// A `Callable` component is the core building block for composition in Twine.
+/// A `Callable` is the core building block for composition in Twine.
 /// Implementations must be deterministic, meaning the same input must always
 /// produce the same output.
 ///
-/// Any `Callable` can be tied to another `Callable` using `.then()`, as long
-/// as the output of the first component is compatible with the input of the
+/// Any `Callable` can be chained to another `Callable` using `.then()`, as
+/// long as the output of the first callable is compatible with the input of the
 /// next. If the input type implements `From` for the previous output type, the
 /// conversion happens automatically.
 ///
 /// The `.then()` method is provided by the `Then` trait, which is implemented
 /// automatically for all compatible `Callable` types. You do not need to
 /// implement `Then` manually—any `Callable` will support `.then()` as long as
-/// its output can be converted into the next component’s input.
+/// its output can be converted into the next callable’s input.
 ///
 /// # Example
 ///
