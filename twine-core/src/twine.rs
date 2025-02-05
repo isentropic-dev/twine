@@ -1,4 +1,4 @@
-use crate::Callable;
+use crate::{Callable, Context};
 
 /// A trait that enables chaining two `Callable` types together.
 ///
@@ -78,11 +78,10 @@ where
     fn then(self, callable: C) -> Self::Then;
 }
 
-/// A `Callable` that represents the sequential execution of two callables.
+/// A `Callable` that sequentially calls two `Callable`s.
 ///
-/// `Twine<A, B>` ties two `Callable` instances together, passing the output
-/// of `A` as the input to `B`. It is automatically created when `.then()` is
-/// called, making composition intuitive.
+/// `Twine<A, B>` passes `A`'s output to `B`'s input and is created
+/// automatically via `.then()`, making function composition seamless.
 pub struct Twine<A, B> {
     first: A,
     second: B,
@@ -119,5 +118,251 @@ where
             first: self,
             second: callable,
         }
+    }
+}
+
+/// Implements `Context` for a `Twine<A, B>`, allowing two `Context`-aware
+/// callables to process structured contexts in sequence.
+///
+/// The first callable (`A`) extracts input, computes a result, and updates the
+/// context. The updated context is passed to the second callable (`B`), which
+/// produces the final transformed context.
+impl<A, B> Context for Twine<A, B>
+where
+    A: Context + Callable,
+    B: Context + Callable,
+    A::Out: Into<B::In>,
+    <B as Callable>::Input: From<<A as Callable>::Output>,
+{
+    type In = A::In;
+    type Out = B::Out;
+
+    fn extract_input(context: &Self::In) -> Self::Input {
+        A::extract_input(context)
+    }
+
+    fn apply_output(&self, context: Self::In, output: Self::Output) -> Self::Out {
+        let context = self.first.call_with_context(context);
+        self.second.apply_output(context.into(), output)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct AddOne;
+    impl Callable for AddOne {
+        type Input = i32;
+        type Output = i32;
+
+        fn call(&self, input: i32) -> i32 {
+            input + 1
+        }
+    }
+
+    struct MultiplyBy {
+        factor: i32,
+    }
+    impl Callable for MultiplyBy {
+        type Input = i32;
+        type Output = i32;
+
+        fn call(&self, input: i32) -> i32 {
+            input * self.factor
+        }
+    }
+
+    struct ToFloat;
+    impl Callable for ToFloat {
+        type Input = i32;
+        type Output = f64;
+
+        fn call(&self, input: i32) -> f64 {
+            f64::from(input)
+        }
+    }
+
+    struct IncreaseBySmallAmount;
+    impl Callable for IncreaseBySmallAmount {
+        type Input = f64;
+        type Output = f64;
+
+        fn call(&self, input: f64) -> f64 {
+            input + 0.1
+        }
+    }
+
+    struct RoundToInteger;
+    impl Callable for RoundToInteger {
+        type Input = f64;
+        type Output = i32;
+
+        #[allow(clippy::cast_possible_truncation)]
+        fn call(&self, input: f64) -> i32 {
+            input.round() as i32
+        }
+    }
+
+    struct IsPositive;
+    impl Callable for IsPositive {
+        type Input = i32;
+        type Output = bool;
+
+        fn call(&self, input: i32) -> bool {
+            input > 0
+        }
+    }
+
+    struct InitialContext {
+        input: i32,
+    }
+
+    struct AfterAddOneContext {
+        input: i32,
+        from_add_one: i32,
+    }
+
+    struct AfterMultiplyBy {
+        input: i32,
+        from_add_one: i32,
+        from_multiply_by: i32,
+    }
+
+    #[derive(Debug, PartialEq, Eq)]
+    struct FinalContext {
+        input: i32,
+        from_add_one: i32,
+        from_multiply_by: i32,
+        is_positive: bool,
+    }
+
+    impl Context for AddOne {
+        type In = InitialContext;
+        type Out = AfterAddOneContext;
+
+        fn extract_input(context: &Self::In) -> Self::Input {
+            context.input
+        }
+
+        fn apply_output(&self, context: Self::In, output: Self::Output) -> Self::Out {
+            Self::Out {
+                input: context.input,
+                from_add_one: output,
+            }
+        }
+    }
+
+    impl Context for MultiplyBy {
+        type In = AfterAddOneContext;
+        type Out = AfterMultiplyBy;
+
+        fn extract_input(context: &Self::In) -> Self::Input {
+            context.from_add_one
+        }
+
+        fn apply_output(&self, context: Self::In, from_multiply_by: Self::Output) -> Self::Out {
+            let Self::In {
+                input,
+                from_add_one,
+            } = context;
+            Self::Out {
+                input,
+                from_add_one,
+                from_multiply_by,
+            }
+        }
+    }
+
+    impl Context for IsPositive {
+        type In = AfterMultiplyBy;
+        type Out = FinalContext;
+
+        fn extract_input(context: &Self::In) -> Self::Input {
+            context.from_multiply_by
+        }
+
+        fn apply_output(
+            &self,
+            AfterMultiplyBy {
+                input,
+                from_add_one,
+                from_multiply_by,
+            }: Self::In,
+            is_positive: Self::Output,
+        ) -> Self::Out {
+            Self::Out {
+                input,
+                from_add_one,
+                from_multiply_by,
+                is_positive,
+            }
+        }
+    }
+
+    #[test]
+    fn chaining_callables() {
+        let chain = AddOne
+            .then(MultiplyBy { factor: 5 })
+            .then(AddOne)
+            .then(AddOne);
+        assert_eq!(chain.call(7), 42); // (7 + 1) * 5 + 1 + 1 = 42
+    }
+
+    #[test]
+    fn type_transformations() {
+        let chain = AddOne
+            .then(ToFloat)
+            .then(IncreaseBySmallAmount)
+            .then(RoundToInteger);
+        assert_eq!(chain.call(3), 4); // 3 + 1 -> 4.0 + 0.1 -> 4
+
+        let boolean_chain = AddOne.then(AddOne).then(IsPositive);
+        assert!(boolean_chain.call(-1)); //  -1 + 1 + 1 =  1 (true)
+        assert!(!boolean_chain.call(-3)); // -3 + 1 + 1 = -1 (false)
+    }
+
+    #[test]
+    fn composing_chains() {
+        let add_four = AddOne.then(AddOne).then(AddOne).then(AddOne);
+        let double_it = MultiplyBy { factor: 2 };
+
+        let chain_one = add_four.then(MultiplyBy { factor: 3 });
+        let chain_two = AddOne.then(double_it);
+
+        let composed = chain_one.then(chain_two);
+
+        assert_eq!(composed.call(0), 26); // (((0 + 4) * 3) + 1) * 2 = 26
+    }
+
+    #[test]
+    fn call_with_context() {
+        let multiply_by_three = MultiplyBy { factor: 3 };
+        let chain = AddOne.then(multiply_by_three).then(IsPositive);
+
+        assert!(chain.call(1));
+        assert!(!chain.call(-3));
+
+        let positive_context = chain.call_with_context(InitialContext { input: 4 });
+        assert_eq!(
+            positive_context,
+            FinalContext {
+                input: 4,
+                from_add_one: 5,
+                from_multiply_by: 15,
+                is_positive: true,
+            }
+        );
+
+        let negative_context = chain.call_with_context(InitialContext { input: -7 });
+        assert_eq!(
+            negative_context,
+            FinalContext {
+                input: -7,
+                from_add_one: -6,
+                from_multiply_by: -18,
+                is_positive: false,
+            }
+        );
     }
 }
