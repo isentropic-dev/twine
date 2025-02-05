@@ -3,15 +3,15 @@ use crate::Callable;
 /// A trait that extends `Callable` to operate within a context.
 ///
 /// `Context` enables callables to extract input from a structured context,
-/// perform a computation, and update the context with the result. This allows
-/// state to flow through a chain of callables while keeping transformation
-/// logic modular.
+/// perform a computation, and produce a new context incorporating the result.
+/// This allows state to flow through a chain of callables while keeping
+/// transformation logic modular.
 ///
 /// Implementors define:
 /// - How to extract input from the context (`extract_input`).
-/// - How to apply the computed output back into the context (`apply_output`).
+/// - How to apply the computed output to produce a new context (`apply_output`).
 ///
-/// The `call_with_context` method runs the callable while maintaining context.
+/// The `call_with_context` method executes the callable while managing context.
 ///
 /// # Example
 ///
@@ -70,13 +70,19 @@ pub trait Context: Callable {
     type In;
     type Out;
 
-    /// Extracts input for the callable from the given context.
+    /// Extracts the input value for the callable from the given context.
+    ///
+    /// This method defines how data from the given context is used to derive
+    /// the callable’s input.
     fn extract_input(context: &Self::In) -> Self::Input;
 
-    /// Applies the callable's output to the context, returning an updated version.
+    /// Transforms the given context using the callable’s output.
+    ///
+    /// This method defines how a new context is constructed using the given
+    /// context and the callable’s computed output.
     fn apply_output(&self, context: Self::In, output: Self::Output) -> Self::Out;
 
-    /// Executes the callable within the given context, ensuring data flow is maintained.
+    /// Executes the callable within the given context.
     fn call_with_context(&self, context: Self::In) -> Self::Out {
         let input = Self::extract_input(&context);
         let output = self.call(input);
