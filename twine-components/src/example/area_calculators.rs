@@ -1,7 +1,7 @@
 use std::f64::consts::PI;
 
 use serde::{Deserialize, Serialize};
-use twine_core::Component;
+use twine_core::legacy::Component;
 use uom::si::f64::{Area, Length};
 
 /// Component for calculating the area of a circle.
