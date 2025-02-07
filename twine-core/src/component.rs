@@ -5,37 +5,35 @@ mod mapped;
 ///
 /// A `Component` represents a transformation from an input to an output
 /// and serves as the foundation for composition in Twine. Components can be
-/// composed using [`Twine`] to build sequential processing chains.
+/// combined using [`Twine`] to build sequential processing chains.
 ///
-/// Implementations of `Component` must be deterministic, meaning that the same
-/// input must always produce the same output.
+/// Implementations must be deterministic, meaning that calling the component
+/// with the same input must always produce the same output.
 ///
-/// Components can be adapted using [`Component::map()`] to modify input/output
-/// behavior or observed using [`Component::inspect()`] for debugging.
+/// Components can be adapted using [`Component::map()`] to transform input/
+/// output behavior or observed using [`Component::inspect()`] for debugging.
 pub trait Component {
     type Input;
     type Output;
 
-    /// Calls the component with the given input.
-    ///
-    /// Executes the component, consuming an input and producing an output.
+    /// Calls the component with the given input, producing an output.
     fn call(&self, input: Self::Input) -> Self::Output;
 
-    /// Adapts this component by transforming its input and output.
+    /// Adapts the component by transforming its input and output.
     ///
-    /// This method enables context-aware composition, allowing a component
-    /// to be embedded within a broader structure. The `input_map` function
-    /// derives the component's input from a larger context, while `output_map`
-    /// integrates its output back into that context.
+    /// This method wraps a component, allowing it to integrate into a broader
+    /// context. The `input_map` function extracts the component's input type
+    /// from the context, while `output_map` combines the original input and the
+    /// component's output to produce a new result.
     ///
     /// # Parameters
     ///
-    /// - `input_map`: Extracts the expected input from a larger structure.
-    /// - `output_map`: Combines the original input with the component's output.
+    /// - `input_map`: Extracts the component's expected input from a broader context.
+    /// - `output_map`: Integrates the component's output back into the original context.
     ///
     /// # Returns
     ///
-    /// - A new component that integrates `Self` into a different input/output structure.
+    /// A new component with modified input and output behavior.
     ///
     /// # Example
     ///
@@ -55,19 +53,19 @@ pub trait Component {
     ///
     /// struct Context {
     ///     value: i32,
-    ///     doubled: i32,
+    ///     doubled: Option<i32>,
     /// }
     ///
     /// let component = Doubler.map(
     ///     |context: &Context| context.value,
     ///     |(context, output)| Context {
     ///         value: context.value,
-    ///         doubled: output,
+    ///         doubled: Some(output),
     ///     }
     /// );
     ///
-    /// let result = component.call(Context { value: 4, doubled: 0 });
-    /// assert_eq!(result.doubled, 8);
+    /// let result = component.call(Context { value: 4, doubled: None });
+    /// assert_eq!(result.doubled, Some(8));
     /// ```
     fn map<InputMap, OutputMap, In, Out>(
         self,
@@ -82,25 +80,21 @@ pub trait Component {
         mapped::Mapped::new(self, input_map, output_map)
     }
 
-    /// Observes input and output without modifying computation.
-    ///
-    /// This method wraps the component and invokes the provided handlers before
-    /// and after calling the component. It does not alter the component’s logic
-    /// but allows logging, debugging, or tracing behavior.
+    /// Wraps the component to inspect input and output without modifying behavior.
     ///
     /// The `input_handler` is called before the component processes the input,
-    /// while  the `output_handler` is called after the component has produced
-    /// an output. Both handlers receive borrowed references to the values,
-    /// ensuring no ownership changes.
+    /// and the `output_handler` is called after the component produces an
+    /// output. Both handlers receive references to their values, ensuring no
+    /// ownership changes.
     ///
     /// # Parameters
     ///
-    /// - `input_handler`: A function that inspects the input before processing.
-    /// - `output_handler`: A function that inspects the output after processing.
+    /// - `input_handler`: Called before execution to inspect the input.
+    /// - `output_handler`: Called after execution to inspect the output.
     ///
     /// # Returns
     ///
-    /// - A new component that behaves identically but calls the handlers on each execution.
+    /// A new component that calls the handlers but otherwise behaves the same.
     ///
     /// # Example
     ///

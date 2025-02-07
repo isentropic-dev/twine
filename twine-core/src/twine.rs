@@ -4,21 +4,15 @@ mod then;
 
 use crate::Component;
 
-/// A builder for composing multiple components into a single, executable chain.
+/// A builder for composing multiple components into a single processing chain.
 ///
-/// `Twine` enables structured composition of [`Component`] implementations,
-/// where each component’s output becomes the next component’s input.
-///
-/// Use [`Twine::new<T>()`] to start a chain with a specified input type.
-/// Components that implement [`Component`] can be added with [`Twine::then()`],
-/// while closures can be added with [`Twine::then_fn()`].
-///
-/// Once the chain is complete, call [`Twine::build()`] to return the final composed component.
+/// `Twine` enables sequential composition of [`Component`] implementations,
+/// where each component's output serves as the next component's input.
 ///
 /// # See Also
 ///
 /// - [`Twine::new<T>()`] — Starts a new chain.
-/// - [`Twine::then()`] — Adds a component that implements [`Component`].
+/// - [`Twine::then()`] — Adds any type that implements [`Component`].
 /// - [`Twine::then_fn()`] — Adds an inline closure.
 /// - [`Twine::build()`] — Finalizes the chain and returns the composed component.
 pub struct Twine<C> {
@@ -26,13 +20,10 @@ pub struct Twine<C> {
 }
 
 impl Twine<()> {
-    /// Starts a new `Twine` chain.
+    /// Starts a new `Twine` chain with the given input type.
     ///
     /// This method begins a new component chain and defines the input type of
     /// the final composed component.
-    ///
-    /// Use [`Twine::then()`] to add components or [`Twine::then_fn()`] to add closures.
-    /// Once the chain is complete, call [`Twine::build()`] to finalize it.
     ///
     /// # Example
     ///
@@ -55,17 +46,14 @@ impl Twine<()> {
 }
 
 impl<C: Component> Twine<C> {
-    /// Adds a `Component` to the chain.
+    /// Adds a component to the chain.
     ///
-    /// This method extends the `Twine` sequence by adding another `Component`,
-    /// where the current component’s output becomes the input for the new one.
-    ///
-    /// Use this method when `next` is a type that implements [`Component`]. To
-    /// add an inline closure instead, use [`Twine::then_fn()`].
+    /// This method appends a [`Component`] to the sequence, using the current
+    /// output as its input.
     ///
     /// # Parameters
     ///
-    /// - `next`: A `Component` that processes the output of the current chain.
+    /// - `next`: The [`Component`] that processes the output of the current chain.
     ///
     /// # Example
     ///
@@ -101,11 +89,8 @@ impl<C: Component> Twine<C> {
 
     /// Adds an inline function to the chain.
     ///
-    /// This method extends the `Twine` sequence by applying a function to the
-    /// output of the current component before passing it to the next.
-    ///
-    /// Use this method when `next` is a function or closure. To add a full
-    /// `Component`, use [`Twine::then()`].
+    /// This method applies a function to the output of the current component
+    /// before passing it to the next component or function.
     ///
     /// # Parameters
     ///
@@ -135,11 +120,8 @@ impl<C: Component> Twine<C> {
 
     /// Finalizes the `Twine` chain and returns the composed component.
     ///
-    /// This method completes the chain-building process and produces a
-    /// `Component` that can be executed with `.call(input)`.
-    ///
-    /// The resulting `Component` retains all transformations and can be used
-    /// independently of `Twine`.
+    /// This method completes the chain-building process, producing a
+    /// [`Component`] that can be executed with `.call(input)`.
     #[must_use]
     pub fn build(self) -> impl Component<Input = C::Input, Output = C::Output> {
         self.component
@@ -174,7 +156,7 @@ mod tests {
         }
     }
 
-    /// A component that squares the input.
+    /// A component that squares a floating point input.
     struct Squarer;
     impl Component for Squarer {
         type Input = f64;

@@ -8,7 +8,7 @@ use crate::Component;
 /// When `call()` is invoked, the input is passed to the first component (`A`),
 /// and its output is forwarded as the input to the second component (`B`).
 ///
-/// This guarantees that `A::Output` is **always** compatible with `B::Input`,
+/// This guarantees that `A::Output` is always compatible with `B::Input`,
 /// making it safe to compose arbitrary components as long as their types align.
 pub(crate) struct Then<A, B> {
     first: A,
