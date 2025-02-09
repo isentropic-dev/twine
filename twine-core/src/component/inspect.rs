@@ -18,8 +18,8 @@ where
     type Input = C::Input;
     type Output = C::Output;
 
-    fn call(&self, input: Self::Input) -> Self::Output {
-        (self.input_handler)(&input);
+    fn call(&self, input: &Self::Input) -> Self::Output {
+        (self.input_handler)(input);
         let output = self.component.call(input);
         (self.output_handler)(&output);
         output

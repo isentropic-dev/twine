@@ -29,16 +29,16 @@ impl<C, FI, FO, I, O> Component for Mapped<C, FI, FO, I, O>
 where
     C: Component,
     FI: Fn(&I) -> C::Input,
-    FO: Fn((I, C::Output)) -> O,
+    FO: Fn((&I, C::Output)) -> O,
 {
     type Input = I;
     type Output = O;
 
     /// Calls the wrapped component with a transformed input and applies the
     /// output mapping function.
-    fn call(&self, input: Self::Input) -> Self::Output {
-        let mapped_input = (self.input_map)(&input);
-        let output = self.component.call(mapped_input);
+    fn call(&self, input: &Self::Input) -> Self::Output {
+        let mapped_input = (self.input_map)(input);
+        let output = self.component.call(&mapped_input);
         (self.output_map)((input, output))
     }
 }

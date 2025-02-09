@@ -16,8 +16,8 @@ pub trait Component {
     type Input;
     type Output;
 
-    /// Calls the component with the given input, producing an output.
-    fn call(&self, input: Self::Input) -> Self::Output;
+    /// Calls the component with a reference to the given input, producing an output.
+    fn call(&self, input: &Self::Input) -> Self::Output;
 
     /// Adapts the component by transforming its input and output.
     ///
@@ -46,7 +46,7 @@ pub trait Component {
     ///     type Input = i32;
     ///     type Output = i32;
     ///
-    ///     fn call(&self, input: Self::Input) -> Self::Output {
+    ///     fn call(&self, input: &Self::Input) -> Self::Output {
     ///         input * 2
     ///     }
     /// }
@@ -64,7 +64,7 @@ pub trait Component {
     ///     }
     /// );
     ///
-    /// let result = component.call(Context { value: 4, doubled: None });
+    /// let result = component.call(&Context { value: 4, doubled: None });
     /// assert_eq!(result.doubled, Some(8));
     /// ```
     fn map<InputMap, OutputMap, In, Out>(
@@ -75,7 +75,7 @@ pub trait Component {
     where
         Self: Sized,
         InputMap: Fn(&In) -> Self::Input,
-        OutputMap: Fn((In, Self::Output)) -> Out,
+        OutputMap: Fn((&In, Self::Output)) -> Out,
     {
         mapped::Mapped::new(self, input_map, output_map)
     }
@@ -107,7 +107,7 @@ pub trait Component {
     ///     type Input = i32;
     ///     type Output = i32;
     ///
-    ///     fn call(&self, input: Self::Input) -> Self::Output {
+    ///     fn call(&self, input: &Self::Input) -> Self::Output {
     ///         input * 2
     ///     }
     /// }
@@ -117,7 +117,7 @@ pub trait Component {
     ///     |output| println!("Produced: {:?}", output),
     /// );
     ///
-    /// debug_component.call(5);
+    /// debug_component.call(&5);
     /// // Prints:
     /// // Received: 5
     /// // Produced: 10
@@ -150,7 +150,7 @@ mod tests {
         type Input = i32;
         type Output = i32;
 
-        fn call(&self, input: Self::Input) -> Self::Output {
+        fn call(&self, input: &Self::Input) -> Self::Output {
             input * 2
         }
     }
@@ -163,21 +163,21 @@ mod tests {
         type Input = i32;
         type Output = i32;
 
-        fn call(&self, input: Self::Input) -> Self::Output {
+        fn call(&self, input: &Self::Input) -> Self::Output {
             input + self.increment
         }
     }
 
     #[test]
     fn basic_components() {
-        assert_eq!(Doubler.call(2), 4);
-        assert_eq!(Doubler.call(5), 10);
+        assert_eq!(Doubler.call(&2), 4);
+        assert_eq!(Doubler.call(&5), 10);
 
         let add_one = Adder { increment: 1 };
-        assert_eq!(add_one.call(10), 11);
+        assert_eq!(add_one.call(&10), 11);
 
         let add_five = Adder { increment: 5 };
-        assert_eq!(add_five.call(3), 8);
+        assert_eq!(add_five.call(&3), 8);
     }
 
     #[test]
@@ -187,7 +187,7 @@ mod tests {
             |(input, output)| format!("Adding 1 to {input} and doubling it is {output}"),
         );
 
-        assert_eq!(mapped.call(2), "Adding 1 to 2 and doubling it is 6");
+        assert_eq!(mapped.call(&2), "Adding 1 to 2 and doubling it is 6");
     }
 
     #[test]
@@ -211,7 +211,7 @@ mod tests {
             output: 0,
         };
 
-        let context_out = mapped_doubler.call(context_in);
+        let context_out = mapped_doubler.call(&context_in);
 
         assert_eq!(
             context_out,
@@ -247,7 +247,7 @@ mod tests {
                  ..
              }| value_to_use,
             |(input, output)| MyOutput {
-                label: input.label,
+                label: input.label.clone(),
                 started_with: input.value,
                 ended_with: output,
                 is_even: output % 2 == 0,
@@ -259,7 +259,7 @@ mod tests {
             value: 3,
         };
 
-        let output = mapped_add_three.call(input);
+        let output = mapped_add_three.call(&input);
 
         assert_eq!(
             output,
@@ -293,8 +293,8 @@ mod tests {
             },
         );
 
-        let result1 = inspected.call(3);
-        let result2 = inspected.call(5);
+        let result1 = inspected.call(&3);
+        let result2 = inspected.call(&5);
 
         assert_eq!(result1, 6);
         assert_eq!(result2, 10);
