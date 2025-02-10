@@ -25,7 +25,7 @@
 ///
 /// # Example
 ///
-/// ```rust
+/// ```ignore
 /// mod example {
 ///     use twine_core::Component;
 ///

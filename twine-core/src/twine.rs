@@ -1,149 +1,160 @@
-use crate::{Callable, Context};
+mod closure;
+mod then;
 
-/// A trait that enables chaining two `Callable` types together.
-///
-/// The `Then` trait allows one `Callable` to be tied to another, ensuring that
-/// the output of the first callable can be used as the input for the next.
-/// This allows callables to be woven together seamlessly, forming a functional
-/// sequence.
-///
-/// Instead of requiring an exact type match (`A::Output == B::Input`), this
-/// trait leverages Rust’s `From` trait to allow seamless conversion between
-/// output and input types. If `B::Input` implements `From<A::Output>`, the
-/// conversion happens automatically, enabling flexible chaining of callables.
-///
-/// When working with standard library types, you may need to define a wrapper
-/// type instead of implementing `From` directly due to Rust’s orphan rule.
-///
-/// # Blanket Implementation
-///
-/// You do not need to implement `Then` manually. Any `Callable` type with a
-/// convertible output automatically supports `.then()`, eliminating boilerplate
-/// and enabling seamless composition.
-///
-/// # Example
-///
-/// ```rust
-/// use twine_core::{Callable, Then};
-///
-/// // Why do we need this?
-/// // Rust’s orphan rule prevents implementing `From<String>` for `i32`
-/// // directly, so we use a newtype wrapper.
-/// struct MyInteger(i32);
-///
-/// impl From<String> for MyInteger {
-///     fn from(value: String) -> Self {
-///         MyInteger(value.parse::<i32>().unwrap_or(0))
-///     }
-/// }
-///
-/// struct ToStringDoubled;
-///
-/// impl Callable for ToStringDoubled {
-///     type Input = i32;
-///     type Output = String;
-///
-///     fn call(&self, input: i32) -> String {
-///         (input * 2).to_string()
-///     }
-/// }
-///
-/// struct ParseToInteger;
-///
-/// impl Callable for ParseToInteger {
-///     type Input = MyInteger;
-///     type Output = i32;
-///
-///     fn call(&self, input: MyInteger) -> i32 {
-///         input.0
-///     }
-/// }
-///
-/// let chain = ToStringDoubled.then(ParseToInteger);
-/// let result = chain.call(21);
-/// assert_eq!(result, 42);
-/// ```
-pub trait Then<C>
-where
-    Self: Callable,
-    C: Callable<Input: From<Self::Output>>,
-{
-    type Then: Callable<Input = Self::Input, Output = C::Output>;
+use std::marker::PhantomData;
 
-    /// Ties the current `Callable` to another, producing a new composed callable.
+use crate::Component;
+
+/// A builder for composing multiple components into a single processing chain.
+///
+/// `Twine` enables sequential composition of [`Component`] implementations,
+/// where each component's output serves as the next component's input.
+///
+/// # See Also
+///
+/// - [`Twine::new<T>()`] — Starts a new chain.
+/// - [`Twine::then()`] — Adds any type that implements [`Component`].
+/// - [`Twine::then_fn()`] — Adds an inline function.
+/// - [`Twine::build()`] — Finalizes the chain and returns the composed component.
+pub struct Twine<T, C = ()> {
+    _marker: PhantomData<T>,
+    component: C,
+}
+
+impl<T> Twine<T> {
+    /// Starts a new `Twine` builder with `T` as the initial input type.
     ///
-    /// The returned `Self::Then` ensures that the overall sequence maintains
-    /// a consistent input-output flow, automatically converting `A::Output`
-    /// to `B::Input` when possible.
-    fn then(self, callable: C) -> Self::Then;
-}
-
-/// A `Callable` that sequentially calls two `Callable`s.
-///
-/// `Twine<A, B>` passes `A`'s output to `B`'s input and is created
-/// automatically via `.then()`, making function composition seamless.
-pub struct Twine<A, B> {
-    first: A,
-    second: B,
-}
-
-impl<A, B> Callable for Twine<A, B>
-where
-    A: Callable,
-    B: Callable<Input: From<A::Output>>,
-{
-    type Input = A::Input;
-    type Output = B::Output;
-
-    fn call(&self, input: Self::Input) -> Self::Output {
-        let first_output = self.first.call(input);
-        let second_input = first_output.into();
-        self.second.call(second_input)
+    /// This function creates an empty chain where `T` serves as the starting input.
+    /// Components added via [`Twine::then()`] or [`Twine::then_fn()`] can
+    /// progressively transform the data as it moves through the chain.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
     }
-}
 
-/// Blanket implementation of `Then` for any compatible `Callable` instances.
-///
-/// This implementation allows any `Callable` to be tied to another using
-/// `.then()`, as long as their output and input types are compatible.
-impl<A, B> Then<B> for A
-where
-    A: Callable,
-    B: Callable<Input: From<A::Output>>,
-{
-    type Then = Twine<A, B>;
-
-    fn then(self, callable: B) -> Self::Then {
+    /// Adds the first component to the chain.
+    ///
+    /// See [`Twine::then()`] for details.
+    #[must_use]
+    pub fn then<C>(self, component: C) -> Twine<T, C>
+    where
+        C: Component<Input = T>,
+    {
         Twine {
-            first: self,
-            second: callable,
+            _marker: PhantomData,
+            component,
+        }
+    }
+
+    /// Adds an inline function as the first step in the chain.
+    ///
+    /// See [`Twine::then_fn()`] for details.
+    #[must_use]
+    pub fn then_fn<F, O>(self, function: F) -> Twine<T, impl Component<Input = T, Output = O>>
+    where
+        F: Fn(&T) -> O,
+    {
+        Twine {
+            _marker: PhantomData,
+            component: closure::Closure::new(function),
         }
     }
 }
 
-/// Implements `Context` for a `Twine<A, B>`, allowing two `Context`-aware
-/// callables to process structured contexts in sequence.
-///
-/// The first callable (`A`) extracts input, computes a result, and updates the
-/// context. The updated context is passed to the second callable (`B`), which
-/// produces the final transformed context.
-impl<A, B> Context for Twine<A, B>
-where
-    A: Context + Callable,
-    B: Context + Callable,
-    A::Out: Into<B::In>,
-    <B as Callable>::Input: From<<A as Callable>::Output>,
-{
-    type In = A::In;
-    type Out = B::Out;
-
-    fn extract_input(context: &Self::In) -> Self::Input {
-        A::extract_input(context)
+impl<T, C: Component<Input = T>> Twine<T, C> {
+    /// Adds a component to the chain.
+    ///
+    /// This method appends a [`Component`] to the sequence, using the current
+    /// output as its input.
+    ///
+    /// # Parameters
+    ///
+    /// - `next`: The [`Component`] that processes the output of the current chain.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use twine_core::{Component, Twine};
+    ///
+    /// struct Doubler;
+    ///
+    /// impl Component for Doubler {
+    ///     type Input = i32;
+    ///     type Output = i32;
+    ///
+    ///     fn call(&self, input: &Self::Input) -> Self::Output {
+    ///         input * 2
+    ///     }
+    /// }
+    ///
+    /// let chain = Twine::<i32>::new()
+    ///     .then(Doubler)
+    ///     .build();
+    ///
+    /// assert_eq!(chain.call(&2), 4);
+    /// ```
+    #[must_use]
+    pub fn then<N>(self, next: N) -> Twine<T, impl Component<Input = C::Input, Output = N::Output>>
+    where
+        N: Component<Input = C::Output>,
+    {
+        Twine {
+            _marker: PhantomData,
+            component: then::Then::new(self.component, next),
+        }
     }
 
-    fn apply_output(&self, context: Self::In, output: Self::Output) -> Self::Out {
-        let context = self.first.call_with_context(context);
-        self.second.apply_output(context.into(), output)
+    /// Adds an inline function to the chain.
+    ///
+    /// This method applies a function to the output of the current component
+    /// before passing it to the next component or function.
+    ///
+    /// # Parameters
+    ///
+    /// - `next`: A function that processes the output of the current chain.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use twine_core::{Component, Twine};
+    ///
+    /// let chain = Twine::<i32>::new()
+    ///     .then_fn(|x| x + 10)
+    ///     .then_fn(|x| x * 2)
+    ///     .build();
+    ///
+    /// assert_eq!(chain.call(&5), 30);
+    /// ```
+    #[must_use]
+    pub fn then_fn<F, O>(
+        self,
+        function: F,
+    ) -> Twine<T, impl Component<Input = C::Input, Output = O>>
+    where
+        F: Fn(&C::Output) -> O,
+    {
+        Twine {
+            _marker: PhantomData,
+            component: then::Then::new(self.component, closure::Closure::new(function)),
+        }
+    }
+
+    /// Finalizes the `Twine` chain and returns the composed component.
+    ///
+    /// This method completes the chain-building process, producing a
+    /// [`Component`] that can be executed with `.call(input)`.
+    #[must_use]
+    pub fn build(self) -> impl Component<Input = C::Input, Output = C::Output> {
+        self.component
+    }
+}
+
+impl<T> Default for Twine<T> {
+    fn default() -> Self {
+        Self {
+            _marker: PhantomData,
+            component: (),
+        }
     }
 }
 
@@ -151,218 +162,142 @@ where
 mod tests {
     use super::*;
 
-    struct AddOne;
-    impl Callable for AddOne {
+    /// A component that doubles the input.
+    struct Doubler;
+    impl Component for Doubler {
         type Input = i32;
         type Output = i32;
 
-        fn call(&self, input: i32) -> i32 {
-            input + 1
+        fn call(&self, input: &Self::Input) -> Self::Output {
+            input * 2
         }
     }
 
-    struct MultiplyBy {
-        factor: i32,
+    /// A component that adds some increment to the input.
+    struct Adder {
+        increment: i32,
     }
-    impl Callable for MultiplyBy {
+    impl Component for Adder {
         type Input = i32;
         type Output = i32;
 
-        fn call(&self, input: i32) -> i32 {
-            input * self.factor
+        fn call(&self, input: &Self::Input) -> Self::Output {
+            input + self.increment
         }
     }
 
-    struct ToFloat;
-    impl Callable for ToFloat {
-        type Input = i32;
-        type Output = f64;
-
-        fn call(&self, input: i32) -> f64 {
-            f64::from(input)
-        }
-    }
-
-    struct IncreaseBySmallAmount;
-    impl Callable for IncreaseBySmallAmount {
+    /// A component that squares a floating point input.
+    struct Squarer;
+    impl Component for Squarer {
         type Input = f64;
         type Output = f64;
 
-        fn call(&self, input: f64) -> f64 {
-            input + 0.1
+        fn call(&self, input: &Self::Input) -> Self::Output {
+            input * input
         }
     }
 
-    struct RoundToInteger;
-    impl Callable for RoundToInteger {
-        type Input = f64;
-        type Output = i32;
-
-        #[allow(clippy::cast_possible_truncation)]
-        fn call(&self, input: f64) -> i32 {
-            input.round() as i32
-        }
-    }
-
-    struct IsPositive;
-    impl Callable for IsPositive {
+    /// A component that converts an integer to a string.
+    struct IntToString;
+    impl Component for IntToString {
         type Input = i32;
-        type Output = bool;
+        type Output = String;
 
-        fn call(&self, input: i32) -> bool {
-            input > 0
-        }
-    }
-
-    struct InitialContext {
-        input: i32,
-    }
-
-    struct AfterAddOneContext {
-        input: i32,
-        from_add_one: i32,
-    }
-
-    struct AfterMultiplyBy {
-        input: i32,
-        from_add_one: i32,
-        from_multiply_by: i32,
-    }
-
-    #[derive(Debug, PartialEq, Eq)]
-    struct FinalContext {
-        input: i32,
-        from_add_one: i32,
-        from_multiply_by: i32,
-        is_positive: bool,
-    }
-
-    impl Context for AddOne {
-        type In = InitialContext;
-        type Out = AfterAddOneContext;
-
-        fn extract_input(context: &Self::In) -> Self::Input {
-            context.input
-        }
-
-        fn apply_output(&self, context: Self::In, output: Self::Output) -> Self::Out {
-            Self::Out {
-                input: context.input,
-                from_add_one: output,
-            }
-        }
-    }
-
-    impl Context for MultiplyBy {
-        type In = AfterAddOneContext;
-        type Out = AfterMultiplyBy;
-
-        fn extract_input(context: &Self::In) -> Self::Input {
-            context.from_add_one
-        }
-
-        fn apply_output(&self, context: Self::In, from_multiply_by: Self::Output) -> Self::Out {
-            let Self::In {
-                input,
-                from_add_one,
-            } = context;
-            Self::Out {
-                input,
-                from_add_one,
-                from_multiply_by,
-            }
-        }
-    }
-
-    impl Context for IsPositive {
-        type In = AfterMultiplyBy;
-        type Out = FinalContext;
-
-        fn extract_input(context: &Self::In) -> Self::Input {
-            context.from_multiply_by
-        }
-
-        fn apply_output(
-            &self,
-            AfterMultiplyBy {
-                input,
-                from_add_one,
-                from_multiply_by,
-            }: Self::In,
-            is_positive: Self::Output,
-        ) -> Self::Out {
-            Self::Out {
-                input,
-                from_add_one,
-                from_multiply_by,
-                is_positive,
-            }
+        fn call(&self, input: &Self::Input) -> Self::Output {
+            format!("{input}")
         }
     }
 
     #[test]
-    fn chaining_callables() {
-        let chain = AddOne
-            .then(MultiplyBy { factor: 5 })
-            .then(AddOne)
-            .then(AddOne);
-        assert_eq!(chain.call(7), 42); // (7 + 1) * 5 + 1 + 1 = 42
+    fn call_a_single_component() {
+        let chain = Twine::<i32>::new().then(Adder { increment: 10 }).build();
+        assert_eq!(chain.call(&0), 10);
+        assert_eq!(chain.call(&10), 20);
     }
 
     #[test]
-    fn type_transformations() {
-        let chain = AddOne
-            .then(ToFloat)
-            .then(IncreaseBySmallAmount)
-            .then(RoundToInteger);
-        assert_eq!(chain.call(3), 4); // 3 + 1 -> 4.0 + 0.1 -> 4
-
-        let boolean_chain = AddOne.then(AddOne).then(IsPositive);
-        assert!(boolean_chain.call(-1)); //  -1 + 1 + 1 =  1 (true)
-        assert!(!boolean_chain.call(-3)); // -3 + 1 + 1 = -1 (false)
+    fn call_a_closure() {
+        let chain = Twine::<i32>::new().then_fn(|x| x * 3).build();
+        assert_eq!(chain.call(&2), 6);
+        assert_eq!(chain.call(&5), 15);
     }
 
     #[test]
-    fn composing_chains() {
-        let add_four = AddOne.then(AddOne).then(AddOne).then(AddOne);
-        let double_it = MultiplyBy { factor: 2 };
+    fn chain_components() {
+        let add_two = Adder { increment: 2 };
+        let add_five = Adder { increment: 5 };
 
-        let chain_one = add_four.then(MultiplyBy { factor: 3 });
-        let chain_two = AddOne.then(double_it);
+        let first_chain = Twine::<i32>::new().then(add_two).then(Doubler).build();
+        assert_eq!(first_chain.call(&0), 4);
+        assert_eq!(first_chain.call(&6), 16);
 
-        let composed = chain_one.then(chain_two);
-
-        assert_eq!(composed.call(0), 26); // (((0 + 4) * 3) + 1) * 2 = 26
+        let second_chain = Twine::<i32>::new().then(first_chain).then(add_five).build();
+        assert_eq!(second_chain.call(&1), 11);
     }
 
     #[test]
-    fn call_with_context() {
-        let multiply_by_three = MultiplyBy { factor: 3 };
-        let chain = AddOne.then(multiply_by_three).then(IsPositive);
+    fn chain_components_and_closures() {
+        let add_ten = Adder { increment: 10 };
+        let chain = Twine::<i32>::new()
+            .then(add_ten)
+            .then_fn(|x| x - 5)
+            .then(Doubler)
+            .then_fn(|x| x + 2)
+            .build();
 
-        assert!(chain.call(1));
-        assert!(!chain.call(-3));
+        assert_eq!(chain.call(&0), 12);
+        assert_eq!(chain.call(&100), 212);
+    }
 
-        let positive_context = chain.call_with_context(InitialContext { input: 4 });
-        assert_eq!(
-            positive_context,
-            FinalContext {
-                input: 4,
-                from_add_one: 5,
-                from_multiply_by: 15,
-                is_positive: true,
-            }
-        );
+    #[test]
+    fn type_transformation() {
+        let chain = Twine::<i32>::new().then(IntToString).build();
+        assert_eq!(chain.call(&42), "42".to_string());
+        assert_eq!(chain.call(&0), "0".to_string());
+    }
 
-        let negative_context = chain.call_with_context(InitialContext { input: -7 });
-        assert_eq!(
-            negative_context,
-            FinalContext {
-                input: -7,
-                from_add_one: -6,
-                from_multiply_by: -18,
-                is_positive: false,
-            }
-        );
+    #[test]
+    fn mixed_type_chaining() {
+        let chain = Twine::<i32>::new()
+            .then_fn(|x| x + 100)
+            .then(IntToString)
+            .then_fn(|s| format!("Value: {s}"))
+            .build();
+
+        assert_eq!(chain.call(&0), "Value: 100");
+        assert_eq!(chain.call(&50), "Value: 150");
+    }
+
+    #[test]
+    fn map_inside_then_to_use_a_context() {
+        #[derive(Debug, PartialEq)]
+        struct Context {
+            input: f64,
+            result: Option<String>,
+        }
+
+        let chain = Twine::<Context>::new()
+            .then(Squarer.map(
+                |&Context { input, .. }| input,
+                |(Context { input, .. }, output)| Context {
+                    input: *input,
+                    result: Some(format!("{input} squared is {output}")),
+                },
+            ))
+            .then_fn(|Context { input, result }| Context {
+                input: *input,
+                // We're very excited about this result.
+                result: result.as_ref().map(|r| format!("{r}!")),
+            })
+            .build();
+
+        let input = Context {
+            input: 6.0,
+            result: None,
+        };
+
+        let output = chain.call(&input);
+
+        assert_eq!(output.result, Some("6 squared is 36!".into()));
     }
 }
