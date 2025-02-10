@@ -40,32 +40,58 @@ pub trait Component {
     /// ```
     /// use twine_core::Component;
     ///
-    /// struct Doubler;
+    /// struct Adder {
+    ///     increment: i32,
+    /// }
     ///
-    /// impl Component for Doubler {
+    /// impl Component for Adder {
     ///     type Input = i32;
     ///     type Output = i32;
     ///
     ///     fn call(&self, input: &Self::Input) -> Self::Output {
-    ///         input * 2
+    ///         input + self.increment
     ///     }
     /// }
     ///
-    /// struct Context {
+    /// struct Input {
     ///     value: i32,
-    ///     doubled: Option<i32>,
+    ///     other_data: f64,
     /// }
     ///
-    /// let component = Doubler.map(
-    ///     |context: &Context| context.value,
-    ///     |(context, output)| Context {
-    ///         value: context.value,
-    ///         doubled: Some(output),
-    ///     }
+    /// #[derive(Debug, PartialEq)]
+    /// struct Output {
+    ///     started_with: i32,
+    ///     ended_with: i32,
+    ///     is_even: bool,
+    ///     other_data: f64,
+    /// }
+    ///
+    /// let add_five = Adder { increment: 5 };
+    ///
+    /// let mapped_add_five = add_five.map(
+    ///     // Destructuring is often useful here.
+    ///     |&Input { value, .. }| value,
+    ///     |(&Input {value, other_data }, output)| Output {
+    ///         started_with: value,
+    ///         ended_with: output,
+    ///         is_even: output % 2 == 0,
+    ///         other_data,
+    ///     },
     /// );
     ///
-    /// let result = component.call(&Context { value: 4, doubled: None });
-    /// assert_eq!(result.doubled, Some(8));
+    /// let input = Input { value: 3, other_data: 100.0 };
+    ///
+    /// let output = mapped_add_five.call(&input);
+    ///
+    /// assert_eq!(
+    ///     mapped_add_five.call(&input),
+    ///     Output {
+    ///         started_with: 3,
+    ///         ended_with: 8,
+    ///         is_even: true,
+    ///         other_data: 100.0,
+    ///     }
+    /// );
     /// ```
     fn map<InputMap, OutputMap, In, Out>(
         self,

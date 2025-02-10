@@ -14,7 +14,7 @@ use crate::Component;
 ///
 /// - [`Twine::new<T>()`] — Starts a new chain.
 /// - [`Twine::then()`] — Adds any type that implements [`Component`].
-/// - [`Twine::then_fn()`] — Adds an inline closure.
+/// - [`Twine::then_fn()`] — Adds an inline function.
 /// - [`Twine::build()`] — Finalizes the chain and returns the composed component.
 pub struct Twine<T, C = ()> {
     _marker: PhantomData<T>,
