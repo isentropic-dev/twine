@@ -31,7 +31,7 @@ pub(crate) fn code(graph: &ComponentGraph) -> TokenStream {
             #(#output_fields)*
         }
 
-        impl twine_core::Component for #comp_type {
+        impl twine_core::legacy::Component for #comp_type {
             type Config = #config_type;
             type Input = #input_type;
             type Output = #output_type;
@@ -78,7 +78,7 @@ fn generate_aggregate_fields(
         .map(|c| {
             let name = &c.name;
             let ty = &c.component_type;
-            quote! { pub #name: <#ty as twine_core::Component>::#field_type, }
+            quote! { pub #name: <#ty as twine_core::legacy::Component>::#field_type, }
         })
         .collect()
 }
@@ -121,7 +121,7 @@ fn generate_input_type_aliases(graph: &ComponentGraph) -> Vec<TokenStream> {
             let input_alias = input_alias_for(component_type);
             if seen_types.insert(input_alias.to_string()) {
                 Some(quote! {
-                    type #input_alias = <#component_type as twine_core::Component>::Input;
+                    type #input_alias = <#component_type as twine_core::legacy::Component>::Input;
                 })
             } else {
                 None
@@ -257,12 +257,12 @@ mod tests {
             let generated = generate_aggregate_fields(&definition, kind);
             let expected = match kind {
                 AggregateKind::Config => quote! {
-                    pub first: <ExampleType as twine_core::Component>::Config,
-                    pub second: <AnotherType as twine_core::Component>::Config,
+                    pub first: <ExampleType as twine_core::legacy::Component>::Config,
+                    pub second: <AnotherType as twine_core::legacy::Component>::Config,
                 },
                 AggregateKind::Output => quote! {
-                    pub first: <ExampleType as twine_core::Component>::Output,
-                    pub second: <AnotherType as twine_core::Component>::Output,
+                    pub first: <ExampleType as twine_core::legacy::Component>::Output,
+                    pub second: <AnotherType as twine_core::legacy::Component>::Output,
                 },
             };
 
@@ -307,8 +307,8 @@ mod tests {
         let generated = generate_create_fn(&graph);
         let expected = quote! {
             fn create(config: Self::Config) -> impl Fn(Self::Input) -> Self::Output {
-                type AnotherTypeInput = <AnotherType as twine_core::Component>::Input;
-                type ExampleTypeInput = <ExampleType as twine_core::Component>::Input;
+                type AnotherTypeInput = <AnotherType as twine_core::legacy::Component>::Input;
+                type ExampleTypeInput = <ExampleType as twine_core::legacy::Component>::Input;
                 let call_first_fn = AnotherType::create(config.call_first);
                 let call_second_fn = ExampleType::create(config.call_second);
 

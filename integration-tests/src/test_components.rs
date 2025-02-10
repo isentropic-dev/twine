@@ -1,6 +1,6 @@
 pub mod building {
     use serde::{Deserialize, Serialize};
-    use twine_core::Component;
+    use twine_core::legacy::Component;
 
     /// A mock model of a building, used for integration tests.
     pub struct BuildingModel;
@@ -58,7 +58,7 @@ pub mod building {
 
 pub mod hourly_weather {
     use serde::{Deserialize, Serialize};
-    use twine_core::Component;
+    use twine_core::legacy::Component;
 
     /// A mock hourly weather provider, used for integration tests.
     pub struct HourlyWeather;
