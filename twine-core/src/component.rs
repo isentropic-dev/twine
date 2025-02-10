@@ -81,8 +81,6 @@ pub trait Component {
     ///
     /// let input = Input { value: 3, other_data: 100.0 };
     ///
-    /// let output = mapped_add_five.call(&input);
-    ///
     /// assert_eq!(
     ///     mapped_add_five.call(&input),
     ///     Output {
