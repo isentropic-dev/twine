@@ -20,12 +20,12 @@ impl<F, I, O> Closure<F, I, O> {
 
 impl<F, I, O> Component for Closure<F, I, O>
 where
-    F: Fn(&I) -> O,
+    F: Fn(I) -> O,
 {
     type Input = I;
     type Output = O;
 
-    fn call(&self, input: &Self::Input) -> Self::Output {
+    fn call(&self, input: Self::Input) -> Self::Output {
         (self.function)(input)
     }
 }
