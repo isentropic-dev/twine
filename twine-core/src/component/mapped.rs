@@ -6,16 +6,16 @@ use super::Component;
 ///
 /// This struct is used internally by `.map()` to modify how a component
 /// interacts with its surrounding context.
-pub(crate) struct Mapped<C, FI, FO, I, O> {
+pub(crate) struct Mapped<C, InputMap, OutputMap, In, Out> {
     component: C,
-    input_map: FI,
-    output_map: FO,
-    _marker: PhantomData<(I, O)>,
+    input_map: InputMap,
+    output_map: OutputMap,
+    _marker: PhantomData<(In, Out)>,
 }
 
-impl<C, FI, FO, I, O> Mapped<C, FI, FO, I, O> {
+impl<C, InputMap, OutputMap, In, Out> Mapped<C, InputMap, OutputMap, In, Out> {
     /// Creates a new mapped component with input and output transformations.
-    pub(crate) fn new(component: C, input_map: FI, output_map: FO) -> Self {
+    pub(crate) fn new(component: C, input_map: InputMap, output_map: OutputMap) -> Self {
         Self {
             component,
             input_map,
@@ -25,20 +25,20 @@ impl<C, FI, FO, I, O> Mapped<C, FI, FO, I, O> {
     }
 }
 
-impl<C, FI, FO, I, O> Component for Mapped<C, FI, FO, I, O>
+impl<C, InputMap, OutputMap, In, Out> Component for Mapped<C, InputMap, OutputMap, In, Out>
 where
     C: Component,
-    FI: Fn(&I) -> C::Input,
-    FO: Fn((&I, C::Output)) -> O,
+    InputMap: Fn(&In) -> C::Input,
+    OutputMap: Fn((In, C::Output)) -> Out,
 {
-    type Input = I;
-    type Output = O;
+    type Input = In;
+    type Output = Out;
 
     /// Calls the wrapped component with a transformed input and applies the
     /// output mapping function.
-    fn call(&self, input: &Self::Input) -> Self::Output {
-        let mapped_input = (self.input_map)(input);
-        let output = self.component.call(&mapped_input);
+    fn call(&self, input: Self::Input) -> Self::Output {
+        let mapped_input = (self.input_map)(&input);
+        let output = self.component.call(mapped_input);
         (self.output_map)((input, output))
     }
 }

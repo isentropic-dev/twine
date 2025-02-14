@@ -16,8 +16,8 @@ pub trait Component {
     type Input;
     type Output;
 
-    /// Calls the component with a reference to the given input, producing an output.
-    fn call(&self, input: &Self::Input) -> Self::Output;
+    /// Calls the component with the given input, producing an output.
+    fn call(&self, input: Self::Input) -> Self::Output;
 
     /// Adapts the component by transforming its input and output.
     ///
@@ -48,7 +48,7 @@ pub trait Component {
     ///     type Input = i32;
     ///     type Output = i32;
     ///
-    ///     fn call(&self, input: &Self::Input) -> Self::Output {
+    ///     fn call(&self, input: Self::Input) -> Self::Output {
     ///         input + self.increment
     ///     }
     /// }
@@ -71,7 +71,7 @@ pub trait Component {
     /// let mapped_add_five = add_five.map(
     ///     // Destructuring is often useful here.
     ///     |&Input { value, .. }| value,
-    ///     |(&Input {value, other_data }, output)| Output {
+    ///     |(Input {value, other_data }, output)| Output {
     ///         started_with: value,
     ///         ended_with: output,
     ///         is_even: output % 2 == 0,
@@ -82,7 +82,7 @@ pub trait Component {
     /// let input = Input { value: 3, other_data: 100.0 };
     ///
     /// assert_eq!(
-    ///     mapped_add_five.call(&input),
+    ///     mapped_add_five.call(input),
     ///     Output {
     ///         started_with: 3,
     ///         ended_with: 8,
@@ -99,7 +99,7 @@ pub trait Component {
     where
         Self: Sized,
         InputMap: Fn(&In) -> Self::Input,
-        OutputMap: Fn((&In, Self::Output)) -> Out,
+        OutputMap: Fn((In, Self::Output)) -> Out,
     {
         mapped::Mapped::new(self, input_map, output_map)
     }
@@ -131,7 +131,7 @@ pub trait Component {
     ///     type Input = i32;
     ///     type Output = i32;
     ///
-    ///     fn call(&self, input: &Self::Input) -> Self::Output {
+    ///     fn call(&self, input: Self::Input) -> Self::Output {
     ///         input * 2
     ///     }
     /// }
@@ -141,7 +141,7 @@ pub trait Component {
     ///     |output| println!("Produced: {:?}", output),
     /// );
     ///
-    /// debug_component.call(&5);
+    /// debug_component.call(5);
     /// // Prints:
     /// // Received: 5
     /// // Produced: 10
@@ -174,7 +174,7 @@ mod tests {
         type Input = i32;
         type Output = i32;
 
-        fn call(&self, input: &Self::Input) -> Self::Output {
+        fn call(&self, input: Self::Input) -> Self::Output {
             input * 2
         }
     }
@@ -187,21 +187,21 @@ mod tests {
         type Input = i32;
         type Output = i32;
 
-        fn call(&self, input: &Self::Input) -> Self::Output {
+        fn call(&self, input: Self::Input) -> Self::Output {
             input + self.increment
         }
     }
 
     #[test]
     fn basic_components() {
-        assert_eq!(Doubler.call(&2), 4);
-        assert_eq!(Doubler.call(&5), 10);
+        assert_eq!(Doubler.call(2), 4);
+        assert_eq!(Doubler.call(5), 10);
 
         let add_one = Adder { increment: 1 };
-        assert_eq!(add_one.call(&10), 11);
+        assert_eq!(add_one.call(10), 11);
 
         let add_five = Adder { increment: 5 };
-        assert_eq!(add_five.call(&3), 8);
+        assert_eq!(add_five.call(3), 8);
     }
 
     #[test]
@@ -235,7 +235,7 @@ mod tests {
             output: 0,
         };
 
-        let context_out = mapped_doubler.call(&context_in);
+        let context_out = mapped_doubler.call(context_in);
 
         assert_eq!(
             context_out,
@@ -283,7 +283,7 @@ mod tests {
             value: 3,
         };
 
-        let output = mapped_add_three.call(&input);
+        let output = mapped_add_three.call(input);
 
         assert_eq!(
             output,
@@ -317,8 +317,8 @@ mod tests {
             },
         );
 
-        let result1 = inspected.call(&3);
-        let result2 = inspected.call(&5);
+        let result1 = inspected.call(3);
+        let result2 = inspected.call(5);
 
         assert_eq!(result1, 6);
         assert_eq!(result2, 10);

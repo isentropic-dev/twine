@@ -30,8 +30,8 @@ where
     type Input = A::Input;
     type Output = B::Output;
 
-    fn call(&self, input: &Self::Input) -> Self::Output {
+    fn call(&self, input: Self::Input) -> Self::Output {
         let output = self.first.call(input);
-        self.second.call(&output)
+        self.second.call(output)
     }
 }

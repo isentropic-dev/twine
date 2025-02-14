@@ -52,7 +52,7 @@ impl<T> Twine<T> {
     #[must_use]
     pub fn then_fn<F, O>(self, function: F) -> Twine<T, impl Component<Input = T, Output = O>>
     where
-        F: Fn(&T) -> O,
+        F: Fn(T) -> O,
     {
         Twine {
             _marker: PhantomData,
@@ -82,7 +82,7 @@ impl<T, C: Component<Input = T>> Twine<T, C> {
     ///     type Input = i32;
     ///     type Output = i32;
     ///
-    ///     fn call(&self, input: &Self::Input) -> Self::Output {
+    ///     fn call(&self, input: Self::Input) -> Self::Output {
     ///         input * 2
     ///     }
     /// }
@@ -91,7 +91,7 @@ impl<T, C: Component<Input = T>> Twine<T, C> {
     ///     .then(Doubler)
     ///     .build();
     ///
-    /// assert_eq!(chain.call(&2), 4);
+    /// assert_eq!(chain.call(2), 4);
     /// ```
     #[must_use]
     pub fn then<N>(self, next: N) -> Twine<T, impl Component<Input = C::Input, Output = N::Output>>
@@ -123,7 +123,7 @@ impl<T, C: Component<Input = T>> Twine<T, C> {
     ///     .then_fn(|x| x * 2)
     ///     .build();
     ///
-    /// assert_eq!(chain.call(&5), 30);
+    /// assert_eq!(chain.call(5), 30);
     /// ```
     #[must_use]
     pub fn then_fn<F, O>(
@@ -131,7 +131,7 @@ impl<T, C: Component<Input = T>> Twine<T, C> {
         function: F,
     ) -> Twine<T, impl Component<Input = C::Input, Output = O>>
     where
-        F: Fn(&C::Output) -> O,
+        F: Fn(C::Output) -> O,
     {
         Twine {
             _marker: PhantomData,
@@ -168,7 +168,7 @@ mod tests {
         type Input = i32;
         type Output = i32;
 
-        fn call(&self, input: &Self::Input) -> Self::Output {
+        fn call(&self, input: Self::Input) -> Self::Output {
             input * 2
         }
     }
@@ -181,7 +181,7 @@ mod tests {
         type Input = i32;
         type Output = i32;
 
-        fn call(&self, input: &Self::Input) -> Self::Output {
+        fn call(&self, input: Self::Input) -> Self::Output {
             input + self.increment
         }
     }
@@ -192,7 +192,7 @@ mod tests {
         type Input = f64;
         type Output = f64;
 
-        fn call(&self, input: &Self::Input) -> Self::Output {
+        fn call(&self, input: Self::Input) -> Self::Output {
             input * input
         }
     }
@@ -203,7 +203,7 @@ mod tests {
         type Input = i32;
         type Output = String;
 
-        fn call(&self, input: &Self::Input) -> Self::Output {
+        fn call(&self, input: Self::Input) -> Self::Output {
             format!("{input}")
         }
     }
@@ -211,15 +211,15 @@ mod tests {
     #[test]
     fn call_a_single_component() {
         let chain = Twine::<i32>::new().then(Adder { increment: 10 }).build();
-        assert_eq!(chain.call(&0), 10);
-        assert_eq!(chain.call(&10), 20);
+        assert_eq!(chain.call(0), 10);
+        assert_eq!(chain.call(10), 20);
     }
 
     #[test]
     fn call_a_closure() {
         let chain = Twine::<i32>::new().then_fn(|x| x * 3).build();
-        assert_eq!(chain.call(&2), 6);
-        assert_eq!(chain.call(&5), 15);
+        assert_eq!(chain.call(2), 6);
+        assert_eq!(chain.call(5), 15);
     }
 
     #[test]
@@ -228,11 +228,11 @@ mod tests {
         let add_five = Adder { increment: 5 };
 
         let first_chain = Twine::<i32>::new().then(add_two).then(Doubler).build();
-        assert_eq!(first_chain.call(&0), 4);
-        assert_eq!(first_chain.call(&6), 16);
+        assert_eq!(first_chain.call(0), 4);
+        assert_eq!(first_chain.call(6), 16);
 
         let second_chain = Twine::<i32>::new().then(first_chain).then(add_five).build();
-        assert_eq!(second_chain.call(&1), 11);
+        assert_eq!(second_chain.call(1), 11);
     }
 
     #[test]
@@ -245,15 +245,15 @@ mod tests {
             .then_fn(|x| x + 2)
             .build();
 
-        assert_eq!(chain.call(&0), 12);
-        assert_eq!(chain.call(&100), 212);
+        assert_eq!(chain.call(0), 12);
+        assert_eq!(chain.call(100), 212);
     }
 
     #[test]
     fn type_transformation() {
         let chain = Twine::<i32>::new().then(IntToString).build();
-        assert_eq!(chain.call(&42), "42".to_string());
-        assert_eq!(chain.call(&0), "0".to_string());
+        assert_eq!(chain.call(42), "42".to_string());
+        assert_eq!(chain.call(0), "0".to_string());
     }
 
     #[test]
@@ -264,8 +264,8 @@ mod tests {
             .then_fn(|s| format!("Value: {s}"))
             .build();
 
-        assert_eq!(chain.call(&0), "Value: 100");
-        assert_eq!(chain.call(&50), "Value: 150");
+        assert_eq!(chain.call(0), "Value: 100");
+        assert_eq!(chain.call(50), "Value: 150");
     }
 
     #[test]
@@ -280,12 +280,12 @@ mod tests {
             .then(Squarer.map(
                 |&Context { input, .. }| input,
                 |(Context { input, .. }, output)| Context {
-                    input: *input,
+                    input,
                     result: Some(format!("{input} squared is {output}")),
                 },
             ))
             .then_fn(|Context { input, result }| Context {
-                input: *input,
+                input,
                 // We're very excited about this result.
                 result: result.as_ref().map(|r| format!("{r}!")),
             })
@@ -296,7 +296,7 @@ mod tests {
             result: None,
         };
 
-        let output = chain.call(&input);
+        let output = chain.call(input);
 
         assert_eq!(output.result, Some("6 squared is 36!".into()));
     }
