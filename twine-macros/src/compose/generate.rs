@@ -1,107 +1,127 @@
-use itertools::Itertools;
-use proc_macro2::TokenStream;
+use std::collections::HashSet;
+
+use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
+use syn::{parse_quote_spanned, Ident, Path};
 
-use super::{ComponentDefinition, ComponentGraph, InputField, InputSchema};
+use super::{ComponentDefinition, ComponentGraph, ComponentInstance};
 
-/// Generates a Rust module from a `ComponentGraph`.
-///
-/// - Defines `Config`, `Input`, and `Output` structs.
-/// - Includes `check_types` to validate input types at compile time.
-/// - Provides `create`, which returns a callable component instance.
-///
-/// This function produces a `mod` block containing the generated structs
-/// and functions necessary for the composed component.
-pub(crate) fn generate_module(graph: &ComponentGraph) -> TokenStream {
+pub(crate) fn code(graph: &ComponentGraph) -> TokenStream {
     let definition = &graph.definition;
-    let name = &definition.name;
-    let config = generate_config(definition);
-    let input = generate_input(definition);
-    let output = generate_output(definition);
-    let type_check_fn = generate_check_types_fn(graph);
+    let comp_type = &definition.component_type;
+    let input_type = &definition.input_type;
+
+    let config_type = generate_aggregate_path(definition, AggregateKind::Config);
+    let config_fields = generate_aggregate_fields(definition, AggregateKind::Config);
+
+    let output_type = generate_aggregate_path(definition, AggregateKind::Output);
+    let output_fields = generate_aggregate_fields(definition, AggregateKind::Output);
+
+    let derive_attrs = generate_derive_attributes();
     let create_fn = generate_create_fn(graph);
 
     quote! {
-        mod #name {
-            use super::*;
-            #config
-            #input
-            #output
-            #type_check_fn
+        #derive_attrs
+        pub struct #config_type {
+            #(#config_fields)*
+        }
+
+        #derive_attrs
+        pub struct #output_type {
+            #(#output_fields)*
+        }
+
+        impl twine_core::legacy::Component for #comp_type {
+            type Config = #config_type;
+            type Input = #input_type;
+            type Output = #output_type;
+
             #create_fn
         }
     }
 }
 
-/// Generates a `Config` struct holding each component’s configuration.
-fn generate_config(definition: &ComponentDefinition) -> TokenStream {
-    let derive_attrs = create_derive_attributes();
-    let fields = definition.components.iter().map(|instance| {
-        let name = &instance.name;
-        let module = &instance.module;
-        quote! { pub #name: #module::Config, }
-    });
+/// Appends `Config` or `Output` to the end of a composed component's path.
+fn generate_aggregate_path(definition: &ComponentDefinition, kind: AggregateKind) -> Path {
+    let mut path = definition.component_type.clone();
 
-    quote! {
-        #derive_attrs
-        pub struct Config {
-            #(#fields)*
+    let last = path
+        .segments
+        .last_mut()
+        .expect("Component type path must not be empty.");
+
+    last.ident = format_ident!(
+        "{}{}",
+        last.ident,
+        match kind {
+            AggregateKind::Config => "Config",
+            AggregateKind::Output => "Output",
         }
-    }
+    );
+
+    path
 }
 
-/// Generates an `Input` struct with nested modules for hierarchical fields.
-fn generate_input(definition: &ComponentDefinition) -> TokenStream {
-    let derive_attrs = create_derive_attributes();
-    let fields = create_input_fields(&definition.input_schema);
-    let nested_modules = create_nested_module(&definition.input_schema);
+/// Generates struct fields for `Config` or `Output`.
+fn generate_aggregate_fields(
+    definition: &ComponentDefinition,
+    kind: AggregateKind,
+) -> Vec<TokenStream> {
+    let field_type = match kind {
+        AggregateKind::Config => quote! { Config },
+        AggregateKind::Output => quote! { Output },
+    };
 
-    quote! {
-        #derive_attrs
-        pub struct Input {
-            #(#fields)*
-        }
-
-        #(#nested_modules)*
-    }
-}
-
-/// Creates fields for the `Input` struct based on the schema.
-///
-/// Fields are sorted for consistency.
-fn create_input_fields(input_schema: &InputSchema) -> Vec<TokenStream> {
-    input_schema
+    definition
+        .components
         .iter()
-        .sorted_by_key(|(ident, _)| ident.to_string())
-        .map(|(field_name, field_value)| match field_value {
-            InputField::Type(field_type) => quote! { pub #field_name: #field_type, },
-            InputField::Struct(_) => quote! { pub #field_name: #field_name::Input, },
+        .map(|c| {
+            let name = &c.name;
+            let ty = &c.component_type;
+            quote! { pub #name: <#ty as twine_core::legacy::Component>::#field_type, }
         })
         .collect()
 }
 
-/// Recursively creates nested modules for hierarchical `Input` fields.
+/// Generates the `create` function for this composed component.
 ///
-/// Each module includes an `Input` struct.
-fn create_nested_module(input_schema: &InputSchema) -> Vec<TokenStream> {
-    let derive_attrs = create_derive_attributes();
-    input_schema
-        .iter()
-        .sorted_by_key(|(ident, _)| ident.to_string())
-        .filter_map(|(mod_name, field_value)| {
-            if let InputField::Struct(nested_schema) = field_value {
-                let nested_fields = create_input_fields(nested_schema);
-                let nested_modules = create_nested_module(nested_schema);
+/// This function performs the following:
+///
+/// - Defines type aliases to handle Rust's qualified path limitations.
+/// - Instantiates each component using its configuration from `Config`.
+/// - Returns a closure that:
+///   - Accepts an `Input` struct.
+///   - Calls each component in the correct order.
+///   - Passes outputs as inputs to dependent components.
+///   - Aggregates results into an `Output` struct.
+fn generate_create_fn(graph: &ComponentGraph) -> TokenStream {
+    let input_type_aliases = generate_input_type_aliases(graph);
+    let instantiate_components = generate_instantiate_components(graph);
+    let call_components = generate_call_components(graph);
+    let output_struct = generate_output_struct(graph);
 
+    quote! {
+        fn create(config: Self::Config) -> impl Fn(Self::Input) -> Self::Output {
+            #(#input_type_aliases)*
+            #(#instantiate_components)*
+            move |input| {
+                #(#call_components)*
+                #output_struct
+            }
+        }
+    }
+}
+
+/// Generates type aliases for component inputs.
+fn generate_input_type_aliases(graph: &ComponentGraph) -> Vec<TokenStream> {
+    let mut seen_types = HashSet::new();
+    graph
+        .iter_components()
+        .filter_map(|ComponentInstance { component_type, .. }| {
+            let input_alias = input_alias_for(component_type);
+            if seen_types.insert(input_alias.to_string()) {
                 Some(quote! {
-                    pub mod #mod_name {
-                        #derive_attrs
-                        pub struct Input {
-                            #(#nested_fields)*
-                        }
-
-                        #(#nested_modules)*
-                    }
+                    type #input_alias = <#component_type as twine_core::legacy::Component>::Input;
                 })
             } else {
                 None
@@ -110,146 +130,79 @@ fn create_nested_module(input_schema: &InputSchema) -> Vec<TokenStream> {
         .collect()
 }
 
-/// Generates an `Output` struct collecting component outputs.
-fn generate_output(definition: &ComponentDefinition) -> TokenStream {
-    let derive_attrs = create_derive_attributes();
-    let fields = definition.components.iter().map(|instance| {
-        let name = &instance.name;
-        let module = &instance.module;
-        quote! { pub #name: #module::Output, }
-    });
-
-    quote! {
-        #derive_attrs
-        pub struct Output {
-            #(#fields)*
-        }
-    }
-}
-
-/// Generates `check_types` to ensure components receive correctly typed inputs at compile time.
-fn generate_check_types_fn(graph: &ComponentGraph) -> TokenStream {
-    let input_fields = graph
-        .definition
-        .input_schema
-        .keys()
-        .sorted()
-        .map(|field_name| quote! { #field_name });
-
-    // Bring inputs into scope.
-    let inputs = quote! {
-        let Input { #(#input_fields),* } = Input::default();
-    };
-
-    // Bring required outputs into scope.
-    let component_outputs: Vec<_> = graph
-        .definition
-        .components
-        .iter()
-        .enumerate()
-        .filter(|(index, _instance)| graph.is_used_as_input(*index))
-        .map(|(_index, instance)| {
-            let name = &instance.name;
-            let mod_input = &instance.module;
-            quote! { let #name = #mod_input::Output::default(); }
-        })
-        .collect();
-
-    // Check each component's input expression.
-    let component_inputs: Vec<_> = graph
-        .definition
-        .components
-        .iter()
-        .map(|instance| {
-            let input_struct = &instance.input_struct;
-            quote! { let _ = #input_struct; }
-        })
-        .collect();
-
-    quote! {
-        fn check_types() {
-            #inputs
-            #(#component_outputs)*
-            #(#component_inputs)*
-        }
-    }
-}
-
-/// Generates the `create` function for this composed component.
-///
-/// This function:
-///
-/// - Instantiates each component using its configuration from `Config`.
-/// - Returns a closure that:
-///   - Receives an `Input` struct.
-///   - Calls each component in the correct order.
-///   - Passes component outputs as inputs to dependent components.
-///   - Assembles the computed results into an `Output` struct.
-fn generate_create_fn(graph: &ComponentGraph) -> TokenStream {
-    let definition = &graph.definition;
-    let call_order = graph.call_order();
-
-    // Initialize each component.
-    let initialize_components: Vec<_> = call_order
-        .iter()
-        .map(|&index| {
-            let component = &definition.components[index];
-            let name = &component.name;
-            let module = &component.module;
-            let name_fn = format_ident!("{}_fn", name);
-            quote! {
-                let #name_fn = #module::create(config.#name);
-            }
-        })
-        .collect();
-
-    // Gather all input fields.
-    let input_fields: Vec<_> = definition
-        .input_schema
-        .keys()
-        .sorted_by_key(ToString::to_string)
-        .map(|field_name| quote! { #field_name })
-        .collect();
-
-    // Call each component.
-    let call_components: Vec<_> = call_order
-        .iter()
-        .map(|&index| {
-            let component = &definition.components[index];
-            let name = &component.name;
-            let name_fn = format_ident!("{}_fn", name);
-            let input_struct = &component.input_struct;
-            quote! {
-                let #name = #name_fn(#input_struct);
-            }
-        })
-        .collect();
-
-    // Build output struct.
-    let output_fields: Vec<_> = call_order
-        .iter()
-        .map(|&index| {
-            let component = &definition.components[index];
-            let name = &component.name;
-            quote! { #name, }
-        })
-        .collect();
-
-    quote! {
-        pub fn create(config: Config) -> impl Fn(Input) -> Output {
-            #(#initialize_components)*
-            move |Input { #(#input_fields),* }| {
-                #(#call_components)*
-                Output {
-                    #(#output_fields)*
+/// Instantiates each component using its configuration.
+fn generate_instantiate_components(graph: &ComponentGraph) -> Vec<TokenStream> {
+    graph
+        .iter_components()
+        .map(
+            |ComponentInstance {
+                 name,
+                 component_type,
+                 ..
+             }| {
+                let component_fn = format_ident!("{name}_fn");
+                quote! {
+                    let #component_fn = #component_type::create(config.#name);
                 }
-            }
-        }
+            },
+        )
+        .collect()
+}
+
+/// Calls each component in the correct order.
+fn generate_call_components(graph: &ComponentGraph) -> Vec<TokenStream> {
+    graph
+        .iter_components()
+        .map(
+            |ComponentInstance {
+                 name,
+                 component_type,
+                 input_struct,
+             }| {
+                // This bit allows rust-analyzer to work as expected.
+                let mut input_expr = input_struct.clone();
+                let input_alias = input_alias_for(component_type);
+                input_expr.path = parse_quote_spanned!(Span::call_site() => #input_alias);
+
+                let component_fn = format_ident!("{name}_fn");
+                quote! {
+                    let #name = #component_fn(#input_expr);
+                }
+            },
+        )
+        .collect()
+}
+
+/// Constructs the `Self::Output` struct with computed values.
+fn generate_output_struct(graph: &ComponentGraph) -> TokenStream {
+    let output_fields = graph
+        .iter_components()
+        .map(|ComponentInstance { name, .. }| {
+            quote! { #name, }
+        });
+    quote! {
+        Self::Output { #(#output_fields)* }
     }
 }
 
-/// Generates derive attributes based on the enabled features.
-fn create_derive_attributes() -> TokenStream {
+/// Derives the input type alias for a given component type.
+fn input_alias_for(component_type: &Path) -> Ident {
+    let last_segment = component_type
+        .segments
+        .last()
+        .expect("Component type path must not be empty");
+    format_ident!("{}Input", last_segment.ident)
+}
+
+/// Represents whether we're generating `Config` or `Output`.
+#[derive(Clone, Copy)]
+enum AggregateKind {
+    Config,
+    Output,
+}
+
+/// Generates `#[derive(...)]` attributes based on feature flags.
+fn generate_derive_attributes() -> TokenStream {
     if cfg!(feature = "serde-derive") {
         quote! { #[derive(Debug, Default, serde::Serialize, serde::Deserialize)] }
     } else {
@@ -259,255 +212,116 @@ fn create_derive_attributes() -> TokenStream {
 
 #[cfg(test)]
 mod tests {
+    use crate::compose::ComponentInstance;
+
     use super::*;
+    use syn::{parse_quote, punctuated::Punctuated};
 
-    use syn::{parse2, parse_quote, File};
+    #[test]
+    fn generate_aggregate_path_works() {
+        let definition = ComponentDefinition {
+            component_type: parse_quote! { MyComponent },
+            input_type: parse_quote! { MyInput },
+            components: vec![],
+        };
+        assert_eq!(
+            generate_aggregate_path(&definition, AggregateKind::Config),
+            parse_quote! { MyComponentConfig }
+        );
+        assert_eq!(
+            generate_aggregate_path(&definition, AggregateKind::Output),
+            parse_quote! { MyComponentOutput }
+        );
+    }
 
-    /// Compares two `TokenStream`s for easier debugging of macro output differences.
-    fn assert_eq_pretty(expected: &TokenStream, actual: &TokenStream) {
-        fn pretty(ts: &TokenStream) -> String {
-            let syntax_tree = parse2::<File>(ts.clone()).expect("Failed to parse TokenStream");
-            prettyplease::unparse(&syntax_tree)
+    #[test]
+    fn generate_aggregate_fields_works() {
+        let definition = ComponentDefinition {
+            component_type: parse_quote! { MyComponent },
+            input_type: parse_quote! { MyInput },
+            components: vec![
+                ComponentInstance {
+                    name: parse_quote! { first },
+                    component_type: parse_quote! { ExampleType },
+                    input_struct: parse_quote! { ExampleInput { x: 1.0 } },
+                },
+                ComponentInstance {
+                    name: parse_quote! { second },
+                    component_type: parse_quote! { AnotherType },
+                    input_struct: parse_quote! { AnotherInput { y: 2.0 } },
+                },
+            ],
+        };
+
+        for kind in [AggregateKind::Config, AggregateKind::Output] {
+            let generated = generate_aggregate_fields(&definition, kind);
+            let expected = match kind {
+                AggregateKind::Config => quote! {
+                    pub first: <ExampleType as twine_core::legacy::Component>::Config,
+                    pub second: <AnotherType as twine_core::legacy::Component>::Config,
+                },
+                AggregateKind::Output => quote! {
+                    pub first: <ExampleType as twine_core::legacy::Component>::Output,
+                    pub second: <AnotherType as twine_core::legacy::Component>::Output,
+                },
+            };
+
+            assert_eq!(quote! { #(#generated)* }.to_string(), expected.to_string());
         }
-        let expected = pretty(expected);
-        let actual = pretty(actual);
-        assert!(
-            expected == actual,
-            "\n--- Expected ---\n{expected}\n\n--- Actual ---\n{actual}"
-        );
     }
 
     #[test]
-    fn generate_config_works() {
-        let generated = generate_config(
-            &(parse_quote! {
-                test {
-                    first => example {
-                        x: 1.0
-                    }
-
-                    second => example {
-                        x: 2.0
-                    }
-
-                    third => another {
-                        y: 3.0
-                    }
-                }
-            }),
-        );
-        let expected = {
-            let derive_attr = if cfg!(feature = "serde-derive") {
-                quote! { #[derive(Debug, Default, serde::Serialize, serde::Deserialize)] }
-            } else {
-                quote! { #[derive(Debug, Default)] }
-            };
-            quote! {
-                #derive_attr
-                pub struct Config {
-                    pub first: example::Config,
-                    pub second: example::Config,
-                    pub third: another::Config,
-                }
-            }
+    #[should_panic(expected = "Component type path must not be empty.")]
+    fn generate_aggregate_path_panics_on_empty_path() {
+        let definition = ComponentDefinition {
+            component_type: Path {
+                leading_colon: None,
+                segments: Punctuated::new(),
+            },
+            input_type: parse_quote! { MyInput },
+            components: vec![],
         };
-        assert_eq_pretty(&expected, &generated);
-    }
 
-    #[test]
-    fn generate_input_works() {
-        let generated = generate_input(
-            &(parse_quote! {
-                test {
-                    Input {
-                        time: f64,
-                        hour: usize,
-                        indoor: {
-                            occupancy: u32,
-                            pressure: f64,
-                            temp_setpoint: f64,
-                        },
-                        thermostat_control: {
-                            auto_mode: bool,
-                        }
-                    }
-                }
-            }),
-        );
-        let expected = {
-            let derive_attr = if cfg!(feature = "serde-derive") {
-                quote! { #[derive(Debug, Default, serde::Serialize, serde::Deserialize)] }
-            } else {
-                quote! { #[derive(Debug, Default)] }
-            };
-            quote! {
-                #derive_attr
-                pub struct Input {
-                    pub hour: usize,
-                    pub indoor: indoor::Input,
-                    pub thermostat_control: thermostat_control::Input,
-                    pub time: f64,
-                }
-
-                pub mod indoor {
-                    #derive_attr
-                    pub struct Input {
-                        pub occupancy: u32,
-                        pub pressure: f64,
-                        pub temp_setpoint: f64,
-                    }
-                }
-
-                pub mod thermostat_control {
-                    #derive_attr
-                    pub struct Input {
-                        pub auto_mode: bool,
-                    }
-                }
-            }
-        };
-        assert_eq_pretty(&expected, &generated);
-    }
-
-    #[test]
-    fn generate_output_works() {
-        let generated = generate_output(
-            &(parse_quote! {
-                test {
-                    first_one => first {
-                        x: 1.0
-                    }
-
-                    second_one => second {
-                        x: first_one.y
-                    }
-                }
-            }),
-        );
-        let expected = {
-            let derive_attr = if cfg!(feature = "serde-derive") {
-                quote! { #[derive(Debug, Default, serde::Serialize, serde::Deserialize)] }
-            } else {
-                quote! { #[derive(Debug, Default)] }
-            };
-            quote! {
-                #derive_attr
-                pub struct Output {
-                    pub first_one: first::Output,
-                    pub second_one: second::Output,
-                }
-            }
-        };
-        assert_eq_pretty(&expected, &generated);
-    }
-
-    #[test]
-    fn generate_type_check_fn_works() {
-        let definition: ComponentDefinition = parse_quote! {
-            test {
-                Input {
-                    x: bool,
-                    y: i32,
-                    z: f64,
-                    extra: {
-                        verbose: bool,
-                    },
-                }
-
-                first_one => first {
-                    x,
-                }
-
-                second_one => second {
-                    y: first_one.y,
-                    z: extra.verbose,
-                }
-            }
-        };
-        let graph = definition.into();
-        let generated = generate_check_types_fn(&graph);
-        let expected = quote! {
-            fn check_types() {
-                let Input { extra, x, y, z } = Input::default();
-                let first_one = first::Output::default();
-                let _ = first::Input { x };
-                let _ = second::Input {
-                    y: first_one.y,
-                    z: extra.verbose,
-                };
-            }
-        };
-        assert_eq_pretty(&expected, &generated);
+        let _ = generate_aggregate_path(&definition, AggregateKind::Config);
     }
 
     #[test]
     fn generate_create_fn_works() {
-        let definition: ComponentDefinition = parse_quote! {
-            test {
-                finalizer => subtractor {
-                    value_in: multiplier.result,
-                    value_out: offset,
-                }
-
-                adder_b => adder {
-                    value_in: adder_a.value_out,
-                }
-
-                Input {
-                    input_value: f64,
-                    factor: f64,
-                    offset: f64,
-                }
-
-                adder_a => adder {
-                    value_in: input_value,
-                }
-
-
-                multiplier => multiplier {
-                    value_in: adder_b.value_out,
-                    factor,
-                }
-
-            }
+        let definition = ComponentDefinition {
+            component_type: parse_quote! { MyComponent },
+            input_type: parse_quote! { MyInput },
+            components: vec![
+                ComponentInstance {
+                    name: parse_quote! { call_second },
+                    component_type: parse_quote! { ExampleType },
+                    input_struct: parse_quote! { ExampleInput { x: call_first.z } },
+                },
+                ComponentInstance {
+                    name: parse_quote! { call_first },
+                    component_type: parse_quote! { AnotherType },
+                    input_struct: parse_quote! { AnotherInput { y: 2.0 } },
+                },
+            ],
         };
         let graph = definition.into();
         let generated = generate_create_fn(&graph);
         let expected = quote! {
-            pub fn create(config: Config) -> impl Fn(Input) -> Output {
-                let adder_a_fn = adder::create(config.adder_a);
-                let adder_b_fn = adder::create(config.adder_b);
-                let multiplier_fn = multiplier::create(config.multiplier);
-                let finalizer_fn = subtractor::create(config.finalizer);
+            fn create(config: Self::Config) -> impl Fn(Self::Input) -> Self::Output {
+                type AnotherTypeInput = <AnotherType as twine_core::legacy::Component>::Input;
+                type ExampleTypeInput = <ExampleType as twine_core::legacy::Component>::Input;
+                let call_first_fn = AnotherType::create(config.call_first);
+                let call_second_fn = ExampleType::create(config.call_second);
 
-                move |Input { factor, input_value, offset }| {
-                    let adder_a = adder_a_fn(adder::Input {
-                        value_in: input_value,
-                    });
-
-                    let adder_b = adder_b_fn(adder::Input {
-                        value_in: adder_a.value_out,
-                    });
-
-                    let multiplier = multiplier_fn(multiplier::Input {
-                        value_in: adder_b.value_out,
-                        factor,
-                    });
-
-                    let finalizer = finalizer_fn(subtractor::Input {
-                        value_in: multiplier.result,
-                        value_out: offset,
-                    });
-
-                    Output {
-                        adder_a,
-                        adder_b,
-                        multiplier,
-                        finalizer,
+                move |input| {
+                    let call_first = call_first_fn(AnotherTypeInput { y: 2.0 });
+                    let call_second = call_second_fn(ExampleTypeInput { x: call_first.z });
+                    Self::Output {
+                        call_first,
+                        call_second,
                     }
                 }
             }
         };
-        assert_eq_pretty(&expected, &generated);
+        assert_eq!(quote! { #generated }.to_string(), expected.to_string());
     }
 }
