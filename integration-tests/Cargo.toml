@@ -6,6 +6,7 @@ publish = false
 
 [dependencies]
 twine-core = { path = "../twine-core" }
+twine-components = { path = "../twine-components" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.136"
 serde_yaml = "0.9.34"

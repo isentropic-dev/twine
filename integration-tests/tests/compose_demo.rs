@@ -1,93 +1,41 @@
-use integration_tests::test_components::{building, hourly_weather};
-use twine_core::compose;
+#![allow(dead_code)]
 
-compose!(demo, {
-    Input {
-        time: f64,
-        indoor: {
-            occupancy: u32,
-            pressure: f64,
-            temp_setpoint: f64,
+use twine_components::example::math::{Adder, Arithmetic, ArithmeticInput};
+use twine_core::{compose, Component};
+
+#[compose]
+struct Composed {
+    add_one: Adder<f64>,
+    add_two: Adder<f64>,
+    first_math: Arithmetic,
+    second_math: Arithmetic,
+}
+
+struct Input {
+    x: f64,
+    y: f64,
+}
+
+// This function demonstrates how component names like `add_one` can be used in
+// different contexts, whether as their input type or output type. It enables
+// full LSP support for renaming and "Go to Definition," making the code easier
+// to navigate and modify.
+//
+// This approach allows users to define component connections using regular
+// Rust code. Another macro can parse these connections to generate a dependency
+// graph and determine the correct call order, ensuring each component has the
+// necessary values available before being called.
+fn connect(input: &Input, output: &ComposedOutputs) -> ComposedInputs {
+    Composed {
+        add_one: input.x,
+        add_two: input.y,
+        first_math: ArithmeticInput {
+            x: output.add_one,
+            y: output.add_two,
         },
-        thermostat_control: {
-            is_auto: bool,
+        second_math: ArithmeticInput {
+            x: output.first_math.sum,
+            y: output.add_one,
         },
-    }
-
-    weather => hourly_weather {
-        time,
-    }
-
-    first_house => building {
-        occupancy: indoor.occupancy,
-        outdoor_temp: weather.temperature,
-        wind_speed: weather.wind_speed,
-        thermostat: building::Thermostat {
-            setpoint: indoor.temp_setpoint,
-            auto: thermostat_control.is_auto,
-        },
-    }
-
-    second_house => building {
-        occupancy: indoor.occupancy,
-        outdoor_temp: first_house.indoor_temp,
-        wind_speed: 0.0,
-        thermostat: building::Thermostat {
-            setpoint: 20.0,
-            auto: false,
-        },
-    }
-});
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Serializes and prints the given struct in JSON, TOML, and YAML formats.
-    fn print_serialized<T: serde::Serialize + std::fmt::Debug>(label: &str, value: &T) {
-        println!("\n==================== {label} ====================");
-        println!("{value:#?}");
-
-        println!("---------------------- JSON ----------------------");
-        println!("{}", serde_json::to_string_pretty(value).unwrap());
-
-        println!("---------------------- TOML ----------------------");
-        println!("{}", toml::to_string(value).unwrap());
-
-        println!("---------------------- YAML ----------------------");
-        println!("{}", serde_yaml::to_string(value).unwrap());
-
-        println!("=================================================\n");
-    }
-
-    #[test]
-    fn inspect_demo_component() {
-        let demo_config = demo::Config::default();
-        let demo_input = demo::Input::default();
-        let demo_output = demo::Output::default();
-
-        print_serialized("Config", &demo_config);
-        print_serialized("Input", &demo_input);
-        print_serialized("Output", &demo_output);
-
-        assert!(
-            serde_json::to_string(&demo_config).is_ok(),
-            "Config JSON serialization failed."
-        );
-        assert!(
-            serde_json::to_string(&demo_input).is_ok(),
-            "Input JSON serialization failed."
-        );
-        assert!(
-            serde_json::to_string(&demo_output).is_ok(),
-            "Output JSON serialization failed."
-        );
-    }
-
-    #[test]
-    fn call_demo_component() {
-        let demo_fn = demo::create(demo::Config::default());
-        let output = demo_fn(demo::Input::default());
-        println!("{output:#?}");
     }
 }

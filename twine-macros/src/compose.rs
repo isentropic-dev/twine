@@ -1,88 +1,209 @@
-mod generate;
-mod graph;
-mod parse;
-
-use std::collections::HashMap;
-
-use petgraph::{
-    algo::toposort,
-    graph::{DiGraph, NodeIndex},
-    Direction,
+use heck::ToUpperCamelCase;
+use proc_macro2::TokenStream;
+use quote::{format_ident, quote};
+use syn::{
+    parse::{Parse, ParseStream},
+    parse_quote, Attribute, Error, Field, Fields, FieldsNamed, Ident, ItemStruct, Result,
+    Visibility,
 };
-use proc_macro::TokenStream;
-use syn::{parse_macro_input, ExprStruct, Ident, Path, Type};
 
-pub(crate) fn expand(input: TokenStream) -> TokenStream {
-    let definition = parse_macro_input!(input as ComponentDefinition);
-    let graph = definition.into();
-    generate::generate_module(&graph).into()
-}
-
-/// Defines a composed component.
+/// Represents a struct processed by the `#[compose]` macro.
 #[derive(Debug)]
-struct ComponentDefinition {
-    /// Component name.
-    name: Ident,
-
-    /// Schema defining the `Input` type.
-    input_schema: InputSchema,
-
-    /// Inner component instances.
-    components: Vec<ComponentInstance>,
+pub(crate) struct Composed {
+    attrs: Vec<Attribute>,
+    vis: Visibility,
+    ident: Ident,
+    fields: FieldsNamed,
 }
 
-struct ComponentGraph {
-    definition: ComponentDefinition,
-    dependencies: DiGraph<usize, graph::Connection>,
+impl Parse for Composed {
+    /// Parses a struct definition from the input stream.
+    ///
+    /// The struct must have named fields (i.e., it can't be a tuple or unit
+    /// struct) and cannot use generics. The `#[compose]` attribute is removed,
+    /// but all other attributes and visibility modifiers remain unchanged.
+    fn parse(input: ParseStream) -> Result<Self> {
+        let ItemStruct {
+            attrs,
+            vis,
+            ident,
+            generics,
+            fields,
+            ..
+        } = input.parse()?;
+
+        let Fields::Named(fields) = fields else {
+            return Err(Error::new_spanned(
+                ident,
+                "Unsupported struct type. This macro requires a struct with named fields.",
+            ));
+        };
+
+        if !generics.params.is_empty() {
+            return Err(Error::new_spanned(
+                generics,
+                "Generic parameters are not allowed. Remove them to use this macro.",
+            ));
+        }
+
+        let attrs: Vec<Attribute> = attrs
+            .into_iter()
+            .filter(|attr| !attr.path().is_ident("compose"))
+            .collect();
+
+        Ok(Composed {
+            attrs,
+            vis,
+            ident,
+            fields,
+        })
+    }
 }
 
-impl From<ComponentDefinition> for ComponentGraph {
-    fn from(definition: ComponentDefinition) -> Self {
-        let dependencies = graph::build_graph(&definition.components);
-        Self {
-            definition,
-            dependencies,
+impl Composed {
+    /// Generates a generic version of the parsed struct with type aliases.
+    ///
+    /// The generated struct keeps its name but replaces field types with
+    /// generic parameters. Additionally, three type aliases are created for
+    /// specific versions of the generic struct:
+    ///
+    /// - `StructNameComponents`
+    ///   - Uses the original field types.
+    ///
+    /// - `StructNameInputs`
+    ///   - Uses `<FieldType as Component>::Input`.
+    ///   - Represents the types each component expects as input.
+    ///
+    /// - `StructNameOutputs`
+    ///   - Uses `<FieldType as Component>::Output`.
+    ///   - Represents the types each component produces as output.
+    pub fn generate_code(self) -> TokenStream {
+        let Self {
+            attrs,
+            vis,
+            ident,
+            mut fields,
+        } = self;
+
+        let components_alias = format_ident!("{}Components", ident);
+        let inputs_alias = format_ident!("{}Inputs", ident);
+        let outputs_alias = format_ident!("{}Outputs", ident);
+
+        let original_types: Vec<_> = fields
+            .named
+            .iter()
+            .map(|Field { ty, .. }| {
+                quote! { #ty }
+            })
+            .collect();
+
+        let generic_params: Vec<_> = fields
+            .named
+            .iter()
+            .map(|field| {
+                let param_name = field
+                    .ident
+                    .as_ref()
+                    .expect("Identifier exists because parsing ensures named fields")
+                    .to_string()
+                    .to_upper_camel_case();
+                format_ident!("{param_name}")
+            })
+            .collect();
+
+        for (field, generic_ident) in fields.named.iter_mut().zip(&generic_params) {
+            field.ty = parse_quote! { #generic_ident };
+        }
+
+        let input_types = original_types
+            .iter()
+            .map(|ty| quote! { <#ty as Component>::Input });
+
+        let output_types = original_types
+            .iter()
+            .map(|ty| quote! { <#ty as Component>::Output });
+
+        quote! {
+            #(#attrs)*
+            #vis struct #ident <#(#generic_params),*> #fields
+
+            #vis type #components_alias = #ident<#(#original_types),*>;
+            #vis type #inputs_alias = #ident<#(#input_types),*>;
+            #vis type #outputs_alias = #ident<#(#output_types),*>;
         }
     }
 }
 
-/// Maps field identifiers to their corresponding input types or structures.
-type InputSchema = HashMap<Ident, InputField>;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-/// Represents an input field as a type or nested schema.
-#[derive(Debug)]
-enum InputField {
-    Type(Type),
-    Struct(InputSchema),
-}
+    use syn::parse_str;
 
-/// Represents an instance of an inner component.
-#[derive(Debug)]
-struct ComponentInstance {
-    name: Ident,
-    module: Path,
-    input_struct: ExprStruct,
-}
+    #[test]
+    fn generates_correct_code() {
+        let input = "
+            pub struct MyComponent {
+                add_one: Adder<f64>,
+                pub(super) add_two: Adder<f64>,
+                pub(crate) math: Arithmetic,
+            }
+        ";
 
-impl ComponentGraph {
-    /// Checks if a component's output is used as an input elsewhere.
-    pub fn is_used_as_input(&self, component_index: usize) -> bool {
-        let node_index = NodeIndex::new(component_index);
+        let composed: Composed = parse_str(input).expect("Parsing should succeed");
+        let generated = composed.generate_code();
 
-        // Check for any outgoing edges.
-        self.dependencies
-            .neighbors_directed(node_index, Direction::Outgoing)
-            .next()
-            .is_some()
+        let expected = quote! {
+            pub struct MyComponent<AddOne, AddTwo, Math> {
+                add_one: AddOne,
+                pub(super) add_two: AddTwo,
+                pub(crate) math: Math,
+            }
+
+            pub type MyComponentComponents = MyComponent<Adder<f64>, Adder<f64>, Arithmetic>;
+
+            pub type MyComponentInputs = MyComponent<
+                <Adder<f64> as Component>::Input,
+                <Adder<f64> as Component>::Input,
+                <Arithmetic as Component>::Input
+            >;
+
+            pub type MyComponentOutputs = MyComponent<
+                <Adder<f64> as Component>::Output,
+                <Adder<f64> as Component>::Output,
+                <Arithmetic as Component>::Output
+            >;
+        };
+
+        assert_eq!(generated.to_string(), expected.to_string());
     }
 
-    /// Returns the components in the proper call order.
-    pub fn call_order(&self) -> Vec<usize> {
-        toposort(&self.dependencies, None)
-            // https://github.com/isentropic-dev/twine/issues/29
-            .expect("Cycle detected in component dependencies")
-            .into_iter()
-            .map(|node_index| self.dependencies[node_index])
-            .collect()
+    #[test]
+    fn rejects_tuple_struct() {
+        let input = "struct TupleComponent(i32, f64);";
+
+        let err = parse_str::<Composed>(input).expect_err("Parsing should fail");
+
+        assert!(
+            err.to_string().contains("Unsupported struct type"),
+            "Unexpected error message: {err}"
+        );
+    }
+
+    #[test]
+    fn rejects_generic_struct() {
+        let input = "
+            struct GenericComponent<T> {
+                field: T,
+            }
+        ";
+
+        let err = parse_str::<Composed>(input).expect_err("Parsing should fail");
+
+        assert!(
+            err.to_string()
+                .contains("Generic parameters are not allowed"),
+            "Unexpected error message: {err}"
+        );
     }
 }
