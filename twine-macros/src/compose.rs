@@ -85,9 +85,9 @@ impl Composed {
             mut fields,
         } = self;
 
-        let components_alias = format_ident!("{}Components", ident);
-        let inputs_alias = format_ident!("{}Inputs", ident);
-        let outputs_alias = format_ident!("{}Outputs", ident);
+        let components_alias = format_ident!("{ident}Components");
+        let inputs_alias = format_ident!("{ident}Inputs");
+        let outputs_alias = format_ident!("{ident}Outputs");
 
         let original_types: Vec<_> = fields
             .named
@@ -117,11 +117,11 @@ impl Composed {
 
         let input_types = original_types
             .iter()
-            .map(|ty| quote! { <#ty as Component>::Input });
+            .map(|ty| quote! { <#ty as twine_core::Component>::Input });
 
         let output_types = original_types
             .iter()
-            .map(|ty| quote! { <#ty as Component>::Output });
+            .map(|ty| quote! { <#ty as twine_core::Component>::Output });
 
         quote! {
             #(#attrs)*
@@ -163,15 +163,15 @@ mod tests {
             pub type MyComponentComponents = MyComponent<Adder<f64>, Adder<f64>, Arithmetic>;
 
             pub type MyComponentInputs = MyComponent<
-                <Adder<f64> as Component>::Input,
-                <Adder<f64> as Component>::Input,
-                <Arithmetic as Component>::Input
+                <Adder<f64> as twine_core::Component>::Input,
+                <Adder<f64> as twine_core::Component>::Input,
+                <Arithmetic as twine_core::Component>::Input
             >;
 
             pub type MyComponentOutputs = MyComponent<
-                <Adder<f64> as Component>::Output,
-                <Adder<f64> as Component>::Output,
-                <Arithmetic as Component>::Output
+                <Adder<f64> as twine_core::Component>::Output,
+                <Adder<f64> as twine_core::Component>::Output,
+                <Arithmetic as twine_core::Component>::Output
             >;
         };
 

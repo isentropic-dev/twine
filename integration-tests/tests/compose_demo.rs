@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use twine_components::example::math::{Adder, Arithmetic, ArithmeticInput};
-use twine_core::{compose, Component};
+use twine_core::compose;
 
 #[compose]
 struct Composed {
