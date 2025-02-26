@@ -9,7 +9,7 @@ use crate::Component;
 pub trait Composition {
     /// Specifies the concrete types of subcomponent instances.
     ///
-    /// Typically a struct like `MyComponents<Comp1, Comp2, ...>`.
+    /// Typically a struct like `MyComposition<Comp1, Comp2, ...>`.
     type Components;
 
     /// Specifies the input types for each subcomponent.
