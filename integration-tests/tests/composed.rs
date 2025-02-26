@@ -3,65 +3,51 @@
 use twine_components::example::math::{
     Adder, Arithmetic, ArithmeticInput, ArithmeticOutput, Multiplier,
 };
-use twine_core::{Component, ComponentGroup, Composed, Twine};
+use twine_core::{Component, Composed, Composition, Twine};
 
 /// A marker type that defines the structure of the composed component.
 ///
-/// Implementing `ComponentGroup` for `MathComposition` specifies:
+/// Implementing `Composition` for `MathComponents` specifies:
 /// - The number and names of subcomponents (e.g., `add_one`, `double_it`, `do_math`).
 /// - The subcomponent types (`Adder<f64>`, `Multiplier<f64>`, `Arithmetic`).
 /// - Their corresponding input and output types (`<Adder<f64> as Component>::Input`, etc.).
 ///
 /// This type does not store component instances but only defines their structure.
-/// The actual instances are stored in the generic `MathComponents`.
-struct MathComposition;
+/// The actual instances are stored in the generic `MathComposition`.
+struct MathComponents;
 
 /// Holds the actual subcomponent instances and their associated types.
 ///
-/// `MathComponents` is a generic struct that defines and stores:
+/// `MathComposition` is a generic struct that defines and stores:
 /// - The subcomponents themselves.
 /// - Their input types.
 /// - Their computed outputs.
 ///
 /// This struct maintains consistent field names (`add_one`, `double_it`,
 /// `do_math`), allowing Rust Analyzer to track references cleanly.
-struct MathComponents<AddOne, DoubleIt, DoMath> {
+struct MathComposition<AddOne, DoubleIt, DoMath> {
     add_one: AddOne,
     double_it: DoubleIt,
     do_math: DoMath,
 }
 
-impl ComponentGroup for MathComposition {
+impl Composition for MathComponents {
     /// Defines the subcomponent types.
-    type Components = MathComponents<Adder<f64>, Multiplier<f64>, Arithmetic>;
+    type Components = MathComposition<Adder<f64>, Multiplier<f64>, Arithmetic>;
 
     /// Defines the input types for each subcomponent.
-    type ComponentInputs = MathComponents<
+    type ComponentInputs = MathComposition<
         <Adder<f64> as Component>::Input,
         <Multiplier<f64> as Component>::Input,
         <Arithmetic as Component>::Input,
     >;
 
     /// Defines the output types for each subcomponent.
-    type ComponentOutputs = MathComponents<
+    type ComponentOutputs = MathComposition<
         <Adder<f64> as Component>::Output,
         <Multiplier<f64> as Component>::Output,
         <Arithmetic as Component>::Output,
     >;
-}
-
-/// A `Composed` implementation that chains `MathComponents` together.
-///
-/// Stores the `Twine`-built execution pipeline, allowing `Math` to function
-/// as a `Component` that transforms `MathInput` into `<MathComposition as
-/// ComponentGroup>::ComponentOutputs`.
-struct Math {
-    component: Box<
-        dyn Component<
-            Input = MathInput,
-            Output = <MathComposition as ComponentGroup>::ComponentOutputs,
-        >,
-    >,
 }
 
 /// Defines the input type for the composed math component.
@@ -70,16 +56,31 @@ struct MathInput {
     y: f64,
 }
 
-impl Composed for Math {
+/// A `Composed` implementation that chains `MathComponents` together.
+///
+/// This struct stores the result of `Twine::build()`, holding the
+/// composed processing chain. This allows `MathExample` to function as
+/// a `Component` that transforms `MathInput` into `<MathComponents as
+/// Composition>::ComponentOutputs`.
+struct MathExample {
+    component: Box<
+        dyn Component<
+            Input = MathInput,
+            Output = <MathComponents as Composition>::ComponentOutputs,
+        >,
+    >,
+}
+
+impl Composed for MathExample {
     type Input = MathInput;
-    type Components = MathComposition;
+    type Components = MathComponents;
 
     /// Builds a `Twine` chain that executes these operations in sequence:
     /// 1. Adds 1 to `input.x` (`add_one`).
     /// 2. Doubles the result (`double_it`).
-    /// 3. Passes `input.y` and the doubled result to `Arithmetic` (`do_math`).
-    /// 4. Bundles all results into `MathComponents` with labeled outputs.
-    fn new(components: <Self::Components as ComponentGroup>::Components) -> Self {
+    /// 3. Passes the doubled result and `input.y` to `Arithmetic` (`do_math`).
+    /// 4. Bundles all results into a `MathComposition` with labeled outputs.
+    fn new(components: <Self::Components as Composition>::Components) -> Self {
         let component = Twine::<MathInput>::new()
             .then(components.add_one.map(
                 |input: &MathInput| input.x,
@@ -96,7 +97,7 @@ impl Composed for Math {
                 },
                 |(input, add_one, double_it), do_math| (input, add_one, double_it, do_math),
             ))
-            .then_fn(|(_input, add_one, double_it, do_math)| MathComponents {
+            .then_fn(|(_input, add_one, double_it, do_math)| MathComposition {
                 add_one,
                 double_it,
                 do_math,
@@ -113,7 +114,7 @@ impl Composed for Math {
         &self,
     ) -> &dyn Component<
         Input = Self::Input,
-        Output = <Self::Components as ComponentGroup>::ComponentOutputs,
+        Output = <Self::Components as Composition>::ComponentOutputs,
     > {
         self.component.as_ref()
     }
@@ -122,7 +123,7 @@ impl Composed for Math {
 #[test]
 #[allow(clippy::float_cmp)]
 fn composed_math_component_works() {
-    let math = Math::new(MathComponents {
+    let math = MathExample::new(MathComposition {
         add_one: Adder::new(1.0),
         double_it: Multiplier::new(2.0),
         do_math: Arithmetic,
@@ -145,6 +146,6 @@ fn composed_math_component_works() {
             quotient: 5.0,
             average: 6.0,
         },
-        "Arithmetic input should be (10, 2)"
+        "Expected Arithmetic input with x = 10.0, y = 2.0"
     );
 }
