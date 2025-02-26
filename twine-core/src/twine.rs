@@ -279,7 +279,7 @@ mod tests {
         let chain = Twine::<Context>::new()
             .then(Squarer.map(
                 |&Context { input, .. }| input,
-                |(Context { input, .. }, output)| Context {
+                |Context { input, .. }, output| Context {
                     input,
                     result: Some(format!("{input} squared is {output}")),
                 },
