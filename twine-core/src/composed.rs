@@ -1,60 +1,51 @@
 use crate::Component;
 
-/// Defines a collection of connected components and their input/output types.
+/// Defines a set of related components that can be composed.
 ///
-/// `Composition` is usually implemented on an empty marker struct to define
-/// how subcomponents fit together. When combined with a generic struct that
-/// holds instances, it allows reusing the same component names across different
-/// contexts—whether referring to instances, inputs, or outputs.
-pub trait Composition {
-    /// Specifies the concrete types of subcomponent instances.
+/// The `Composable` trait is typically implemented for a generic struct that
+/// groups multiple named components. It provides associated types for:
+/// - `Inputs`: A variant where each field represents the component's input type.
+/// - `Outputs`: A variant where each field represents the component's output type.
+pub trait Composable {
+    /// Defines the expected input types for each subcomponent.
     ///
-    /// Typically a struct like `MyComposition<Comp1, Comp2, ...>`.
-    type Components;
+    /// Typically structured as `<CompType as Component>::Input` for each field.
+    type Inputs;
 
-    /// Specifies the input types for each subcomponent.
+    /// Defines the computed output types for each subcomponent.
     ///
-    /// Typically structured as `<Comp as Component>::Input` for each field.
-    type ComponentInputs;
-
-    /// Specifies the output types for each subcomponent.
-    ///
-    /// Typically structured as `<Comp as Component>::Output` for each field.
-    type ComponentOutputs;
+    /// Typically structured as `<CompType as Component>::Output` for each field.
+    type Outputs;
 }
 
-/// Represents a composed component built from a `Composition`.
+/// Represents a component built from a `Composable` set of subcomponents.
 ///
-/// The `Composed` trait combines multiple subcomponents from a `Composition`
-/// into a single [`Component`]. It allows implementers to define execution
-/// order and map the composed component's input and the outputs of previously
-/// executed subcomponents into the inputs of the next ones in the sequence.
+/// The `Composed` trait enables combining multiple subcomponents into a single
+/// [`Component`]. It provides methods for constructing the execution chain and
+/// accessing the final composed component.
 pub trait Composed: Sized {
-    /// The input type for this composed component.
+    /// The input type for the composed component.
     type Input;
 
-    /// The `Composition` that defines the subcomponents.
-    type Components: Composition;
+    /// The grouped subcomponents.
+    type Components: Composable;
 
     /// Constructs a new composed instance from subcomponents.
     ///
     /// This method defines the composition logic, which includes:
-    /// - Accepting a `Self::Components` struct of instantiated components.
-    /// - Specifying the execution order of subcomponents.
-    /// - Mapping inputs and outputs between subcomponents, ensuring values
+    /// - Accepting a `Self::Components` struct of instantiated subcomponents.
+    /// - Defining the execution order of subcomponents.
+    /// - Mapping inputs and outputs between subcomponents to ensure values
     ///   are available at the correct execution stage.
     ///
     /// The execution order and input/output mapping are typically implemented
     /// using a `Twine` builder.
-    fn new(components: <Self::Components as Composition>::Components) -> Self;
+    fn new(components: Self::Components) -> Self;
 
-    /// Provides access to the composed processing chain as a [`Component`].
+    /// Returns a reference to the composed processing chain as a [`Component`].
     fn component(
         &self,
-    ) -> &dyn Component<
-        Input = Self::Input,
-        Output = <Self::Components as Composition>::ComponentOutputs,
-    >;
+    ) -> &dyn Component<Input = Self::Input, Output = <Self::Components as Composable>::Outputs>;
 }
 
 /// Implements [`Component`] for all [`Composed`] types.
@@ -67,7 +58,7 @@ where
     T: Composed,
 {
     type Input = T::Input;
-    type Output = <T::Components as Composition>::ComponentOutputs;
+    type Output = <T::Components as Composable>::Outputs;
 
     fn call(&self, input: Self::Input) -> Self::Output {
         self.component().call(input)

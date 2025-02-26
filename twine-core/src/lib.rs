@@ -7,5 +7,5 @@ mod twine;
 pub use twine_macros::compose;
 
 pub use component::Component;
-pub use composed::{Composed, Composition};
+pub use composed::{Composable, Composed};
 pub use twine::Twine;
