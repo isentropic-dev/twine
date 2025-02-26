@@ -1,16 +1,16 @@
 use crate::Component;
 
-/// Describes a collection of connected components and their input/output types.
+/// Defines a collection of connected components and their input/output types.
 ///
 /// `ComponentGroup` is typically implemented on an empty marker struct to
-/// define how multiple subcomponents fit together. When paired with a generic
-/// base struct that holds actual component instances, this approach enables
-/// reusing the same component names in different contexts—whether referring to
-/// instances, their input values, or their output values.
+/// specify how multiple subcomponents fit together. When paired with a generic
+/// struct that holds actual instances, this approach enables reusing the same
+/// component names in different contexts—whether referring to instances, their
+/// input values, or their output values.
 pub trait ComponentGroup {
     /// Specifies the concrete types of subcomponent instances.
     ///
-    /// Typically a struct like `MyGroupBase<Comp1, Comp2, ...>`.
+    /// Typically a struct like `MyComponents<Comp1, Comp2, ...>`.
     type Components;
 
     /// Specifies the input types for each subcomponent.
@@ -26,11 +26,10 @@ pub trait ComponentGroup {
 
 /// Represents a composed component built from a `ComponentGroup`.
 ///
-/// Implementing `Composed` combines multiple subcomponents (from its
-/// `ComponentGroup`) into a single [`Component`]. This trait allows
-/// implementers to define the execution order and map the composed component's
-/// input and the outputs of previously executed subcomponents into the inputs
-/// of the next subcomponents in the sequence.
+/// The `Composed` trait combines multiple subcomponents from a `ComponentGroup`
+/// into a single [`Component`]. It allows implementers to define execution
+/// order and map the composed component's input and the outputs of previously
+/// executed subcomponents into the inputs of the next ones in the sequence.
 pub trait Composed: Sized {
     /// The input type for this composed component.
     type Input;
@@ -46,7 +45,8 @@ pub trait Composed: Sized {
     /// - Mapping inputs and outputs between subcomponents, respecting execution
     ///   order to ensure values are available when needed.
     ///
-    /// The execution order and mapping are typically implemented using a `Twine` builder.
+    /// The execution order and input/output mapping are typically implemented
+    /// using a `Twine` builder.
     fn new(components: <Self::Components as ComponentGroup>::Components) -> Self;
 
     /// Provides access to the composed processing chain as a [`Component`].
