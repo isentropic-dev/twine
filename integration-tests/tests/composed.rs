@@ -12,7 +12,7 @@ use twine_core::{Component, ComponentGroup, Composed, Twine};
 /// - The subcomponent types (`Adder<f64>`, `Multiplier<f64>`, `Arithmetic`).
 /// - Their corresponding input and output types (`<Adder<f64> as Component>::Input`, etc.).
 ///
-/// This type does not store component instances; it only defines their structure.
+/// This type does not store component instances but only defines their structure.
 /// The actual instances are stored in the generic `MathComponents`.
 struct MathComposition;
 
@@ -50,10 +50,12 @@ impl ComponentGroup for MathComposition {
     >;
 }
 
-/// A `Composed` implementation that chains `MathComponents` together using `Twine`.
+/// A `Composed` implementation that chains `MathComponents` together.
+///
+/// Stores the `Twine`-built execution pipeline, allowing `Math` to function
+/// as a `Component` that transforms `MathInput` into `<MathComposition as
+/// ComponentGroup>::ComponentOutputs`.
 struct Math {
-    /// The final processing chain, transforming `MathInput` into
-    /// `<MathComposition as ComponentGroup>::ComponentOutputs`.
     component: Box<
         dyn Component<
             Input = MathInput,
