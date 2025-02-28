@@ -71,7 +71,7 @@ pub trait Component {
     /// let mapped_add_five = add_five.map(
     ///     // Destructuring is often useful here.
     ///     |&Input { value, .. }| value,
-    ///     |(Input {value, other_data }, output)| Output {
+    ///     |Input {value, other_data }, output| Output {
     ///         started_with: value,
     ///         ended_with: output,
     ///         is_even: output % 2 == 0,
@@ -99,7 +99,7 @@ pub trait Component {
     where
         Self: Sized,
         InputMap: Fn(&In) -> Self::Input,
-        OutputMap: Fn((In, Self::Output)) -> Out,
+        OutputMap: Fn(In, Self::Output) -> Out,
     {
         mapped::Mapped::new(self, input_map, output_map)
     }
@@ -208,7 +208,7 @@ mod tests {
     fn mapped_component_to_string() {
         let mapped = Doubler.map(
             |&input| input + 1,
-            |(input, output)| format!("Adding 1 to {input} and doubling it is {output}"),
+            |input, output| format!("Adding 1 to {input} and doubling it is {output}"),
         );
 
         assert_eq!(mapped.call(&2), "Adding 1 to 2 and doubling it is 6");
@@ -224,7 +224,7 @@ mod tests {
 
         let mapped_doubler = Doubler.map(
             |context: &Context| context.input,
-            |(context, output)| Context {
+            |context, output| Context {
                 input: context.input,
                 output,
             },
@@ -270,7 +270,7 @@ mod tests {
                  value: value_to_use,
                  ..
              }| value_to_use,
-            |(input, output)| MyOutput {
+            |input, output| MyOutput {
                 label: input.label.clone(),
                 started_with: input.value,
                 ended_with: output,

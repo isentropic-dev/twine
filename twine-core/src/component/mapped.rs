@@ -29,7 +29,7 @@ impl<C, InputMap, OutputMap, In, Out> Component for Mapped<C, InputMap, OutputMa
 where
     C: Component,
     InputMap: Fn(&In) -> C::Input,
-    OutputMap: Fn((In, C::Output)) -> Out,
+    OutputMap: Fn(In, C::Output) -> Out,
 {
     type Input = In;
     type Output = Out;
@@ -39,6 +39,6 @@ where
     fn call(&self, input: Self::Input) -> Self::Output {
         let mapped_input = (self.input_map)(&input);
         let output = self.component.call(mapped_input);
-        (self.output_map)((input, output))
+        (self.output_map)(input, output)
     }
 }

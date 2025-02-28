@@ -26,6 +26,7 @@ pub struct ArithmeticInput {
 }
 
 /// The output for the [`Arithmetic`] component.
+#[derive(Debug, PartialEq)]
 pub struct ArithmeticOutput {
     pub sum: f64,
     pub difference: f64,
