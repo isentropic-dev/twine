@@ -30,6 +30,13 @@ pub trait Composed: Sized {
     /// The grouped subcomponents.
     type Components: Composable;
 
+    /// The error type for the composed component.
+    ///
+    /// This type must handle errors from all subcomponents, either by
+    /// converting them into a single error type or by ensuring that all
+    /// subcomponents use the same error type.
+    type Error: std::error::Error + Send + Sync + 'static;
+
     /// Constructs a new composed instance from subcomponents.
     ///
     /// This method defines the composition logic, which includes:
@@ -45,7 +52,11 @@ pub trait Composed: Sized {
     /// Returns a reference to the composed processing chain as a [`Component`].
     fn component(
         &self,
-    ) -> &dyn Component<Input = Self::Input, Output = <Self::Components as Composable>::Outputs>;
+    ) -> &dyn Component<
+        Input = Self::Input,
+        Output = <Self::Components as Composable>::Outputs,
+        Error = Self::Error,
+    >;
 }
 
 /// Implements [`Component`] for all [`Composed`] types.
@@ -59,8 +70,9 @@ where
 {
     type Input = T::Input;
     type Output = <T::Components as Composable>::Outputs;
+    type Error = T::Error;
 
-    fn call(&self, input: Self::Input) -> Self::Output {
+    fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
         self.component().call(input)
     }
 }
