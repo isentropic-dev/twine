@@ -7,12 +7,12 @@ use twine_core::{Component, Composable, Composed, Twine};
 
 /// Defines a generic structure for grouping math-related subcomponents.
 ///
-/// `MathComponentsBase` serves as a template where each field represents a
+/// `MathComponentsTemplate` serves as a template where each field represents a
 /// subcomponent. It can be used in different contexts:
 /// - To store actual subcomponent instances.
 /// - To define the expected input types of subcomponents.
 /// - To represent the computed output types of subcomponents.
-struct MathComponentsBase<AddOne, DoubleIt, DoMath> {
+struct MathComponentsTemplate<AddOne, DoubleIt, DoMath> {
     add_one: AddOne,
     double_it: DoubleIt,
     do_math: DoMath,
@@ -20,19 +20,19 @@ struct MathComponentsBase<AddOne, DoubleIt, DoMath> {
 
 /// A type alias for a fully instantiated set of math components.
 ///
-/// `MathComponents` binds `MathComponentsBase` to concrete subcomponent types.
-type MathComponents = MathComponentsBase<Adder<f64>, Multiplier<f64>, Arithmetic>;
+/// `MathComponents` binds `MathComponentsTemplate` to concrete subcomponent types.
+type MathComponents = MathComponentsTemplate<Adder<f64>, Multiplier<f64>, Arithmetic>;
 
 impl Composable for MathComponents {
     /// Defines the input types for each subcomponent.
-    type Inputs = MathComponentsBase<
+    type Inputs = MathComponentsTemplate<
         <Adder<f64> as Component>::Input,
         <Multiplier<f64> as Component>::Input,
         <Arithmetic as Component>::Input,
     >;
 
     /// Defines the output types for each subcomponent.
-    type Outputs = MathComponentsBase<
+    type Outputs = MathComponentsTemplate<
         <Adder<f64> as Component>::Output,
         <Multiplier<f64> as Component>::Output,
         <Arithmetic as Component>::Output,
@@ -63,7 +63,7 @@ impl Composed for MathExample {
     /// 1. Adds 1 to `input.x` (`add_one`).
     /// 2. Doubles the result (`double_it`).
     /// 3. Passes the doubled result and `input.y` to `Arithmetic` (`do_math`).
-    /// 4. Collects the results into the `Outputs` variant of `MathComponentsBase`.
+    /// 4. Collects the results into the `Outputs` variant of `MathComponentsTemplate`.
     fn new(components: Self::Components) -> Self {
         let component = Twine::<MathInput>::new()
             .then(components.add_one.map(
@@ -79,9 +79,9 @@ impl Composed for MathExample {
                     x: *double_it,
                     y: input.y,
                 },
-                |(input, add_one, double_it), do_math| (input, add_one, double_it, do_math),
+                |(_input, add_one, double_it), do_math| (add_one, double_it, do_math),
             ))
-            .then_fn(|(_input, add_one, double_it, do_math)| MathComponentsBase {
+            .then_fn(|(add_one, double_it, do_math)| MathComponentsTemplate {
                 add_one,
                 double_it,
                 do_math,
