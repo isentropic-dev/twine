@@ -17,11 +17,12 @@ where
 {
     type Input = C::Input;
     type Output = C::Output;
+    type Error = C::Error;
 
-    fn call(&self, input: Self::Input) -> Self::Output {
+    fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
         (self.input_handler)(&input);
-        let output = self.component.call(input);
+        let output = self.component.call(input)?;
         (self.output_handler)(&output);
-        output
+        Ok(output)
     }
 }

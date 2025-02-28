@@ -1,5 +1,6 @@
 mod inspect;
 mod mapped;
+mod mapped_error;
 
 /// The core trait for defining components in Twine.
 ///
@@ -10,21 +11,29 @@ mod mapped;
 /// Implementations must be deterministic, meaning that calling the component
 /// with the same input must always produce the same output.
 ///
-/// Components can be adapted using [`Component::map()`] to transform input/
-/// output behavior or observed using [`Component::inspect()`] for debugging.
+/// Components can be adapted with [`Component::map()`] to modify input and
+/// output behavior or observed with [`Component::inspect()`] for debugging. A
+/// component's error type can be transformed using [`Component::map_error()`].
 pub trait Component {
     type Input;
     type Output;
+    type Error: std::error::Error + Send + Sync + 'static;
 
-    /// Calls the component with the given input, producing an output.
-    fn call(&self, input: Self::Input) -> Self::Output;
+    /// Calls the component with the given input, producing an output or an error.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error of type [`Component::Error`] if the call fails,
+    /// allowing components to manage their own errors.
+    fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error>;
 
     /// Adapts the component by transforming its input and output.
     ///
     /// This method wraps a component, allowing it to integrate into a broader
     /// context. The `input_map` function extracts the component's input type
-    /// from the context, while `output_map` combines the original input and the
-    /// component's output to produce a new result.
+    /// from the context, while `output_map` combines the original input and
+    /// the component's output to produce a new result. If calling the component
+    /// fails, the error is returned unchanged.
     ///
     /// # Parameters
     ///
@@ -33,11 +42,12 @@ pub trait Component {
     ///
     /// # Returns
     ///
-    /// A new component with modified input and output behavior.
+    /// A new component with modified input and output behavior, preserving the error type.
     ///
     /// # Example
     ///
     /// ```
+    /// use std::convert::Infallible;
     /// use twine_core::Component;
     ///
     /// struct Adder {
@@ -47,9 +57,10 @@ pub trait Component {
     /// impl Component for Adder {
     ///     type Input = i32;
     ///     type Output = i32;
+    ///     type Error = Infallible;
     ///
-    ///     fn call(&self, input: Self::Input) -> Self::Output {
-    ///         input + self.increment
+    ///     fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
+    ///         Ok(input + self.increment)
     ///     }
     /// }
     ///
@@ -83,19 +94,19 @@ pub trait Component {
     ///
     /// assert_eq!(
     ///     mapped_add_five.call(input),
-    ///     Output {
+    ///     Ok(Output {
     ///         started_with: 3,
     ///         ended_with: 8,
     ///         is_even: true,
     ///         other_data: 100.0,
-    ///     }
+    ///     })
     /// );
     /// ```
     fn map<InputMap, OutputMap, In, Out>(
         self,
         input_map: InputMap,
         output_map: OutputMap,
-    ) -> impl Component<Input = In, Output = Out>
+    ) -> impl Component<Input = In, Output = Out, Error = Self::Error>
     where
         Self: Sized,
         InputMap: Fn(&In) -> Self::Input,
@@ -104,12 +115,33 @@ pub trait Component {
         mapped::Mapped::new(self, input_map, output_map)
     }
 
+    /// Adapts the component by transforming its error type.
+    ///
+    /// This method is used when the component's error needs to be converted to
+    /// a different type, such as mapping internal errors to a broader or more
+    /// contextual representation.
+    ///
+    /// # Returns
+    ///
+    /// A new component with the same input and output types but a transformed error.
+    fn map_error<ErrorMap, NewError>(
+        self,
+        error_map: ErrorMap,
+    ) -> impl Component<Input = Self::Input, Output = Self::Output, Error = NewError>
+    where
+        Self: Sized,
+        ErrorMap: Fn(Self::Error) -> NewError,
+        NewError: std::error::Error + Send + Sync + 'static,
+    {
+        mapped_error::MappedError::new(self, error_map)
+    }
+
     /// Wraps the component to inspect input and output without modifying behavior.
     ///
     /// The `input_handler` is called before the component processes the input,
     /// and the `output_handler` is called after the component produces an
     /// output. Both handlers receive references to their values, ensuring no
-    /// ownership changes.
+    /// ownership changes. If an error occurs, it is propagated unchanged.
     ///
     /// # Parameters
     ///
@@ -123,6 +155,7 @@ pub trait Component {
     /// # Example
     ///
     /// ```
+    /// use std::convert::Infallible;
     /// use twine_core::Component;
     ///
     /// struct Doubler;
@@ -130,9 +163,10 @@ pub trait Component {
     /// impl Component for Doubler {
     ///     type Input = i32;
     ///     type Output = i32;
+    ///     type Error = Infallible;
     ///
-    ///     fn call(&self, input: Self::Input) -> Self::Output {
-    ///         input * 2
+    ///     fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
+    ///         Ok(input * 2)
     ///     }
     /// }
     ///
@@ -150,7 +184,7 @@ pub trait Component {
         self,
         input_handler: InputHandler,
         output_handler: OutputHandler,
-    ) -> impl Component<Input = Self::Input, Output = Self::Output>
+    ) -> impl Component<Input = Self::Input, Output = Self::Output, Error = Self::Error>
     where
         Self: Sized,
         InputHandler: Fn(&Self::Input),
@@ -166,6 +200,8 @@ pub trait Component {
 
 #[cfg(test)]
 mod tests {
+    use std::{convert::Infallible, error::Error as StdError, fmt};
+
     use super::*;
 
     struct Doubler;
@@ -173,9 +209,10 @@ mod tests {
     impl Component for Doubler {
         type Input = i32;
         type Output = i32;
+        type Error = Infallible;
 
-        fn call(&self, input: Self::Input) -> Self::Output {
-            input * 2
+        fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
+            Ok(input * 2)
         }
     }
 
@@ -186,22 +223,46 @@ mod tests {
     impl Component for Adder {
         type Input = i32;
         type Output = i32;
+        type Error = Infallible;
 
-        fn call(&self, input: Self::Input) -> Self::Output {
-            input + self.increment
+        fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
+            Ok(input + self.increment)
         }
     }
 
+    struct Failer;
+
+    impl Component for Failer {
+        type Input = ();
+        type Output = ();
+        type Error = FailerError;
+
+        fn call(&self, _input: Self::Input) -> Result<Self::Output, Self::Error> {
+            Err(FailerError)
+        }
+    }
+
+    #[derive(Debug, PartialEq)]
+    struct FailerError;
+
+    impl fmt::Display for FailerError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "The failer failed.")
+        }
+    }
+
+    impl StdError for FailerError {}
+
     #[test]
     fn basic_components() {
-        assert_eq!(Doubler.call(2), 4);
-        assert_eq!(Doubler.call(5), 10);
+        assert_eq!(Doubler.call(2), Ok(4));
+        assert_eq!(Doubler.call(5), Ok(10));
 
         let add_one = Adder { increment: 1 };
-        assert_eq!(add_one.call(10), 11);
+        assert_eq!(add_one.call(10), Ok(11));
 
         let add_five = Adder { increment: 5 };
-        assert_eq!(add_five.call(3), 8);
+        assert_eq!(add_five.call(3), Ok(8));
     }
 
     #[test]
@@ -211,7 +272,10 @@ mod tests {
             |input, output| format!("Adding 1 to {input} and doubling it is {output}"),
         );
 
-        assert_eq!(mapped.call(&2), "Adding 1 to 2 and doubling it is 6");
+        assert_eq!(
+            mapped.call(2).unwrap(),
+            "Adding 1 to 2 and doubling it is 6"
+        );
     }
 
     #[test]
@@ -235,7 +299,7 @@ mod tests {
             output: 0,
         };
 
-        let context_out = mapped_doubler.call(context_in);
+        let context_out = mapped_doubler.call(context_in).unwrap();
 
         assert_eq!(
             context_out,
@@ -283,7 +347,7 @@ mod tests {
             value: 3,
         };
 
-        let output = mapped_add_three.call(input);
+        let output = mapped_add_three.call(input).unwrap();
 
         assert_eq!(
             output,
@@ -293,6 +357,34 @@ mod tests {
                 ended_with: 6,
                 is_even: true,
             }
+        );
+    }
+
+    #[test]
+    fn map_error_transforms_component_error() {
+        use std::fmt;
+
+        #[derive(Debug, PartialEq)]
+        struct MappedError(String);
+
+        impl fmt::Display for MappedError {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write!(f, "Mapped error: {}", self.0)
+            }
+        }
+
+        impl StdError for MappedError {}
+
+        let will_fail = Failer
+            .map_error(|err| MappedError(format!("The wrapped component failed with: {err}")));
+
+        let result = will_fail.call(());
+
+        assert_eq!(
+            result,
+            Err(MappedError(
+                "The wrapped component failed with: The failer failed.".into()
+            ))
         );
     }
 
@@ -317,8 +409,8 @@ mod tests {
             },
         );
 
-        let result1 = inspected.call(3);
-        let result2 = inspected.call(5);
+        let result1 = inspected.call(3).unwrap();
+        let result2 = inspected.call(5).unwrap();
 
         assert_eq!(result1, 6);
         assert_eq!(result2, 10);

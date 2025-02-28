@@ -33,12 +33,13 @@ where
 {
     type Input = In;
     type Output = Out;
+    type Error = C::Error;
 
     /// Calls the wrapped component with a transformed input and applies the
     /// output mapping function.
-    fn call(&self, input: Self::Input) -> Self::Output {
+    fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
         let mapped_input = (self.input_map)(&input);
-        let output = self.component.call(mapped_input);
-        (self.output_map)(input, output)
+        let output = self.component.call(mapped_input)?;
+        Ok((self.output_map)(input, output))
     }
 }
