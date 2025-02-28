@@ -1,5 +1,5 @@
 mod component;
-// mod composed;
+mod composed;
 pub mod legacy;
 // mod twine;
 
@@ -7,5 +7,5 @@ pub mod legacy;
 pub use twine_macros::compose;
 
 pub use component::Component;
-// pub use composed::{Composable, Composed};
+pub use composed::{Composable, Composed};
 // pub use twine::{Twine, TwineError};
