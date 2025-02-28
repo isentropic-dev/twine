@@ -242,7 +242,7 @@ mod tests {
         }
     }
 
-    #[derive(Debug, PartialEq)]
+    #[derive(Debug)]
     struct FailerError;
 
     impl fmt::Display for FailerError {
@@ -364,12 +364,12 @@ mod tests {
     fn map_error_transforms_component_error() {
         use std::fmt;
 
-        #[derive(Debug, PartialEq)]
+        #[derive(Debug)]
         struct MappedError(String);
 
         impl fmt::Display for MappedError {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                write!(f, "Mapped error: {}", self.0)
+                write!(f, "{}", self.0)
             }
         }
 
@@ -381,10 +381,8 @@ mod tests {
         let result = will_fail.call(());
 
         assert_eq!(
-            result,
-            Err(MappedError(
-                "The wrapped component failed with: The failer failed.".into()
-            ))
+            result.unwrap_err().to_string(),
+            "The wrapped component failed with: The failer failed."
         );
     }
 
