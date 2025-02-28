@@ -1,3 +1,5 @@
+use std::fmt;
+
 use twine_core::Component;
 
 /// A component that performs basic arithmetic on two values.
@@ -10,13 +12,9 @@ use twine_core::Component;
 /// - **Quotient**: `x / y`
 /// - **Average**: `(x + y) / 2`
 ///
-/// # Panics
+/// # Errors
 ///
-/// Panics if `y` is zero when computing the quotient.
-///
-/// In the future, this component will return a `Result` instead of panicking,
-/// as part of the broader error handling design work being tracked at
-/// <https://github.com/isentropic-dev/twine/issues/41>.
+/// Returns [`ArithmeticError::DivisionByZero`] if `y` is zero.
 pub struct Arithmetic;
 
 /// The input for the [`Arithmetic`] component.
@@ -35,19 +33,42 @@ pub struct ArithmeticOutput {
     pub average: f64,
 }
 
+/// An error type for the [`Arithmetic`] component.
+#[derive(Debug, PartialEq)]
+pub enum ArithmeticError {
+    DivisionByZero,
+}
+
 impl Component for Arithmetic {
     type Input = ArithmeticInput;
     type Output = ArithmeticOutput;
+    type Error = ArithmeticError;
 
-    fn call(&self, input: Self::Input) -> Self::Output {
+    fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
         let Self::Input { x, y } = input;
 
-        Self::Output {
-            sum: x + y,
-            difference: x - y,
-            product: x * y,
-            quotient: x / y,
-            average: (x + y) * 0.5,
+        if y == 0.0 {
+            Err(ArithmeticError::DivisionByZero)
+        } else {
+            Ok(Self::Output {
+                sum: x + y,
+                difference: x - y,
+                product: x * y,
+                quotient: x / y,
+                average: (x + y) * 0.5,
+            })
         }
     }
 }
+
+impl fmt::Display for ArithmeticError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ArithmeticError::DivisionByZero => {
+                write!(f, "Value for y must not be zero.")
+            }
+        }
+    }
+}
+
+impl std::error::Error for ArithmeticError {}

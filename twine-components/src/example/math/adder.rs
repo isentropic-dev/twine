@@ -1,4 +1,4 @@
-use std::ops::Add;
+use std::{convert::Infallible, ops::Add};
 
 use twine_core::Component;
 
@@ -34,8 +34,9 @@ where
 {
     type Input = T;
     type Output = T;
+    type Error = Infallible;
 
-    fn call(&self, input: Self::Input) -> Self::Output {
-        input + self.increment
+    fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
+        Ok(input + self.increment)
     }
 }
