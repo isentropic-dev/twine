@@ -1,48 +1,116 @@
+mod chain;
 mod inspect;
 mod mapped;
 mod mapped_error;
 
 /// The core trait for defining components in Twine.
 ///
-/// A `Component` represents a transformation from an input to an output
-/// and serves as the foundation for composition in Twine. Components can be
-/// combined using [`Twine`] to build sequential processing chains.
+/// A `Component` takes an input and produces an output. Components can be
+/// combined, adapted, and extended to build flexible processing chains.
 ///
-/// Implementations must be deterministic, meaning that calling the component
-/// with the same input must always produce the same output.
+/// ## Implementing `Component`
 ///
-/// Components can be adapted with [`Component::map()`] to modify input and
-/// output behavior or observed with [`Component::inspect()`] for debugging. A
-/// component's error type can be transformed using [`Component::map_error()`].
+/// To define a `Component`, implement the [`call()`] method, which takes
+/// an input and returns either an output or an error. Components should be
+/// deterministic, always producing the same result for a given input.
+///
+/// ## Composing Components
+///
+/// Components can be combined sequentially using [`Component::chain()`],
+/// applying them in sequence. To ensure type safety:
+/// - The first component’s output type must match the second’s input type.
+/// - Both components must use the same error type.
+///
+/// ## Adapting Components
+///
+/// Components can be customized with:
+/// - [`Component::map()`] – Modify inputs and outputs.
+/// - [`Component::map_error()`] – Transform error types.
+/// - [`Component::inspect()`] – Observe calls without changing behavior.
+///
+/// These utilities enable components to integrate smoothly into larger workflows.
 pub trait Component {
     type Input;
     type Output;
     type Error: std::error::Error + Send + Sync + 'static;
 
-    /// Calls the component with the given input, producing an output or an error.
+    /// Calls the component with the given input and returns a result.
+    ///
+    /// This is the only method required when implementing `Component`.
     ///
     /// # Errors
     ///
-    /// Returns an error of type [`Component::Error`] if the call fails,
-    /// allowing components to manage their own errors.
+    /// Each component defines its own `Error` type, allowing it to determine
+    /// what constitutes a failure within its domain.
     fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error>;
 
-    /// Adapts the component by transforming its input and output.
+    /// Chains this component with another.
     ///
-    /// This method wraps a component, allowing it to integrate into a broader
-    /// context. The `input_map` function extracts the component's input type
-    /// from the context, while `output_map` combines the original input and
-    /// the component's output to produce a new result. If calling the component
-    /// fails, the error is returned unchanged.
-    ///
-    /// # Parameters
-    ///
-    /// - `input_map`: Extracts the component's expected input from a broader context.
-    /// - `output_map`: Integrates the component's output back into the original context.
+    /// Ensures type-safe chaining by requiring:
+    /// - `Self::Output` matches `Next::Input`.
+    /// - Both components share the same `Error` type.
     ///
     /// # Returns
     ///
-    /// A new component with modified input and output behavior, preserving the error type.
+    /// A new component that first calls `self`, then passes its output to `next`.
+    ///
+    /// # Example
+    /// ```
+    /// use std::convert::Infallible;
+    /// use twine_core::Component;
+    ///
+    /// struct Double;
+    /// impl Component for Double {
+    ///     type Input = i32;
+    ///     type Output = i32;
+    ///     type Error = Infallible;
+    ///
+    ///     fn call(&self, input: i32) -> Result<i32, Self::Error> {
+    ///         Ok(input * 2)
+    ///     }
+    /// }
+    ///
+    /// struct Increment;
+    /// impl Component for Increment {
+    ///     type Input = i32;
+    ///     type Output = i32;
+    ///     type Error = Infallible;
+    ///
+    ///     fn call(&self, input: i32) -> Result<i32, Self::Error> {
+    ///         Ok(input + 1)
+    ///     }
+    /// }
+    ///
+    /// let chain = Double.chain(Increment);
+    /// assert_eq!(chain.call(3).unwrap(), 7);
+    /// ```
+    fn chain<Next>(
+        self,
+        next: Next,
+    ) -> impl Component<Input = Self::Input, Output = Next::Output, Error = Self::Error>
+    where
+        Self: Sized,
+        Next: Component<Input = Self::Output, Error = Self::Error>,
+    {
+        chain::Chain {
+            first: self,
+            second: next,
+        }
+    }
+
+    /// Transforms this component’s input and output types.
+    ///
+    /// This method adapts this component to work in contexts where the input
+    /// and output types differ.
+    ///
+    /// # Parameters
+    ///
+    /// - `input_map`: Extracts this component’s input from another type.
+    /// - `output_map`: Transforms this component’s output into the desired type.
+    ///
+    /// # Returns
+    ///
+    /// A new component with transformed input and output, keeping the same error type.
     ///
     /// # Example
     ///
@@ -115,15 +183,11 @@ pub trait Component {
         mapped::Mapped::new(self, input_map, output_map)
     }
 
-    /// Adapts the component by transforming its error type.
-    ///
-    /// This method is used when the component's error needs to be converted to
-    /// a different type, such as mapping internal errors to a broader or more
-    /// contextual representation.
+    /// Transforms this component’s error into a different type.
     ///
     /// # Returns
     ///
-    /// A new component with the same input and output types but a transformed error.
+    /// A new component with the same input and output types but a transformed error type.
     fn map_error<ErrorMap, NewError>(
         self,
         error_map: ErrorMap,
@@ -136,12 +200,7 @@ pub trait Component {
         mapped_error::MappedError::new(self, error_map)
     }
 
-    /// Wraps the component to inspect input and output without modifying behavior.
-    ///
-    /// The `input_handler` is called before the component processes the input,
-    /// and the `output_handler` is called after the component produces an
-    /// output. Both handlers receive references to their values, ensuring no
-    /// ownership changes. If an error occurs, it is propagated unchanged.
+    /// Inspects inputs and outputs without modifying behavior.
     ///
     /// # Parameters
     ///
@@ -415,5 +474,15 @@ mod tests {
 
         assert_eq!(*input_log.lock().unwrap(), vec![3, 5]);
         assert_eq!(*output_log.lock().unwrap(), vec![6, 10]);
+    }
+
+    #[test]
+    fn chain_components() {
+        let add_one = Adder { increment: 1 };
+        let add_ten = Adder { increment: 10 };
+        let chain = add_one.chain(Doubler).chain(add_ten);
+
+        assert_eq!(chain.call(2), Ok(16));
+        assert_eq!(chain.call(20), Ok(52));
     }
 }
