@@ -6,14 +6,24 @@ use super::Component;
 ///
 /// This struct is used internally by `.map()` to modify how a component
 /// interacts with its surrounding context.
-pub(crate) struct Mapped<C, InputMap, OutputMap, In, Out> {
+pub(crate) struct Mapped<C, InputMap, OutputMap, In, Out>
+where
+    C: Component,
+    InputMap: Fn(&In) -> C::Input,
+    OutputMap: Fn(In, C::Output) -> Out,
+{
     component: C,
     input_map: InputMap,
     output_map: OutputMap,
     _marker: PhantomData<(In, Out)>,
 }
 
-impl<C, InputMap, OutputMap, In, Out> Mapped<C, InputMap, OutputMap, In, Out> {
+impl<C, InputMap, OutputMap, In, Out> Mapped<C, InputMap, OutputMap, In, Out>
+where
+    C: Component,
+    InputMap: Fn(&In) -> C::Input,
+    OutputMap: Fn(In, C::Output) -> Out,
+{
     /// Creates a new mapped component with input and output transformations.
     pub(crate) fn new(component: C, input_map: InputMap, output_map: OutputMap) -> Self {
         Self {

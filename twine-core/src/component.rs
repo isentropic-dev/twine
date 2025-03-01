@@ -1,6 +1,7 @@
 mod inspect;
 mod mapped;
 mod mapped_error;
+mod then;
 
 /// The core trait for defining components in Twine.
 ///
@@ -194,6 +195,55 @@ pub trait Component {
             component: self,
             input_handler,
             output_handler,
+        }
+    }
+
+    /// Chains this component with another.
+    ///
+    /// The second component must accept this component’s output as input
+    /// and share the same error type.
+    ///
+    /// # Example
+    /// ```
+    /// use std::convert::Infallible;
+    /// use twine_core::Component;
+    ///
+    /// struct Double;
+    /// impl Component for Double {
+    ///     type Input = i32;
+    ///     type Output = i32;
+    ///     type Error = Infallible;
+    ///
+    ///     fn call(&self, input: i32) -> Result<i32, Self::Error> {
+    ///         Ok(input * 2)
+    ///     }
+    /// }
+    ///
+    /// struct Increment;
+    /// impl Component for Increment {
+    ///     type Input = i32;
+    ///     type Output = i32;
+    ///     type Error = Infallible;
+    ///
+    ///     fn call(&self, input: i32) -> Result<i32, Self::Error> {
+    ///         Ok(input + 1)
+    ///     }
+    /// }
+    ///
+    /// let chain = Double.then(Increment);
+    /// assert_eq!(chain.call(3).unwrap(), 7);
+    /// ```
+    fn then<B>(
+        self,
+        next: B,
+    ) -> impl Component<Input = Self::Input, Output = B::Output, Error = Self::Error>
+    where
+        Self: Sized,
+        B: Component<Input = Self::Output, Error = Self::Error>,
+    {
+        then::Then {
+            first: self,
+            second: next,
         }
     }
 }
@@ -415,5 +465,15 @@ mod tests {
 
         assert_eq!(*input_log.lock().unwrap(), vec![3, 5]);
         assert_eq!(*output_log.lock().unwrap(), vec![6, 10]);
+    }
+
+    #[test]
+    fn chain_components_with_then() {
+        let add_one = Adder { increment: 1 };
+        let add_ten = Adder { increment: 10 };
+        let chain = add_one.then(Doubler).then(add_ten);
+
+        assert_eq!(chain.call(2), Ok(16));
+        assert_eq!(chain.call(20), Ok(52));
     }
 }

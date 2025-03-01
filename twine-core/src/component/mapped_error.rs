@@ -6,13 +6,23 @@ use super::Component;
 ///
 /// This is used internally by `.map_error()` to modify how a component
 /// reports errors.
-pub(crate) struct MappedError<C, ErrorMap, NewError> {
+pub(crate) struct MappedError<C, ErrorMap, NewError>
+where
+    C: Component,
+    ErrorMap: Fn(C::Error) -> NewError,
+    NewError: StdError + Send + Sync + 'static,
+{
     component: C,
     error_map: ErrorMap,
     _marker: PhantomData<NewError>,
 }
 
-impl<C, ErrorMap, NewError> MappedError<C, ErrorMap, NewError> {
+impl<C, ErrorMap, NewError> MappedError<C, ErrorMap, NewError>
+where
+    C: Component,
+    ErrorMap: Fn(C::Error) -> NewError,
+    NewError: StdError + Send + Sync + 'static,
+{
     /// Creates a new component with a transformed error type.
     pub(crate) fn new(component: C, error_map: ErrorMap) -> Self {
         Self {
