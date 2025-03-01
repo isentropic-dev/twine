@@ -1,55 +1,116 @@
+mod chain;
 mod inspect;
 mod mapped;
 mod mapped_error;
-mod then;
 
 /// The core trait for defining components in Twine.
 ///
-/// A `Component` transforms an input into an output and serves as the
-/// foundation for composition in Twine. It enables structured, reusable
-/// processing units that can be combined, adapted, and extended.
+/// A `Component` takes an input and produces an output. Components can be
+/// combined, adapted, and extended to build flexible processing chains.
 ///
-/// Implementations must be deterministic, meaning that the component always
-/// produces the same output given the same input.
+/// ## Implementing `Component`
 ///
-/// Components can be sequentially composed using [`Component::then()`], which
-/// chains execution while ensuring type safety. To chain components:
+/// To define a `Component`, implement the [`call()`] method, which takes
+/// an input and returns either an output or an error. Components should be
+/// deterministic, always producing the same result for a given input.
+///
+/// ## Composing Components
+///
+/// Components can be combined sequentially using [`Component::chain()`],
+/// applying them in sequence. To ensure type safety:
 /// - The first component’s output type must match the second’s input type.
-/// - Both components must share the same error type.
+/// - Both components must use the same error type.
 ///
-/// Components can also be adapted with:
-/// - [`Component::map()`] to transform inputs and outputs.
-/// - [`Component::map_error()`] to transform error types.
-/// - [`Component::inspect()`] to observe execution without altering behavior.
+/// ## Adapting Components
+///
+/// Components can be customized with:
+/// - [`Component::map()`] – Modify inputs and outputs.
+/// - [`Component::map_error()`] – Transform error types.
+/// - [`Component::inspect()`] – Observe calls without changing behavior.
+///
+/// These utilities enable components to integrate smoothly into larger workflows.
 pub trait Component {
     type Input;
     type Output;
     type Error: std::error::Error + Send + Sync + 'static;
 
-    /// Calls the component with the given input, producing an output or an error.
+    /// Calls the component with the given input and returns a result.
+    ///
+    /// This is the only method required when implementing `Component`.
     ///
     /// # Errors
     ///
-    /// Returns an error of type [`Component::Error`] if the call fails,
-    /// allowing components to manage their own errors.
+    /// Each component defines its own `Error` type, allowing it to determine
+    /// what constitutes a failure within its domain.
     fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error>;
 
-    /// Transforms the component’s input and output.
+    /// Chains this component with another.
     ///
-    /// This method adapts a component to integrate into a broader context:
-    /// - `input_map` extracts the expected input type.
-    /// - `output_map` integrates the component’s output back into the original context.
-    ///
-    /// If the component produces an error, it is returned unchanged.
-    ///
-    /// # Parameters
-    ///
-    /// - `input_map`: Extracts the component's expected input from a broader context.
-    /// - `output_map`: Integrates the component's output back into the original context.
+    /// Ensures type-safe chaining by requiring:
+    /// - `Self::Output` matches `Next::Input`.
+    /// - Both components share the same `Error` type.
     ///
     /// # Returns
     ///
-    /// A new component with modified input and output behavior, preserving the error type.
+    /// A new component that first calls `self`, then passes its output to `next`.
+    ///
+    /// # Example
+    /// ```
+    /// use std::convert::Infallible;
+    /// use twine_core::Component;
+    ///
+    /// struct Double;
+    /// impl Component for Double {
+    ///     type Input = i32;
+    ///     type Output = i32;
+    ///     type Error = Infallible;
+    ///
+    ///     fn call(&self, input: i32) -> Result<i32, Self::Error> {
+    ///         Ok(input * 2)
+    ///     }
+    /// }
+    ///
+    /// struct Increment;
+    /// impl Component for Increment {
+    ///     type Input = i32;
+    ///     type Output = i32;
+    ///     type Error = Infallible;
+    ///
+    ///     fn call(&self, input: i32) -> Result<i32, Self::Error> {
+    ///         Ok(input + 1)
+    ///     }
+    /// }
+    ///
+    /// let chain = Double.chain(Increment);
+    /// assert_eq!(chain.call(3).unwrap(), 7);
+    /// ```
+    fn chain<Next>(
+        self,
+        next: Next,
+    ) -> impl Component<Input = Self::Input, Output = Next::Output, Error = Self::Error>
+    where
+        Self: Sized,
+        Next: Component<Input = Self::Output, Error = Self::Error>,
+    {
+        chain::Chain {
+            first: self,
+            second: next,
+        }
+    }
+
+    /// Transforms this component’s input and output types.
+    ///
+    /// This method adapts this component to work in contexts where the input
+    /// and output types differ.
+    ///
+    /// # Parameters
+    ///
+    /// - `input_map`: Extracts this component’s input from another type.
+    /// - `output_map`: Transforms this component’s output into the desired type.
+    ///
+    /// # Returns
+    ///
+    /// A new component with transformed input and output, keeping the same error type.
     ///
     /// # Example
     ///
@@ -122,10 +183,7 @@ pub trait Component {
         mapped::Mapped::new(self, input_map, output_map)
     }
 
-    /// Transforms the component’s error into a different type.
-    ///
-    /// Converts low-level errors into structured, higher-level errors for
-    /// better integration within a broader context.
+    /// Transforms this component’s error into a different type.
     ///
     /// # Returns
     ///
@@ -142,7 +200,7 @@ pub trait Component {
         mapped_error::MappedError::new(self, error_map)
     }
 
-    /// Observes input and output without modifying the component’s behavior.
+    /// Inspects inputs and outputs without modifying behavior.
     ///
     /// # Parameters
     ///
@@ -195,59 +253,6 @@ pub trait Component {
             component: self,
             input_handler,
             output_handler,
-        }
-    }
-
-    /// Chains this component with another.
-    ///
-    /// The second component must accept this component’s output as input and
-    /// share the same error type, ensuring type-safe composition.
-    ///
-    /// # Returns
-    ///
-    /// A new component that executes `self` and passes its output to `next`.
-    ///
-    /// # Example
-    /// ```
-    /// use std::convert::Infallible;
-    /// use twine_core::Component;
-    ///
-    /// struct Double;
-    /// impl Component for Double {
-    ///     type Input = i32;
-    ///     type Output = i32;
-    ///     type Error = Infallible;
-    ///
-    ///     fn call(&self, input: i32) -> Result<i32, Self::Error> {
-    ///         Ok(input * 2)
-    ///     }
-    /// }
-    ///
-    /// struct Increment;
-    /// impl Component for Increment {
-    ///     type Input = i32;
-    ///     type Output = i32;
-    ///     type Error = Infallible;
-    ///
-    ///     fn call(&self, input: i32) -> Result<i32, Self::Error> {
-    ///         Ok(input + 1)
-    ///     }
-    /// }
-    ///
-    /// let chain = Double.then(Increment);
-    /// assert_eq!(chain.call(3).unwrap(), 7);
-    /// ```
-    fn then<B>(
-        self,
-        next: B,
-    ) -> impl Component<Input = Self::Input, Output = B::Output, Error = Self::Error>
-    where
-        Self: Sized,
-        B: Component<Input = Self::Output, Error = Self::Error>,
-    {
-        then::Then {
-            first: self,
-            second: next,
         }
     }
 }
@@ -472,10 +477,10 @@ mod tests {
     }
 
     #[test]
-    fn chain_components_with_then() {
+    fn chain_components() {
         let add_one = Adder { increment: 1 };
         let add_ten = Adder { increment: 10 };
-        let chain = add_one.then(Doubler).then(add_ten);
+        let chain = add_one.chain(Doubler).chain(add_ten);
 
         assert_eq!(chain.call(2), Ok(16));
         assert_eq!(chain.call(20), Ok(52));

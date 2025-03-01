@@ -2,12 +2,11 @@ use crate::Component;
 
 /// A wrapper that calls two components sequentially.
 ///
-/// Internally used by `.then()` to chain two compatible components.
+/// Internally used by `.chain()` to combine two compatible components.
 ///
 /// For components to be compatible, the first component’s output type must
-/// match the second’s input, enabling type-safe composition. Both components
-/// must share the same error type, ensuring errors propagate unchanged.
-pub(crate) struct Then<A, B>
+/// match the second’s input and both components must share the same error type.
+pub(crate) struct Chain<A, B>
 where
     A: Component,
     B: Component<Input = A::Output, Error = A::Error>,
@@ -16,7 +15,7 @@ where
     pub(crate) second: B,
 }
 
-impl<A, B> Component for Then<A, B>
+impl<A, B> Component for Chain<A, B>
 where
     A: Component,
     B: Component<Input = A::Output, Error = A::Error>,
