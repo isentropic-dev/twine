@@ -2,10 +2,10 @@ use std::marker::PhantomData;
 
 use super::Component;
 
-/// A wrapper that adapts a component by transforming its input and output.
+/// A wrapper that transforms a component’s input and output.
 ///
-/// This struct is used internally by `.map()` to modify how a component
-/// interacts with its surrounding context.
+/// Internally used by `.map()` to modify how a component interacts with its
+/// surrounding context.
 pub(crate) struct Mapped<C, InputMap, OutputMap, In, Out>
 where
     C: Component,
@@ -45,8 +45,8 @@ where
     type Output = Out;
     type Error = C::Error;
 
-    /// Calls the wrapped component with a transformed input and applies the
-    /// output mapping function.
+    /// Calls the wrapped component with a transformed input and applies
+    /// the output mapping function.
     fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
         let mapped_input = (self.input_map)(&input);
         let output = self.component.call(mapped_input)?;

@@ -5,16 +5,22 @@ mod then;
 
 /// The core trait for defining components in Twine.
 ///
-/// A `Component` represents a transformation from an input to an output
-/// and serves as the foundation for composition in Twine. Components can be
-/// combined using [`Twine`] to build sequential processing chains.
+/// A `Component` transforms an input into an output and serves as the
+/// foundation for composition in Twine. It enables structured, reusable
+/// processing units that can be combined, adapted, and extended.
 ///
-/// Implementations must be deterministic, meaning that calling the component
-/// with the same input must always produce the same output.
+/// Implementations must be deterministic, meaning that the component always
+/// produces the same output given the same input.
 ///
-/// Components can be adapted with [`Component::map()`] to modify input and
-/// output behavior or observed with [`Component::inspect()`] for debugging. A
-/// component's error type can be transformed using [`Component::map_error()`].
+/// Components can be sequentially composed using [`Component::then()`], which
+/// chains execution while ensuring type safety. To chain components:
+/// - The first component’s output type must match the second’s input type.
+/// - Both components must share the same error type.
+///
+/// Components can also be adapted with:
+/// - [`Component::map()`] to transform inputs and outputs.
+/// - [`Component::map_error()`] to transform error types.
+/// - [`Component::inspect()`] to observe execution without altering behavior.
 pub trait Component {
     type Input;
     type Output;
@@ -28,13 +34,13 @@ pub trait Component {
     /// allowing components to manage their own errors.
     fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error>;
 
-    /// Adapts the component by transforming its input and output.
+    /// Transforms the component’s input and output.
     ///
-    /// This method wraps a component, allowing it to integrate into a broader
-    /// context. The `input_map` function extracts the component's input type
-    /// from the context, while `output_map` combines the original input and
-    /// the component's output to produce a new result. If calling the component
-    /// fails, the error is returned unchanged.
+    /// This method adapts a component to integrate into a broader context:
+    /// - `input_map` extracts the expected input type.
+    /// - `output_map` integrates the component’s output back into the original context.
+    ///
+    /// If the component produces an error, it is returned unchanged.
     ///
     /// # Parameters
     ///
@@ -116,15 +122,14 @@ pub trait Component {
         mapped::Mapped::new(self, input_map, output_map)
     }
 
-    /// Adapts the component by transforming its error type.
+    /// Transforms the component’s error into a different type.
     ///
-    /// This method is used when the component's error needs to be converted to
-    /// a different type, such as mapping internal errors to a broader or more
-    /// contextual representation.
+    /// Converts low-level errors into structured, higher-level errors for
+    /// better integration within a broader context.
     ///
     /// # Returns
     ///
-    /// A new component with the same input and output types but a transformed error.
+    /// A new component with the same input and output types but a transformed error type.
     fn map_error<ErrorMap, NewError>(
         self,
         error_map: ErrorMap,
@@ -137,12 +142,7 @@ pub trait Component {
         mapped_error::MappedError::new(self, error_map)
     }
 
-    /// Wraps the component to inspect input and output without modifying behavior.
-    ///
-    /// The `input_handler` is called before the component processes the input,
-    /// and the `output_handler` is called after the component produces an
-    /// output. Both handlers receive references to their values, ensuring no
-    /// ownership changes. If an error occurs, it is propagated unchanged.
+    /// Observes input and output without modifying the component’s behavior.
     ///
     /// # Parameters
     ///
@@ -200,8 +200,12 @@ pub trait Component {
 
     /// Chains this component with another.
     ///
-    /// The second component must accept this component’s output as input
-    /// and share the same error type.
+    /// The second component must accept this component’s output as input and
+    /// share the same error type, ensuring type-safe composition.
+    ///
+    /// # Returns
+    ///
+    /// A new component that executes `self` and passes its output to `next`.
     ///
     /// # Example
     /// ```

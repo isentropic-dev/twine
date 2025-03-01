@@ -1,17 +1,12 @@
 use crate::Component;
 
-/// A component that calls two components sequentially.
+/// A wrapper that calls two components sequentially.
 ///
-/// This struct is used internally by `.then()` to chain two compatible
-/// components together.
+/// Internally used by `.then()` to chain two compatible components.
 ///
-/// `Then` ensures that the first component’s output type matches the second
-/// component’s input type, enabling type-safe composition. When `call()` is
-/// invoked, the input is processed by the first component (`A`), and its output
-/// is passed as input to the second component (`B`).
-///
-/// Both components must share the same error type (`A::Error`), ensuring that
-/// errors propagate naturally without modification.
+/// For components to be compatible, the first component’s output type must
+/// match the second’s input, enabling type-safe composition. Both components
+/// must share the same error type, ensuring errors propagate unchanged.
 pub(crate) struct Then<A, B>
 where
     A: Component,
@@ -30,6 +25,7 @@ where
     type Output = B::Output;
     type Error = A::Error;
 
+    /// Calls the first component and passes its output to the second.
     fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
         let output = self.first.call(input)?;
         self.second.call(output)
