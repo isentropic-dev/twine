@@ -122,7 +122,7 @@ impl<T, C: Component<Input = T, Error = TwineError>> Twine<T, C> {
     /// The resulting component takes `T` as its input, returns the final output
     /// type, and uses [`TwineError`] as its error.
     #[must_use]
-    pub fn build(self) -> impl Component<Input = T, Output = C::Output> {
+    pub fn build(self) -> impl Component<Input = T, Output = C::Output, Error = TwineError> {
         self.component
     }
 }
