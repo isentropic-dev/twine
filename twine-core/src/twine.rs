@@ -28,7 +28,8 @@ pub struct Twine<T, C = ()> {
 impl<T> Twine<T> {
     /// Creates a new `Twine` builder.
     ///
-    /// The final component, after calling [`build()`], will take `T` as its input.
+    /// The type `T`, which serves as the input type for the chain, must be
+    /// specified using turbofish syntax (`Twine::<T>::new()`).
     #[must_use]
     pub fn new() -> Twine<T, impl Component<Input = T, Output = T, Error = TwineError>> {
         Twine {
@@ -41,8 +42,8 @@ impl<T> Twine<T> {
 impl<T, C: Component<Input = T, Error = TwineError>> Twine<T, C> {
     /// Adds a [`Component`] to the chain.
     ///
-    /// The new component takes the current output as input, wrapping any
-    /// errors in [`TwineError`] for consistent handling.
+    /// The added component takes the current output as input, and its errors
+    /// are wrapped in [`TwineError`] for consistent handling.
     ///
     /// # Example
     ///
@@ -87,8 +88,8 @@ impl<T, C: Component<Input = T, Error = TwineError>> Twine<T, C> {
 
     /// Adds an inline function to the chain.
     ///
-    /// The function receives the current output as input, and its return value
-    /// becomes the new output.
+    /// The added function takes the current output as its input and produces
+    /// the next output in the chain.
     ///
     /// # Example
     ///
@@ -118,7 +119,8 @@ impl<T, C: Component<Input = T, Error = TwineError>> Twine<T, C> {
 
     /// Finalizes the chain and returns the composed [`Component`].
     ///
-    /// The resulting component takes `T` as input and produces the final output.
+    /// The resulting component takes `T` as its input, returns the final output
+    /// type, and uses [`TwineError`] as its error.
     #[must_use]
     pub fn build(self) -> impl Component<Input = T, Output = C::Output> {
         self.component
