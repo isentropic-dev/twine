@@ -1,5 +1,6 @@
 mod component;
 mod composed;
+pub mod graph;
 pub mod legacy;
 mod twine;
 

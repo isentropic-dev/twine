@@ -8,3 +8,6 @@ description = "A Rust framework for functional and composable system modeling."
 repository = "https://github.com/isentropic-dev/twine"
 readme = "../README.md"
 keywords = ["twine", "framework", "functional", "composable", "modeling"]
+
+[dependencies]
+petgraph = "0.7.1"
