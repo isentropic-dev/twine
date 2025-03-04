@@ -82,7 +82,7 @@ impl<T, C: Component<Input = T, Error = TwineError>> Twine<T, C> {
             _marker: PhantomData,
             component: self
                 .component
-                .chain(next.map_error(|error| TwineError::from_component::<N>(error))),
+                .chain(next.map_err(|err| TwineError::from_component::<N>(err))),
         }
     }
 

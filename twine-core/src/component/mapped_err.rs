@@ -4,11 +4,11 @@ use super::Component;
 
 /// A wrapper that transforms a component’s error type.
 ///
-/// Internally used by `.map_error()` to map one error type to another.
+/// Internally used by `.map_err()` to map one error type to another.
 ///
 /// Ensures that error type transformation remains type-safe and allows errors
 /// to be adapted without modifying the component’s input or output types.
-pub(crate) struct MappedError<C, ErrorMap, NewError>
+pub(crate) struct MappedErr<C, ErrorMap, NewError>
 where
     C: Component,
     ErrorMap: Fn(C::Error) -> NewError,
@@ -19,7 +19,7 @@ where
     _marker: PhantomData<NewError>,
 }
 
-impl<C, ErrorMap, NewError> MappedError<C, ErrorMap, NewError>
+impl<C, ErrorMap, NewError> MappedErr<C, ErrorMap, NewError>
 where
     C: Component,
     ErrorMap: Fn(C::Error) -> NewError,
@@ -35,7 +35,7 @@ where
     }
 }
 
-impl<C, ErrorMap, NewError> Component for MappedError<C, ErrorMap, NewError>
+impl<C, ErrorMap, NewError> Component for MappedErr<C, ErrorMap, NewError>
 where
     C: Component,
     ErrorMap: Fn(C::Error) -> NewError,
@@ -49,6 +49,6 @@ where
     fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
         self.component
             .call(input)
-            .map_err(|error| (self.error_map)(error))
+            .map_err(|err| (self.error_map)(err))
     }
 }

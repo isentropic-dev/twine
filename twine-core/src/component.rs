@@ -1,7 +1,7 @@
 mod chain;
 mod inspect;
 mod mapped;
-mod mapped_error;
+mod mapped_err;
 
 /// The core trait for defining components in Twine.
 ///
@@ -25,7 +25,7 @@ mod mapped_error;
 ///
 /// Components can be customized with:
 /// - [`Component::map()`] – Modify inputs and outputs.
-/// - [`Component::map_error()`] – Transform error types.
+/// - [`Component::map_err()`] – Transform error types.
 /// - [`Component::inspect()`] – Observe calls without changing behavior.
 ///
 /// These utilities enable components to integrate smoothly into larger workflows.
@@ -188,7 +188,7 @@ pub trait Component {
     /// # Returns
     ///
     /// A new component with the same input and output types but a transformed error type.
-    fn map_error<ErrorMap, NewError>(
+    fn map_err<ErrorMap, NewError>(
         self,
         error_map: ErrorMap,
     ) -> impl Component<Input = Self::Input, Output = Self::Output, Error = NewError>
@@ -197,7 +197,7 @@ pub trait Component {
         ErrorMap: Fn(Self::Error) -> NewError,
         NewError: std::error::Error + Send + Sync + 'static,
     {
-        mapped_error::MappedError::new(self, error_map)
+        mapped_err::MappedErr::new(self, error_map)
     }
 
     /// Inspects inputs and outputs without modifying behavior.
@@ -420,7 +420,7 @@ mod tests {
     }
 
     #[test]
-    fn map_error_transforms_component_error() {
+    fn map_err_transforms_component_error() {
         use std::fmt;
 
         #[derive(Debug)]
@@ -434,8 +434,8 @@ mod tests {
 
         impl StdError for MappedError {}
 
-        let will_fail = Failer
-            .map_error(|err| MappedError(format!("The wrapped component failed with: {err}")));
+        let will_fail =
+            Failer.map_err(|err| MappedError(format!("The wrapped component failed with: {err}")));
 
         let result = will_fail.call(());
 
