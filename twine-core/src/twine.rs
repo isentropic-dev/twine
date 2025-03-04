@@ -1,79 +1,54 @@
-mod closure;
-mod then;
+mod error;
+mod function;
+mod identity;
+
+pub use error::TwineError;
 
 use std::marker::PhantomData;
 
 use crate::Component;
 
-/// A builder for composing multiple components into a single processing chain.
+/// A builder for chaining components with consistent error handling.
 ///
-/// `Twine` enables sequential composition of [`Component`] implementations,
-/// where each component's output serves as the next component's input.
+/// `Twine` connects [`Component`]s sequentially, passing each output as the
+/// next input. It wraps component errors in [`TwineError`] to ensure uniform
+/// propagation and simplify composition.
 ///
 /// # See Also
 ///
-/// - [`Twine::new<T>()`] — Starts a new chain.
-/// - [`Twine::then()`] — Adds any type that implements [`Component`].
+/// - [`Twine::<T>::new()`] — Starts a new chain.
+/// - [`Twine::then()`] — Adds a component.
 /// - [`Twine::then_fn()`] — Adds an inline function.
-/// - [`Twine::build()`] — Finalizes the chain and returns the composed component.
+/// - [`Twine::build()`] — Finalizes the chain.
 pub struct Twine<T, C = ()> {
     _marker: PhantomData<T>,
     component: C,
 }
 
 impl<T> Twine<T> {
-    /// Starts a new `Twine` builder with `T` as the initial input type.
+    /// Creates a new `Twine` builder.
     ///
-    /// This function creates an empty chain where `T` serves as the starting input.
-    /// Components added via [`Twine::then()`] or [`Twine::then_fn()`] can
-    /// progressively transform the data as it moves through the chain.
+    /// The type `T`, which serves as the input type for the chain, must be
+    /// specified using turbofish syntax (`Twine::<T>::new()`).
     #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Adds the first component to the chain.
-    ///
-    /// See [`Twine::then()`] for details.
-    #[must_use]
-    pub fn then<C>(self, component: C) -> Twine<T, C>
-    where
-        C: Component<Input = T>,
-    {
+    pub fn new() -> Twine<T, impl Component<Input = T, Output = T, Error = TwineError>> {
         Twine {
             _marker: PhantomData,
-            component,
-        }
-    }
-
-    /// Adds an inline function as the first step in the chain.
-    ///
-    /// See [`Twine::then_fn()`] for details.
-    #[must_use]
-    pub fn then_fn<F, O>(self, function: F) -> Twine<T, impl Component<Input = T, Output = O>>
-    where
-        F: Fn(T) -> O,
-    {
-        Twine {
-            _marker: PhantomData,
-            component: closure::Closure::new(function),
+            component: identity::Identity::new(),
         }
     }
 }
 
-impl<T, C: Component<Input = T>> Twine<T, C> {
-    /// Adds a component to the chain.
+impl<T, C: Component<Input = T, Error = TwineError>> Twine<T, C> {
+    /// Adds a [`Component`] to the chain.
     ///
-    /// This method appends a [`Component`] to the sequence, using the current
-    /// output as its input.
-    ///
-    /// # Parameters
-    ///
-    /// - `next`: The [`Component`] that processes the output of the current chain.
+    /// The added component takes the current output as input, and its errors
+    /// are wrapped in [`TwineError`] for consistent handling.
     ///
     /// # Example
     ///
     /// ```
+    /// use std::convert::Infallible;
     /// use twine_core::{Component, Twine};
     ///
     /// struct Doubler;
@@ -81,37 +56,40 @@ impl<T, C: Component<Input = T>> Twine<T, C> {
     /// impl Component for Doubler {
     ///     type Input = i32;
     ///     type Output = i32;
+    ///     type Error = Infallible;
     ///
-    ///     fn call(&self, input: Self::Input) -> Self::Output {
-    ///         input * 2
+    ///     fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
+    ///         Ok(input * 2)
     ///     }
     /// }
     ///
     /// let chain = Twine::<i32>::new()
     ///     .then(Doubler)
+    ///     .then(Doubler)
     ///     .build();
     ///
-    /// assert_eq!(chain.call(2), 4);
+    /// assert_eq!(chain.call(2).unwrap(), 8);
     /// ```
     #[must_use]
-    pub fn then<N>(self, next: N) -> Twine<T, impl Component<Input = C::Input, Output = N::Output>>
+    pub fn then<N>(
+        self,
+        next: N,
+    ) -> Twine<T, impl Component<Input = T, Output = N::Output, Error = TwineError>>
     where
         N: Component<Input = C::Output>,
     {
         Twine {
             _marker: PhantomData,
-            component: then::Then::new(self.component, next),
+            component: self
+                .component
+                .chain(next.map_error(|error| TwineError::from_component::<N>(error))),
         }
     }
 
     /// Adds an inline function to the chain.
     ///
-    /// This method applies a function to the output of the current component
-    /// before passing it to the next component or function.
-    ///
-    /// # Parameters
-    ///
-    /// - `next`: A function that processes the output of the current chain.
+    /// The added function takes the current output as its input and produces
+    /// the next output in the chain.
     ///
     /// # Example
     ///
@@ -123,38 +101,29 @@ impl<T, C: Component<Input = T>> Twine<T, C> {
     ///     .then_fn(|x| x * 2)
     ///     .build();
     ///
-    /// assert_eq!(chain.call(5), 30);
+    /// assert_eq!(chain.call(5).unwrap(), 30);
     /// ```
     #[must_use]
     pub fn then_fn<F, O>(
         self,
         function: F,
-    ) -> Twine<T, impl Component<Input = C::Input, Output = O>>
+    ) -> Twine<T, impl Component<Input = T, Output = O, Error = TwineError>>
     where
         F: Fn(C::Output) -> O,
     {
         Twine {
             _marker: PhantomData,
-            component: then::Then::new(self.component, closure::Closure::new(function)),
+            component: self.component.chain(function::Function::new(function)),
         }
     }
 
-    /// Finalizes the `Twine` chain and returns the composed component.
+    /// Finalizes the chain and returns the composed [`Component`].
     ///
-    /// This method completes the chain-building process, producing a
-    /// [`Component`] that can be executed with `.call(input)`.
+    /// The resulting component takes `T` as its input, returns the final output
+    /// type, and uses [`TwineError`] as its error.
     #[must_use]
-    pub fn build(self) -> impl Component<Input = C::Input, Output = C::Output> {
+    pub fn build(self) -> impl Component<Input = T, Output = C::Output, Error = TwineError> {
         self.component
-    }
-}
-
-impl<T> Default for Twine<T> {
-    fn default() -> Self {
-        Self {
-            _marker: PhantomData,
-            component: (),
-        }
     }
 }
 
@@ -162,14 +131,17 @@ impl<T> Default for Twine<T> {
 mod tests {
     use super::*;
 
+    use std::convert::Infallible;
+
     /// A component that doubles the input.
     struct Doubler;
     impl Component for Doubler {
         type Input = i32;
         type Output = i32;
+        type Error = Infallible;
 
-        fn call(&self, input: Self::Input) -> Self::Output {
-            input * 2
+        fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
+            Ok(input * 2)
         }
     }
 
@@ -180,9 +152,10 @@ mod tests {
     impl Component for Adder {
         type Input = i32;
         type Output = i32;
+        type Error = Infallible;
 
-        fn call(&self, input: Self::Input) -> Self::Output {
-            input + self.increment
+        fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
+            Ok(input + self.increment)
         }
     }
 
@@ -191,9 +164,10 @@ mod tests {
     impl Component for Squarer {
         type Input = f64;
         type Output = f64;
+        type Error = Infallible;
 
-        fn call(&self, input: Self::Input) -> Self::Output {
-            input * input
+        fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
+            Ok(input * input)
         }
     }
 
@@ -202,24 +176,25 @@ mod tests {
     impl Component for IntToString {
         type Input = i32;
         type Output = String;
+        type Error = Infallible;
 
-        fn call(&self, input: Self::Input) -> Self::Output {
-            format!("{input}")
+        fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
+            Ok(format!("{input}"))
         }
     }
 
     #[test]
     fn call_a_single_component() {
         let chain = Twine::<i32>::new().then(Adder { increment: 10 }).build();
-        assert_eq!(chain.call(0), 10);
-        assert_eq!(chain.call(10), 20);
+        assert_eq!(chain.call(0).unwrap(), 10);
+        assert_eq!(chain.call(10).unwrap(), 20);
     }
 
     #[test]
     fn call_a_closure() {
         let chain = Twine::<i32>::new().then_fn(|x| x * 3).build();
-        assert_eq!(chain.call(2), 6);
-        assert_eq!(chain.call(5), 15);
+        assert_eq!(chain.call(2).unwrap(), 6);
+        assert_eq!(chain.call(5).unwrap(), 15);
     }
 
     #[test]
@@ -228,11 +203,11 @@ mod tests {
         let add_five = Adder { increment: 5 };
 
         let first_chain = Twine::<i32>::new().then(add_two).then(Doubler).build();
-        assert_eq!(first_chain.call(0), 4);
-        assert_eq!(first_chain.call(6), 16);
+        assert_eq!(first_chain.call(0).unwrap(), 4);
+        assert_eq!(first_chain.call(6).unwrap(), 16);
 
         let second_chain = Twine::<i32>::new().then(first_chain).then(add_five).build();
-        assert_eq!(second_chain.call(1), 11);
+        assert_eq!(second_chain.call(1).unwrap(), 11);
     }
 
     #[test]
@@ -245,15 +220,15 @@ mod tests {
             .then_fn(|x| x + 2)
             .build();
 
-        assert_eq!(chain.call(0), 12);
-        assert_eq!(chain.call(100), 212);
+        assert_eq!(chain.call(0).unwrap(), 12);
+        assert_eq!(chain.call(100).unwrap(), 212);
     }
 
     #[test]
     fn type_transformation() {
         let chain = Twine::<i32>::new().then(IntToString).build();
-        assert_eq!(chain.call(42), "42".to_string());
-        assert_eq!(chain.call(0), "0".to_string());
+        assert_eq!(chain.call(42).unwrap(), "42".to_string());
+        assert_eq!(chain.call(0).unwrap(), "0".to_string());
     }
 
     #[test]
@@ -264,8 +239,8 @@ mod tests {
             .then_fn(|s| format!("Value: {s}"))
             .build();
 
-        assert_eq!(chain.call(0), "Value: 100");
-        assert_eq!(chain.call(50), "Value: 150");
+        assert_eq!(chain.call(0).unwrap(), "Value: 100");
+        assert_eq!(chain.call(50).unwrap(), "Value: 150");
     }
 
     #[test]
@@ -296,7 +271,7 @@ mod tests {
             result: None,
         };
 
-        let output = chain.call(input);
+        let output = chain.call(input).unwrap();
 
         assert_eq!(output.result, Some("6 squared is 36!".into()));
     }
