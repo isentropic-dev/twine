@@ -3,7 +3,7 @@
 use twine_components::example::math::{
     Adder, Arithmetic, ArithmeticInput, ArithmeticOutput, Multiplier,
 };
-use twine_core::{Component, Composable, Composed, Twine};
+use twine_core::{Component, Composable, Composed, Twine, TwineError};
 
 /// Defines a generic structure for grouping math-related subcomponents.
 ///
@@ -51,13 +51,19 @@ struct MathInput {
 /// processing chain. It allows `MathExample` to function as a `Component` that
 /// transforms `MathInput` into `<MathComponents as Composable>::Outputs`.
 struct MathExample {
-    component:
-        Box<dyn Component<Input = MathInput, Output = <MathComponents as Composable>::Outputs>>,
+    component: Box<
+        dyn Component<
+            Input = MathInput,
+            Output = <MathComponents as Composable>::Outputs,
+            Error = TwineError,
+        >,
+    >,
 }
 
 impl Composed for MathExample {
     type Input = MathInput;
     type Components = MathComponents;
+    type Error = TwineError;
 
     /// Builds a `Twine` chain that executes these operations in sequence:
     /// 1. Adds 1 to `input.x` (`add_one`).
@@ -96,8 +102,11 @@ impl Composed for MathExample {
     /// Returns a reference to the composed processing chain.
     fn component(
         &self,
-    ) -> &dyn Component<Input = Self::Input, Output = <Self::Components as Composable>::Outputs>
-    {
+    ) -> &dyn Component<
+        Input = Self::Input,
+        Output = <Self::Components as Composable>::Outputs,
+        Error = TwineError,
+    > {
         self.component.as_ref()
     }
 }
@@ -112,7 +121,7 @@ fn composed_math_component_works() {
     });
 
     let input = MathInput { x: 4.0, y: 2.0 };
-    let output = math.call(input);
+    let output = math.call(input).unwrap();
 
     assert_eq!(output.add_one, 5.0, "Expected to add 1 to x");
     assert_eq!(

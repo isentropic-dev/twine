@@ -8,4 +8,4 @@ pub use twine_macros::compose;
 
 pub use component::Component;
 pub use composed::{Composable, Composed};
-pub use twine::Twine;
+pub use twine::{Twine, TwineError};
