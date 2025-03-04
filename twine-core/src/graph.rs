@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use std::collections::HashMap;
 
 use petgraph::{
@@ -7,12 +5,12 @@ use petgraph::{
     graph::{DiGraph, NodeIndex},
 };
 
+/// A directed graph representing connections between components.
 pub struct ComponentGraph {
     graph: DiGraph<String, Connection>,
     node_map: HashMap<String, NodeIndex>,
 }
 
-/// A directed graph representing connections between components.
 impl ComponentGraph {
     /// Creates an empty component graph.
     #[must_use]
@@ -48,6 +46,10 @@ impl ComponentGraph {
     ///
     /// let mut graph = ComponentGraph::new();
     ///
+    /// // This establishes the following dependencies:
+    /// // - "comp_b.in" depends on "comp_a.out_1"
+    /// // - "comp_c.in_1" depends on "comp_a.out_2"
+    /// // - "comp_c.in_2" depends on "comp_b.out"
     /// graph.connect(("comp_a", "out_1"), ("comp_b", "in"));
     /// graph.connect(("comp_a", "out_2"), ("comp_c", "in_1"));
     /// graph.connect(("comp_b", "out"), ("comp_c", "in_2"));
@@ -63,7 +65,7 @@ impl ComponentGraph {
             .add_edge(source_index, target_index, Connection { source, target });
     }
 
-    /// Returns an iterator over component names in a valid execution order.
+    /// Returns an iterator over component names in a valid call order.
     ///
     /// This method performs a topological sort of the component graph, ensuring
     /// that each component appears only after all its dependencies.
