@@ -17,6 +17,7 @@ pub(crate) struct Parsed {
 }
 
 impl Parse for Parsed {
+    /// Parses a struct definition and validates constraints.
     fn parse(input: ParseStream) -> Result<Self> {
         let ItemStruct {
             attrs,
@@ -58,6 +59,7 @@ impl Parse for Parsed {
 }
 
 impl Parsed {
+    /// Generates the full token stream for the macro expansion.
     pub fn generate_code(self) -> TokenStream {
         let generic_struct = self.generate_generic_struct();
         let types_trait = self.generate_types_trait();
@@ -70,6 +72,7 @@ impl Parsed {
         }
     }
 
+    /// Generates a generic struct with type parameters for each field.
     fn generate_generic_struct(&self) -> TokenStream {
         let Self {
             attrs,
@@ -99,6 +102,7 @@ impl Parsed {
         }
     }
 
+    /// Generates a trait that exposes the original field types.
     fn generate_types_trait(&self) -> TokenStream {
         let Self { vis, ident, .. } = self;
 
@@ -134,6 +138,7 @@ impl Parsed {
         }
     }
 
+    /// Implements the `Composable` trait for the concrete struct.
     fn generate_impl_composable(&self) -> TokenStream {
         let Self { ident, .. } = self;
 
@@ -157,6 +162,7 @@ impl Parsed {
         }
     }
 
+    /// Iterates over struct fields and generates generic type names.
     fn iter_fields_as_generics(&self) -> impl Iterator<Item = Ident> + '_ {
         self.fields.named.iter().map(|field| {
             field
@@ -167,6 +173,7 @@ impl Parsed {
         })
     }
 
+    /// Iterates over struct fields and returns their original types.
     fn iter_fields_as_types(&self) -> impl Iterator<Item = Type> + '_ {
         self.fields.named.iter().map(|field| field.ty.clone())
     }
@@ -181,6 +188,7 @@ mod tests {
     #[test]
     fn generates_correct_code() {
         let input = "
+            /// The components in my model.
             pub struct MyComponents {
                 add_one: Adder<f64>,
                 pub(super) add_two: Adder<f64>,
@@ -192,6 +200,7 @@ mod tests {
         let generated_code = parsed.generate_code();
 
         let expected_code = quote! {
+            #[doc = " The components in my model."]
             pub struct MyComponents<AddOne, AddTwo, Math> {
                 add_one: AddOne,
                 pub(super) add_two: AddTwo,
