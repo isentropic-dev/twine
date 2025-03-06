@@ -1,9 +1,10 @@
 #![allow(dead_code)]
 
 use twine_components::example::math::{Adder, Arithmetic, ArithmeticInput};
-use twine_macros::compose;
+use twine_core::Composable;
+use twine_macros::composable;
 
-#[compose]
+#[composable]
 struct Composed {
     add_one: Adder<f64>,
     add_two: Adder<f64>,
@@ -16,6 +17,8 @@ struct Input {
     y: f64,
 }
 
+type ComposedAlias = Composed<Adder<f64>, Adder<f64>, Arithmetic, Arithmetic>;
+
 // This function demonstrates how component names like `add_one` can be used in
 // different contexts, whether as their input type or output type. It enables
 // full LSP support for renaming and "Go to Definition," making the code easier
@@ -25,7 +28,10 @@ struct Input {
 // Rust code. Another macro can parse these connections to generate a dependency
 // graph and determine the correct call order, ensuring each component has the
 // necessary values available before being called.
-fn connect(input: &Input, output: &ComposedOutputs) -> ComposedInputs {
+fn connect(
+    input: &Input,
+    output: &<ComposedAlias as Composable>::Outputs,
+) -> <ComposedAlias as Composable>::Inputs {
     Composed {
         add_one: input.x,
         add_two: input.y,
