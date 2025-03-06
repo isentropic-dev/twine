@@ -10,10 +10,4 @@ readme = "../README.md"
 keywords = ["twine", "framework", "functional", "composable", "modeling"]
 
 [dependencies]
-twine-macros = { version = "0.1", path = "../twine-macros", optional = true }
-serde = { version = "1.0", features = ["derive"], optional = true }
-
-[features]
-default = ["macros", "serde-derive"]
-macros = ["dep:twine-macros"]
-serde-derive = ["dep:serde", "twine-macros?/serde-derive"]
+petgraph = "0.7.1"

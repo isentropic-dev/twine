@@ -67,6 +67,7 @@ dependencies = [
  "toml",
  "twine-components",
  "twine-core",
+ "twine-macros",
 ]
 
 [[package]]
@@ -297,8 +298,7 @@ dependencies = [
 name = "twine-core"
 version = "0.1.1"
 dependencies = [
- "serde",
- "twine-macros",
+ "petgraph",
 ]
 
 [[package]]
