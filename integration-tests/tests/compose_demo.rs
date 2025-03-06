@@ -1,47 +1,93 @@
-#![allow(dead_code)]
-
 use twine_components::example::math::{Adder, Arithmetic, ArithmeticInput};
-use twine_core::Composable;
-use twine_macros::composable;
+use twine_macros::{composable, compose};
 
+/// The components to compose.
 #[composable]
-struct Composed {
+struct MathComponents {
     add_one: Adder<f64>,
     add_two: Adder<f64>,
-    first_math: Arithmetic,
-    second_math: Arithmetic,
+    math: Arithmetic,
 }
 
+/// The input type for the composed component.
 struct Input {
     x: f64,
     y: f64,
 }
 
-type ComposedAlias = Composed<Adder<f64>, Adder<f64>, Arithmetic, Arithmetic>;
+/// A different input type.
+struct OtherInput {
+    value: f64,
+}
 
-// This function demonstrates how component names like `add_one` can be used in
-// different contexts, whether as their input type or output type. It enables
-// full LSP support for renaming and "Go to Definition," making the code easier
-// to navigate and modify.
-//
-// This approach allows users to define component connections using regular
-// Rust code. Another macro can parse these connections to generate a dependency
-// graph and determine the correct call order, ensuring each component has the
-// necessary values available before being called.
-fn connect(
-    input: &Input,
-    output: &<ComposedAlias as Composable>::Outputs,
-) -> <ComposedAlias as Composable>::Inputs {
-    Composed {
+/// The composed math component.
+#[compose(MathExample)]
+fn compose() {
+    type Input = Input;
+    type Components = MathComponents;
+
+    Connections {
         add_one: input.x,
         add_two: input.y,
-        first_math: ArithmeticInput {
+        math: ArithmeticInput {
             x: output.add_one,
             y: output.add_two,
         },
-        second_math: ArithmeticInput {
-            x: output.first_math.sum,
-            y: output.add_one,
+    }
+}
+
+/// A different composed component using the same components.
+#[compose(OtherExample)]
+fn compose() {
+    type Input = OtherInput;
+    type Components = MathComponents;
+
+    Connections {
+        add_one: output.math.sum,
+        add_two: output.math.product,
+        math: ArithmeticInput {
+            x: input.value,
+            y: input.value,
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use twine_core::Component;
+
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn call_math_example() {
+        let math = MathExample::new(MathComponents {
+            add_one: Adder::new(1.0),
+            add_two: Adder::new(2.0),
+            math: Arithmetic,
+        });
+
+        let output = math.call(Input { x: 10., y: 20. }).unwrap();
+
+        assert_eq!(output.add_one, 11.0);
+        assert_eq!(output.add_two, 22.0);
+        assert_eq!(output.math.sum, 33.0);
+    }
+
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn call_other_example() {
+        let other = OtherExample::new(MathComponents {
+            add_one: Adder::new(1.0),
+            add_two: Adder::new(2.0),
+            math: Arithmetic,
+        });
+
+        let output = other.call(OtherInput { value: 5.0 }).unwrap();
+
+        assert_eq!(output.math.sum, 10.0);
+        assert_eq!(output.math.product, 25.0);
+        assert_eq!(output.add_one, 11.0);
+        assert_eq!(output.add_two, 27.0);
     }
 }

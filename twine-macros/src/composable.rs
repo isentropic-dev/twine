@@ -60,15 +60,13 @@ impl Parse for Parsed {
 
 impl Parsed {
     /// Generates the full token stream for the macro expansion.
-    pub fn generate_code(self) -> TokenStream {
+    pub fn expand(self) -> TokenStream {
         let generic_struct = self.generate_generic_struct();
         let types_trait = self.generate_types_trait();
-        let impl_composable = self.generate_impl_composable();
 
         quote! {
             #generic_struct
             #types_trait
-            #impl_composable
         }
     }
 
@@ -107,40 +105,11 @@ impl Parsed {
         let Self { vis, ident, .. } = self;
 
         let trait_name = ident.with_suffix("Types");
-        let trait_doc = format!(r" Provides access to the original field types of `{ident}`.");
+        let trait_doc = format!("Provides access to the original field types of `{ident}`.");
 
-        let associated_types = self.iter_fields_as_generics().map(|generic_param| {
+        let field_types = self.iter_fields_as_generics().map(|generic_param| {
             quote! { type #generic_param; }
         });
-
-        let comp_types = self.iter_fields_as_types().map(|comp_type| {
-            quote! { #comp_type }
-        });
-
-        let impl_associated_types = self
-            .iter_fields_as_generics()
-            .zip(self.iter_fields_as_types())
-            .map(|(generic_param, comp_type)| {
-                quote! { type #generic_param = #comp_type; }
-            });
-
-        quote! {
-            #[doc = #trait_doc]
-            #vis trait #trait_name {
-                type __Alias;
-                #(#associated_types)*
-            }
-
-            impl #trait_name for () {
-                type __Alias = #ident<#(#comp_types),*>;
-                #(#impl_associated_types)*
-            }
-        }
-    }
-
-    /// Implements the `Composable` trait for the concrete struct.
-    fn generate_impl_composable(&self) -> TokenStream {
-        let Self { ident, .. } = self;
 
         let comp_types = self.iter_fields_as_types().map(|comp_type| {
             quote! { #comp_type }
@@ -154,10 +123,27 @@ impl Parsed {
             quote! { <#comp_type as twine_core::Component>::Output}
         });
 
+        let impl_associated_types = self
+            .iter_fields_as_generics()
+            .zip(self.iter_fields_as_types())
+            .map(|(generic_param, comp_type)| {
+                quote! { type #generic_param = #comp_type; }
+            });
+
         quote! {
-            impl twine_core::Composable for #ident<#(#comp_types),*> {
-                type Inputs = #ident<#(#input_types),*>;
-                type Outputs = #ident<#(#output_types),*>;
+            #[doc = #trait_doc]
+            #vis trait #trait_name {
+                type __Concrete;
+                type __Inputs;
+                type __Outputs;
+                #(#field_types)*
+            }
+
+            impl #trait_name for () {
+                type __Concrete = #ident<#(#comp_types),*>;
+                type __Inputs = #ident<#(#input_types),*>;
+                type __Outputs = #ident<#(#output_types),*>;
+                #(#impl_associated_types)*
             }
         }
     }
@@ -197,7 +183,7 @@ mod tests {
         ";
 
         let parsed = parse_str::<Parsed>(input).expect("Parsing should succeed");
-        let generated_code = parsed.generate_code();
+        let generated_code = parsed.expand();
 
         let expected_code = quote! {
             #[doc = " The components in my model."]
@@ -207,33 +193,31 @@ mod tests {
                 pub(crate) math: Math
             }
 
-            #[doc = " Provides access to the original field types of `MyComponents`."]
+            #[doc = "Provides access to the original field types of `MyComponents`."]
             pub trait MyComponentsTypes {
-                type __Alias;
+                type __Concrete;
+                type __Inputs;
+                type __Outputs;
                 type AddOne;
                 type AddTwo;
                 type Math;
             }
 
             impl MyComponentsTypes for () {
-                type __Alias = MyComponents<Adder<f64>, Adder<f64>, Arithmetic>;
-                type AddOne = Adder<f64>;
-                type AddTwo = Adder<f64>;
-                type Math = Arithmetic;
-            }
-
-            impl twine_core::Composable for MyComponents<Adder<f64>, Adder<f64>, Arithmetic> {
-                type Inputs = MyComponents<
+                type __Concrete = MyComponents<Adder<f64>, Adder<f64>, Arithmetic>;
+                type __Inputs = MyComponents<
                     <Adder<f64> as twine_core::Component>::Input,
                     <Adder<f64> as twine_core::Component>::Input,
                     <Arithmetic as twine_core::Component>::Input
                 >;
-
-                type Outputs = MyComponents<
+                type __Outputs = MyComponents<
                     <Adder<f64> as twine_core::Component>::Output,
                     <Adder<f64> as twine_core::Component>::Output,
                     <Arithmetic as twine_core::Component>::Output
                 >;
+                type AddOne = Adder<f64>;
+                type AddTwo = Adder<f64>;
+                type Math = Arithmetic;
             }
         };
 
@@ -242,48 +226,46 @@ mod tests {
 
     #[test]
     fn error_if_attributes_are_present() {
-        let input = "
-            #[derive(Debug)]
+        let error_message = parse_str::<Parsed>(
+            "#[derive(Debug)]
             struct ComponentsWithAttributes {
                 comp: SomeComp,
-            }
-        ";
+            }",
+        )
+        .unwrap_err()
+        .to_string();
 
-        let err = parse_str::<Parsed>(input).expect_err("Parsing should fail");
-
-        assert!(
-            err.to_string()
-                .contains("Only doc attributes (`///`) are allowed."),
-            "Unexpected error message: {err}"
+        assert_eq!(
+            error_message,
+            "Only doc attributes (`///`) are allowed. Remove other attributes to use this macro."
         );
     }
 
     #[test]
     fn error_if_tuple_struct() {
-        let input = "struct TupleComponents(i32, f64);";
+        let error_message = parse_str::<Parsed>("struct TupleComponents(i32, f64);")
+            .unwrap_err()
+            .to_string();
 
-        let err = parse_str::<Parsed>(input).expect_err("Parsing should fail");
-
-        assert!(
-            err.to_string().contains("Unsupported struct type"),
-            "Unexpected error message: {err}"
+        assert_eq!(
+            error_message,
+            "Unsupported struct type. This macro requires a struct with named fields."
         );
     }
 
     #[test]
     fn error_if_generics_are_present() {
-        let input = "
-            struct ComponentsWithGenerics<T> {
+        let error_message = parse_str::<Parsed>(
+            "struct ComponentsWithGenerics<T> {
                 comp: T,
-            }
-        ";
+            }",
+        )
+        .unwrap_err()
+        .to_string();
 
-        let err = parse_str::<Parsed>(input).expect_err("Parsing should fail");
-
-        assert!(
-            err.to_string()
-                .contains("Generic parameters are not allowed"),
-            "Unexpected error message: {err}"
+        assert_eq!(
+            error_message,
+            "Generic parameters are not allowed. Remove them to use this macro."
         );
     }
 }

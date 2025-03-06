@@ -10,11 +10,16 @@ readme = "../README.md"
 keywords = ["twine", "macros", "proc-macro"]
 
 [dependencies]
-itertools = "0.14.0"
+twine-core = { version = "0.1", path = "../twine-core" }
 petgraph = "0.7.1"
 proc-macro2 = "1.0"
 quote = "1.0"
-syn = { version = "2.0", features = ["full", "extra-traits"] }
+syn = { version = "2.0", features = [
+  "full",
+  "extra-traits",
+  "visit",
+  "visit-mut",
+] }
 serde = { version = "1.0", features = ["derive"], optional = true }
 heck = "0.5.0"
 
@@ -23,6 +28,7 @@ proc-macro = true
 doctest = false
 
 [dev-dependencies]
+itertools = "0.14.0"
 prettyplease = "0.2.29"
 
 [features]

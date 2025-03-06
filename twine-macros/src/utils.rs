@@ -8,7 +8,6 @@ pub(crate) trait IdentExt {
     fn upper_camel_case(&self) -> Ident;
 
     /// Returns a new identifier with the given prefix.
-    #[allow(dead_code)]
     fn with_prefix(&self, prefix: &str) -> Ident;
 
     /// Returns a new identifier with the given suffix.
