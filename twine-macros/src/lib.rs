@@ -1,4 +1,5 @@
 mod composable;
+mod compose;
 mod utils;
 
 use proc_macro::TokenStream;
@@ -6,56 +7,59 @@ use syn::parse_macro_input;
 
 /// Converts a struct of named components into a composable template.
 ///
-/// This macro transforms a struct that defines component types into a generic
-/// template while preserving those types via an associated trait. It enables
-/// type-safe composition by generating a trait-based mapping of field types
-/// and implementing `twine_core::Composable` for the generic struct with type
-/// parameters corresponding to the original component types.
+/// This macro simplifies component-based model creation by transforming a
+/// struct into a generic template and automatically generating a trait that
+/// defines associated type mappings. This approach facilitates type-safe and
+/// flexible composition of components.
 ///
-/// ## What This Macro Does
+/// When applied to a struct, this macro:
 ///
-/// - Replaces the original struct with a generic `{StructName}`.
-/// - Generates `{StructName}Types`, a trait that exposes original field types.
-/// - Implements `{StructName}Types` for `()`, enabling type lookup from the trait alone.
-/// - Implements `twine_core::Composable` on the generic version of the struct, defining:
-///   - `Inputs`: `{StructName}` where fields use `<CompType as Component>::Input`.
-///   - `Outputs`: `{StructName}` where fields use `<CompType as Component>::Output`.
+/// - Replaces the original struct with a generic version (`{StructName}`).
+/// - Generates a trait (`{StructName}Types`) that preserves the original field
+///   types and provides aliases to common struct variants.
 ///
 /// ## Naming Conventions
 ///
-/// - `{StructName}`: The transformed generic struct.
-/// - `{StructName}Types`: The trait that maps field names to types.
-/// - Generic parameters and the associated types in `{StructName}Types` use the
-///   corresponding field names, converted to `UpperCamelCase`.
+/// - `{StructName}`: The generic version of the struct.
+/// - `{StructName}Types`: A trait exposing:
+///   - Associated types for each original field.
+///   - Additional type aliases:
+///     - `__Concrete`: The original struct type with concrete component types.
+///     - `__Inputs`: A struct variant with fields using `<CompType as Component>::Input`.
+///     - `__Outputs`: A struct variant with fields using `<CompType as Component>::Output`.
 ///
-/// ## Usage
+/// Field names are transformed into `UpperCamelCase` for generic parameters and
+/// associated types.
 ///
-/// `{StructName}Types` allows accessing individual component types generically:
+/// ## Restrictions
+///
+/// - Structs must use named fields.
+/// - Field types must implement `twine_core::Component`.
+/// - Only documentation attributes (`///`) are permitted.
+/// - Generic parameters are not supported.
+///
+/// ## Types Trait Usage
+///
+/// Access original field types generically:
 ///
 /// ```ignore
 /// type AddOneType = <() as MyComponentsTypes>::AddOne;
-/// let _x: AddOneType = Adder::new(1);
+/// let adder: AddOneType = Adder::new(1);
 ///
-/// // Access the fully composed struct.
-/// type ConcreteAlias = <() as MyComponentsTypes>::__Alias;
-/// let instance: ConcreteAlias = MyComponents {
+/// // Access the concrete composed struct.
+/// type Concrete = <() as MyComponentsTypes>::__Concrete;
+/// let components: Concrete = MyComponents {
 ///     add_one: Adder::new(1),
 ///     add_two: Adder::new(2),
 ///     math: Arithmetic,
 /// };
 /// ```
 ///
-/// ## Restrictions
-///
-/// - The struct must use named fields.
-/// - All field types must implement `twine_core::Component`.
-/// - Attributes other than documentation comments are not allowed.
-/// - Generic parameters cannot be used.
-///
 /// ## Example
 ///
-/// ### Before
-/// ```
+/// ### Input
+///
+/// ```ignore
 /// #[composable]
 /// pub struct MyComponents {
 ///     pub add_one: Adder<f64>,
@@ -64,8 +68,9 @@ use syn::parse_macro_input;
 /// }
 /// ```
 ///
-/// ### After Macro Expansion
-/// ```
+/// ### Expanded
+///
+/// ```ignore
 /// pub struct MyComponents<AddOne, AddTwo, Math> {
 ///     pub add_one: AddOne,
 ///     pub add_two: AddTwo,
@@ -73,35 +78,98 @@ use syn::parse_macro_input;
 /// }
 ///
 /// pub trait MyComponentsTypes {
-///     type __Alias;
+///     type __Concrete;
+///     type __Inputs;
+///     type __Outputs;
 ///     type AddOne;
 ///     type AddTwo;
 ///     type Math;
 /// }
 ///
 /// impl MyComponentsTypes for () {
-///     type __Alias = MyComponents<Adder<f64>, Adder<f64>, Arithmetic>;
-///     type AddOne = Adder<f64>;
-///     type AddTwo = Adder<f64>;
-///     type Math = Arithmetic;
-/// }
+///     type __Concrete = MyComponents<
+///         Adder<f64>,
+///         Adder<f64>,
+///         Arithmetic
+///     >;
 ///
-/// impl twine_core::Composable for MyComponents<Adder<f64>, Adder<f64>, Arithmetic> {
-///     type Inputs = MyComponents<
+///     type __Inputs = MyComponents<
 ///         <Adder<f64> as twine_core::Component>::Input,
 ///         <Adder<f64> as twine_core::Component>::Input,
 ///         <Arithmetic as twine_core::Component>::Input
 ///     >;
 ///
-///     type Outputs = MyComponents<
+///     type __Outputs = MyComponents<
 ///         <Adder<f64> as twine_core::Component>::Output,
 ///         <Adder<f64> as twine_core::Component>::Output,
 ///         <Arithmetic as twine_core::Component>::Output
 ///     >;
+///
+///     type AddOne = Adder<f64>;
+///     type AddTwo = Adder<f64>;
+///     type Math = Arithmetic;
 /// }
 /// ```
 #[proc_macro_attribute]
 pub fn composable(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let parsed = parse_macro_input!(item as composable::Parsed);
-    parsed.generate_code().into()
+    parsed.expand().into()
+}
+
+/// Creates a component from multiple `#[composable]` components.
+///
+/// This macro generates a concrete struct implementing `twine_core::Component`.
+/// The generated component wraps an internal `twine_core::Twine` chain,
+/// automatically managing component execution order based on user-specified
+/// connections between the top-level input and component outputs.
+///
+/// ## Restrictions
+///
+/// - Exactly two type aliases must be defined:
+///   - `Input`: The top-level input type.
+///   - `Components`: References a struct previously defined with `#[composable]`.
+/// - Connection expressions may only reference fields from:
+///   - The top-level `input`, or
+///   - Outputs from other components (`output.{component_name}`).
+/// - All referenced components must implement `twine_core::Component`.
+/// - Cyclic dependencies between components are not currently permitted.
+///
+/// ## Example
+///
+/// ```ignore
+/// #[composable]
+/// pub struct CalcComponents {
+///     pub adder: Adder<i32>,
+///     pub multiplier: Multiplier<i32>,
+/// }
+///
+/// pub struct CalcInput {
+///     value: i32,
+/// }
+///
+/// #[compose(Calculator)]
+/// fn compose() {
+///     type Input = CalcInput;
+///     type Components = CalcComponents;
+///
+///     Connections {
+///         adder: input.value,
+///         multiplier: output.adder,
+///     }
+/// }
+///
+/// let calculator = Calculator::new(CalcComponents {
+///     adder: Adder::new(1),
+///     multiplier: Multiplier::new(2),
+/// });
+///
+/// let result = calculator.call(CalcInput { value: 10 }).unwrap();
+/// ```
+#[proc_macro_attribute]
+pub fn compose(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let parsed = compose::Parsed::new(
+        parse_macro_input!(attr as compose::ParsedAttr),
+        parse_macro_input!(item as compose::ParsedItem),
+    );
+    parsed.try_expand().unwrap_or_else(|err| err).into()
 }
