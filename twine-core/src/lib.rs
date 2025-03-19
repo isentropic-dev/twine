@@ -1,6 +1,5 @@
 mod component;
 pub mod graph;
-pub mod legacy;
 mod twine;
 
 pub use component::Component;

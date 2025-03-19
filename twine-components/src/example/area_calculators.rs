@@ -1,7 +1,7 @@
-use std::f64::consts::PI;
+use std::{convert::Infallible, f64::consts::PI};
 
 use serde::{Deserialize, Serialize};
-use twine_core::legacy::Component;
+use twine_core::Component;
 use uom::si::f64::{Area, Length};
 
 /// Component for calculating the area of a circle.
@@ -34,26 +34,26 @@ pub struct Output {
 }
 
 impl Component for CircleArea {
-    type Config = ();
     type Input = CircleInput;
     type Output = Output;
+    type Error = Infallible;
 
-    fn create(_config: Self::Config) -> impl Fn(Self::Input) -> Self::Output {
-        |input| Self::Output {
+    fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
+        Ok(Self::Output {
             area: PI * input.radius * input.radius,
-        }
+        })
     }
 }
 
 impl Component for RectangleArea {
-    type Config = ();
     type Input = RectangleInput;
     type Output = Output;
+    type Error = Infallible;
 
-    fn create(_config: Self::Config) -> impl Fn(Self::Input) -> Self::Output {
-        |input| Self::Output {
+    fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
+        Ok(Self::Output {
             area: input.length * input.width,
-        }
+        })
     }
 }
 
@@ -69,13 +69,11 @@ mod tests {
 
     #[test]
     fn circle_area_calculator() {
-        let circle_area_fn = CircleArea::create(());
-
         let input = CircleInput {
             radius: Length::new::<kilometer>(1.0),
         };
 
-        let output = circle_area_fn(input);
+        let output = CircleArea.call(input).unwrap();
         let square_miles = output.area.get::<square_mile>();
 
         assert_relative_eq!(square_miles, 1.212_976, epsilon = 1e-6);
@@ -83,14 +81,12 @@ mod tests {
 
     #[test]
     fn rectangle_area_calculator() {
-        let rectangle_area_fn = RectangleArea::create(());
-
         let input = RectangleInput {
             length: Length::new::<inch>(3.0),
             width: Length::new::<foot>(1.0),
         };
 
-        let output = rectangle_area_fn(input);
+        let output = RectangleArea.call(input).unwrap();
         let square_ft = output.area.get::<square_foot>();
         let square_cm = output.area.get::<square_centimeter>();
 
