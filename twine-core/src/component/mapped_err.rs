@@ -5,9 +5,6 @@ use super::Component;
 /// A wrapper that transforms a component’s error type.
 ///
 /// Internally used by `.map_err()` to map one error type to another.
-///
-/// Ensures that error type transformation remains type-safe and allows errors
-/// to be adapted without modifying the component’s input or output types.
 pub(crate) struct MappedErr<C, ErrorMap, NewError>
 where
     C: Component,
@@ -45,10 +42,8 @@ where
     type Output = C::Output;
     type Error = NewError;
 
-    /// Calls the wrapped component and applies the error transformation.
+    /// Calls the wrapped component and transforms the error.
     fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
-        self.component
-            .call(input)
-            .map_err(|err| (self.error_map)(err))
+        self.component.call(input).map_err(&self.error_map)
     }
 }
