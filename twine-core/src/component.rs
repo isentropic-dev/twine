@@ -2,6 +2,8 @@ mod chain;
 mod inspect;
 mod mapped;
 mod mapped_err;
+mod mapped_input;
+mod mapped_output;
 
 /// The core trait for defining components in Twine.
 ///
@@ -181,6 +183,52 @@ pub trait Component {
         OutputMap: Fn(In, Self::Output) -> Out,
     {
         mapped::Mapped::new(self, input_map, output_map)
+    }
+
+    /// Transforms this component’s input type.
+    ///
+    /// This method adapts the component to accept a different input type by
+    /// mapping it into the original input type.
+    ///
+    /// # Parameters
+    ///
+    /// - `input_map`: A function that maps the new input type to the original input type.
+    ///
+    /// # Returns
+    ///
+    /// A new component with a transformed input type, preserving the output and error types.
+    fn map_input<InputMap, NewInput>(
+        self,
+        input_map: InputMap,
+    ) -> impl Component<Input = NewInput, Output = Self::Output, Error = Self::Error>
+    where
+        Self: Sized,
+        InputMap: Fn(NewInput) -> Self::Input,
+    {
+        mapped_input::MappedInput::new(self, input_map)
+    }
+
+    /// Transforms this component’s output type.
+    ///
+    /// This method adapts the component to produce a different output type by
+    /// mapping the result after execution.
+    ///
+    /// # Parameters
+    ///
+    /// - `output_map`: A function that maps the original output type to the new one.
+    ///
+    /// # Returns
+    ///
+    /// A new component with a transformed output type, preserving the input and error types.
+    fn map_output<OutputMap, NewOutput>(
+        self,
+        output_map: OutputMap,
+    ) -> impl Component<Input = Self::Input, Output = NewOutput, Error = Self::Error>
+    where
+        Self: Sized,
+        OutputMap: Fn(Self::Output) -> NewOutput,
+    {
+        mapped_output::MappedOutput::new(self, output_map)
     }
 
     /// Transforms this component’s error into a different type.
@@ -417,6 +465,28 @@ mod tests {
                 is_even: true,
             }
         );
+    }
+
+    #[test]
+    fn map_input_transforms_component_input() {
+        struct Wrapper {
+            inner: i32,
+        }
+
+        let adapted = Doubler.map_input(|wrapper: Wrapper| wrapper.inner);
+
+        let input = Wrapper { inner: 21 };
+        let output = adapted.call(input).unwrap();
+
+        assert_eq!(output, 42);
+    }
+
+    #[test]
+    fn map_output_transforms_component_output() {
+        let double_to_string = Doubler.map_output(|output| format!("Doubled to: {output}"));
+
+        let output = double_to_string.call(7).unwrap();
+        assert_eq!(output, "Doubled to: 14");
     }
 
     #[test]
