@@ -26,8 +26,10 @@ mod mapped_output;
 /// ## Adapting Components
 ///
 /// Components can be customized with:
-/// - [`Component::map()`] – Modify inputs and outputs.
-/// - [`Component::map_err()`] – Transform error types.
+/// - [`Component::map()`] – Transform input and output types together.
+/// - [`Component::map_input()`] – Transform the input type.
+/// - [`Component::map_output()`] – Transform the output type.
+/// - [`Component::map_err()`] – Transform the error type.
 /// - [`Component::inspect()`] – Observe calls without changing behavior.
 ///
 /// These utilities enable components to integrate smoothly into larger workflows.
@@ -102,17 +104,22 @@ pub trait Component {
 
     /// Transforms this component’s input and output types.
     ///
-    /// This method adapts this component to work in contexts where the input
-    /// and output types differ.
+    /// This method adapts the component to work in contexts where the input and
+    /// output types differ.
+    ///
+    /// Unlike [`map_input`] and [`map_output`], this method provides access to
+    /// the new input value when transforming the component’s output, making it
+    /// ideal for carrying input context forward into the output.
     ///
     /// # Parameters
     ///
-    /// - `input_map`: Extracts this component’s input from another type.
-    /// - `output_map`: Transforms this component’s output into the desired type.
+    /// - `input_map`: Extracts the component’s input from a reference to the new input.
+    /// - `output_map`: Produces the new output from the new input and the component’s output.
     ///
     /// # Returns
     ///
-    /// A new component with transformed input and output, keeping the same error type.
+    /// A new component with transformed input and output types, preserving the
+    /// original error type.
     ///
     /// # Example
     ///
@@ -188,15 +195,16 @@ pub trait Component {
     /// Transforms this component’s input type.
     ///
     /// This method adapts the component to accept a different input type by
-    /// mapping it into the original input type.
+    /// converting it into the type expected by the component.
     ///
     /// # Parameters
     ///
-    /// - `input_map`: A function that maps the new input type to the original input type.
+    /// - `input_map`: Converts the new input into the component’s input type.
     ///
     /// # Returns
     ///
-    /// A new component with a transformed input type, preserving the output and error types.
+    /// A new component with a transformed input type, preserving the output and
+    /// error types.
     fn map_input<InputMap, NewInput>(
         self,
         input_map: InputMap,
@@ -211,15 +219,16 @@ pub trait Component {
     /// Transforms this component’s output type.
     ///
     /// This method adapts the component to produce a different output type by
-    /// mapping the result after execution.
+    /// converting the result after execution.
     ///
     /// # Parameters
     ///
-    /// - `output_map`: A function that maps the original output type to the new one.
+    /// - `output_map`: Converts the component’s output into the new output type.
     ///
     /// # Returns
     ///
-    /// A new component with a transformed output type, preserving the input and error types.
+    /// A new component with a transformed output type, preserving the input and
+    /// error types.
     fn map_output<OutputMap, NewOutput>(
         self,
         output_map: OutputMap,
@@ -231,11 +240,18 @@ pub trait Component {
         mapped_output::MappedOutput::new(self, output_map)
     }
 
-    /// Transforms this component’s error into a different type.
+    /// Transforms this component’s error type.
+    ///
+    /// This method adapts the component by converting its error into a different type.
+    ///
+    /// # Parameters
+    ///
+    /// - `error_map`: Converts the component’s error into the new error type.
     ///
     /// # Returns
     ///
-    /// A new component with the same input and output types but a transformed error type.
+    /// A new component with a transformed error type, preserving the input and
+    /// output types.
     fn map_err<ErrorMap, NewError>(
         self,
         error_map: ErrorMap,
