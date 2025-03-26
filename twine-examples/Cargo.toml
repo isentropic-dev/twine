@@ -1,0 +1,15 @@
+[package]
+name = "twine-examples"
+version = "0.1.1"
+edition = "2021"
+license = "MIT"
+authors = ["Isentropic Development <info@isentropic.dev>"]
+description = "Example applications for Twine, a Rust framework for functional and composable system modeling."
+repository = "https://github.com/isentropic-dev/twine"
+readme = "../README.md"
+keywords = ["twine", "framework", "functional", "composable", "modeling", "examples", "demo"]
+
+[dependencies]
+twine-core = { path = "../twine-core" }
+twine-components = { path = "../twine-components" }
+twine-macros = { path = "../twine-macros" }
