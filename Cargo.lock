@@ -152,16 +152,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "prettyplease"
-version = "0.2.29"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6924ced06e1f7dfe3fa48d57b9f74f55d8915f5036121bef647ef4b204895fac"
-dependencies = [
- "proc-macro2",
- "syn",
-]
-
-[[package]]
 name = "proc-macro2"
 version = "1.0.93"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -311,11 +301,8 @@ version = "0.1.1"
 dependencies = [
  "heck",
  "itertools",
- "petgraph",
- "prettyplease",
  "proc-macro2",
  "quote",
- "serde",
  "syn",
  "twine-core",
 ]
