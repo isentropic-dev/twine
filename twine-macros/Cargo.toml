@@ -7,7 +7,7 @@ authors = ["Isentropic Development <info@isentropic.dev>"]
 description = "Macros for Twine, a Rust framework for functional and composable system modeling."
 repository = "https://github.com/isentropic-dev/twine"
 readme = "../README.md"
-keywords = ["twine", "macros", "proc-macro"]
+keywords = ["twine", "framework", "functional", "composable", "modeling", "macros", "proc-macro"]
 
 [dependencies]
 twine-core = { version = "0.1", path = "../twine-core" }
