@@ -2,7 +2,7 @@ use ndarray::Array1;
 use ninterp::{
     error::{InterpolateError, ValidateError},
     prelude::{Extrapolate, Interp1DOwned, Interpolator},
-    strategy::{self},
+    strategy,
 };
 use thiserror::Error;
 use twine_core::Component;
