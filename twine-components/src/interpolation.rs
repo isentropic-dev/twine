@@ -1,6 +1,8 @@
+use ndarray::Array1;
 use ninterp::{
     error::{InterpolateError, ValidateError},
     prelude::{Interp1DOwned, Interpolator},
+    strategy,
 };
 use thiserror::Error;
 use twine_core::Component;
@@ -47,62 +49,62 @@ impl<T> From<Extrapolate<T>> for ninterp::interpolator::Extrapolate<T> {
     }
 }
 
-macro_rules! define_interpolators {
-    (
-        $enum_name:ident, $interp_name:ident, $interp_type:ident, $input:ty, $new_fn:ident, $call_fn:ident;
-        $($variant:ident => $strategy:path),+ $(,)?
-    ) => {
-        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        pub enum $enum_name {
-            $($variant),+
-        }
-
-        pub enum $interp_name {
-            $($variant($interp_type<$input, $strategy>)),+
-        }
-
-        impl $interp_name {
-            #[allow(clippy::missing_errors_doc)]
-            pub fn $new_fn<T: Into<ndarray::Array1<$input>>>(
-                x: T,
-                f_x: T,
-                strategy: $enum_name,
-                extrapolate: Extrapolate<$input>,
-            ) -> Result<Self, InterpError> {
-                match strategy {
-                    $($enum_name::$variant => Ok(Self::$variant(
-                        $interp_type::new(x.into(), f_x.into(), $strategy, extrapolate.into())?
-                    )),)+
-                }
-            }
-
-            #[allow(clippy::missing_errors_doc)]
-            pub fn $call_fn(&self, input: $input) -> Result<$input, InterpError> {
-                match self {
-                    $(Self::$variant(i) => i.interpolate(&[input]).map_err(Into::into),)+
-                }
-            }
-        }
-
-        impl Component for $interp_name {
-            type Input = $input;
-            type Output = $input;
-            type Error = InterpError;
-
-            fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
-                self.$call_fn(input)
-            }
-        }
-    };
+#[derive(Debug, Clone, Copy)]
+pub enum Strategy {
+    Linear,
+    Nearest,
+    LeftNearest,
+    RightNearest,
 }
 
-define_interpolators!(
-    Strategy1D, Interp1D, Interp1DOwned, f64, new, interpolate;
-    Linear => ninterp::strategy::Linear,
-    Nearest => ninterp::strategy::Nearest,
-    LeftNearest => ninterp::strategy::LeftNearest,
-    RightNearest => ninterp::strategy::RightNearest,
-);
+pub struct Interp1D(Interp1DOwned<f64, strategy::enums::Strategy1DEnum>);
+
+impl Interp1D {
+    #[allow(clippy::missing_errors_doc)]
+    pub fn new<T: Into<Array1<f64>>>(
+        x: T,
+        f_x: T,
+        strategy: &Strategy,
+        extrapolate: Extrapolate<f64>,
+    ) -> Result<Self, InterpError> {
+        match strategy {
+            Strategy::Linear => Ok(Self(Interp1DOwned::new(
+                x.into(),
+                f_x.into(),
+                ninterp::strategy::Linear.into(),
+                extrapolate.into(),
+            )?)),
+            Strategy::Nearest => Ok(Self(Interp1DOwned::new(
+                x.into(),
+                f_x.into(),
+                ninterp::strategy::Nearest.into(),
+                extrapolate.into(),
+            )?)),
+            Strategy::LeftNearest => Ok(Self(Interp1DOwned::new(
+                x.into(),
+                f_x.into(),
+                ninterp::strategy::LeftNearest.into(),
+                extrapolate.into(),
+            )?)),
+            Strategy::RightNearest => Ok(Self(Interp1DOwned::new(
+                x.into(),
+                f_x.into(),
+                ninterp::strategy::RightNearest.into(),
+                extrapolate.into(),
+            )?)),
+        }
+    }
+}
+
+impl Component for Interp1D {
+    type Input = f64;
+    type Output = f64;
+    type Error = InterpError;
+
+    fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
+        self.0.interpolate(&[input]).map_err(Into::into)
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -113,17 +115,17 @@ mod tests {
     #[test]
     fn strategy_interp_matches_expected_value() {
         let test_cases = [
-            (Strategy1D::Linear, 0.56),
-            (Strategy1D::Nearest, 0.4),
-            (Strategy1D::LeftNearest, 0.4),
-            (Strategy1D::RightNearest, 0.8),
+            (Strategy::Linear, 0.56),
+            (Strategy::Nearest, 0.4),
+            (Strategy::LeftNearest, 0.4),
+            (Strategy::RightNearest, 0.8),
         ];
 
         for (strategy, expected) in test_cases {
             let interp = Interp1D::new(
                 vec![0., 1., 2.],
                 vec![0.0, 0.4, 0.8],
-                strategy,
+                &strategy,
                 Extrapolate::Error,
             )
             .unwrap();
