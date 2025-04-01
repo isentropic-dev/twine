@@ -37,9 +37,9 @@ pub enum Extrapolate<T> {
     Error,
 }
 
-impl<T> Extrapolate<T> {
-    fn ninterp(self) -> ninterp::interpolator::Extrapolate<T> {
-        match self {
+impl<T> From<Extrapolate<T>> for ninterp::interpolator::Extrapolate<T> {
+    fn from(value: Extrapolate<T>) -> Self {
+        match value {
             Extrapolate::Enable => ninterp::interpolator::Extrapolate::Enable,
             Extrapolate::Fill(val) => ninterp::interpolator::Extrapolate::Fill(val),
             Extrapolate::Clamp => ninterp::interpolator::Extrapolate::Clamp,
@@ -62,7 +62,7 @@ impl Interp1D {
             x.into(),
             f_x.into(),
             strategy::Linear,
-            extrapolate.ninterp(),
+            extrapolate.into(),
         )?))
     }
 }
