@@ -1,8 +1,6 @@
-use ndarray::Array1;
 use ninterp::{
     error::{InterpolateError, ValidateError},
     prelude::{Interp1DOwned, Interpolator},
-    strategy,
 };
 use thiserror::Error;
 use twine_core::Component;
@@ -49,75 +47,95 @@ impl<T> From<Extrapolate<T>> for ninterp::interpolator::Extrapolate<T> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Strategy {
-    Linear,
-    Nearest,
-    LeftNearest,
-    RightNearest,
-}
-
-pub enum Interp1D {
-    Linear(Interp1DOwned<f64, strategy::Linear>),
-}
-
-impl Interp1D {
-    #[allow(clippy::missing_errors_doc)]
-    pub fn new<T: Into<Array1<f64>>>(
-        x: T,
-        f_x: T,
-        strategy: Strategy,
-        extrapolate: Extrapolate<f64>,
-    ) -> Result<Self, InterpError> {
-        match strategy {
-            Strategy::Linear => Ok(Self::Linear(Interp1DOwned::new(
-                x.into(),
-                f_x.into(),
-                strategy::Linear,
-                extrapolate.into(),
-            )?)),
-            Strategy::Nearest => todo!(),
-            Strategy::LeftNearest => todo!(),
-            Strategy::RightNearest => todo!(),
+macro_rules! define_interpolators {
+    (
+        $enum_name:ident, $interp_name:ident, $interp_type:ident, $input:ty, $new_fn:ident, $call_fn:ident;
+        $($variant:ident => $strategy:path),+ $(,)?
+    ) => {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        pub enum $enum_name {
+            $($variant),+
         }
-    }
 
-    #[allow(clippy::missing_errors_doc)]
-    pub fn interpolate(&self, x: f64) -> Result<f64, InterpError> {
-        match self {
-            Interp1D::Linear(i) => i.interpolate(&[x]).map_err(Into::into),
+        pub enum $interp_name {
+            $($variant($interp_type<$input, $strategy>)),+
         }
-    }
+
+        impl $interp_name {
+            #[allow(clippy::missing_errors_doc)]
+            pub fn $new_fn<T: Into<ndarray::Array1<$input>>>(
+                x: T,
+                f_x: T,
+                strategy: $enum_name,
+                extrapolate: Extrapolate<$input>,
+            ) -> Result<Self, InterpError> {
+                match strategy {
+                    $($enum_name::$variant => Ok(Self::$variant(
+                        $interp_type::new(x.into(), f_x.into(), $strategy, extrapolate.into())?
+                    )),)+
+                }
+            }
+
+            #[allow(clippy::missing_errors_doc)]
+            pub fn $call_fn(&self, input: $input) -> Result<$input, InterpError> {
+                match self {
+                    $(Self::$variant(i) => i.interpolate(&[input]).map_err(Into::into),)+
+                }
+            }
+        }
+
+        impl Component for $interp_name {
+            type Input = $input;
+            type Output = $input;
+            type Error = InterpError;
+
+            fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
+                self.$call_fn(input)
+            }
+        }
+    };
 }
 
-impl Component for Interp1D {
-    type Input = f64;
-    type Output = f64;
-    type Error = InterpError;
-
-    fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
-        self.interpolate(input)
-    }
-}
+define_interpolators!(
+    Strategy1D, Interp1D, Interp1DOwned, f64, new, interpolate;
+    Linear => ninterp::strategy::Linear,
+    Nearest => ninterp::strategy::Nearest,
+    LeftNearest => ninterp::strategy::LeftNearest,
+    RightNearest => ninterp::strategy::RightNearest,
+);
 
 #[cfg(test)]
 mod tests {
-    use approx::assert_relative_eq;
     use twine_core::Component;
 
     use super::*;
 
     #[test]
-    fn linear_1d_interp() {
-        let linear = Interp1D::new(
-            vec![0., 1., 2.],
-            vec![0.0, 0.4, 0.8],
-            Strategy::Linear,
-            Extrapolate::Error,
-        )
-        .unwrap();
+    fn strategy_interp_matches_expected_value() {
+        let test_cases = [
+            (Strategy1D::Linear, 0.56),
+            (Strategy1D::Nearest, 0.4),
+            (Strategy1D::LeftNearest, 0.4),
+            (Strategy1D::RightNearest, 0.8),
+        ];
 
-        assert_relative_eq!(linear.call(1.4).unwrap(), 0.56);
-        assert!(linear.call(5.).is_err());
+        for (strategy, expected) in test_cases {
+            let interp = Interp1D::new(
+                vec![0., 1., 2.],
+                vec![0.0, 0.4, 0.8],
+                strategy,
+                Extrapolate::Error,
+            )
+            .unwrap();
+
+            let actual = interp.call(1.4).unwrap();
+            assert!(
+                approx::relative_eq!(actual, expected),
+                "strategy {:?} produced wrong result: got {}, expected {}",
+                strategy,
+                actual,
+                expected
+            );
+        }
     }
 }
