@@ -1,0 +1,22 @@
+[package]
+name = "twine-plot"
+version = "0.1.1"
+edition = "2021"
+license = "MIT"
+authors = ["Isentropic Development <info@isentropic.dev>"]
+description = "Plotting utilities for Twine, a Rust framework for functional and composable system modeling."
+repository = "https://github.com/isentropic-dev/twine"
+readme = "../README.md"
+keywords = [
+  "twine",
+  "framework",
+  "functional",
+  "composable",
+  "modeling",
+  "plotting",
+  "visualization",
+]
+
+[dependencies]
+eframe = "0.31.1"
+egui_plot = "0.31.0"
