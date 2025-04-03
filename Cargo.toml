@@ -6,4 +6,5 @@ members = [
   "twine-core",
   "twine-examples",
   "twine-macros",
+  "twine-plot",
 ]
