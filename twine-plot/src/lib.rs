@@ -8,7 +8,7 @@ pub struct PlotApp {
 }
 
 struct Series {
-    label: String,
+    name: String,
     points: Vec<PlotPoint>,
 }
 
@@ -19,9 +19,9 @@ impl PlotApp {
     }
 
     #[must_use]
-    pub fn add_series(mut self, label: &str, points: &[[f64; 2]]) -> Self {
+    pub fn add_series(mut self, name: &str, points: &[[f64; 2]]) -> Self {
         self.series.push(Series {
-            label: label.to_string(),
+            name: name.to_string(),
             points: points.iter().copied().map(Into::into).collect(),
         });
 
@@ -46,7 +46,7 @@ impl eframe::App for PlotApp {
                 .show(ui, |plot_ui| {
                     for series in &self.series {
                         let points = series.points.as_slice();
-                        let name = &series.label;
+                        let name = &series.name;
 
                         plot_ui.line(Line::new(points).name(name));
                     }
