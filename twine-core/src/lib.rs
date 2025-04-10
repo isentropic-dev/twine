@@ -1,6 +1,6 @@
 mod component;
 pub mod graph;
-mod integrate;
+pub mod solve;
 mod twine;
 
 pub use component::Component;
