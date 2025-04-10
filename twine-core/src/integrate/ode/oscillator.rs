@@ -52,6 +52,7 @@ pub(crate) struct Parameters {
 }
 
 /// A component that computes oscillator state derivatives.
+#[derive(Debug)]
 pub(crate) struct Oscillator;
 
 impl Component for Oscillator {
@@ -124,6 +125,7 @@ impl Input {
     }
 }
 
+#[allow(dead_code)]
 impl Derivative {
     /// Creates a derivative using raw SI values (m/s and m/s²).
     pub(crate) fn new_si(position: f64, velocity: f64) -> Self {
