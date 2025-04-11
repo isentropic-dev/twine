@@ -38,7 +38,7 @@ pub struct SolverOutput<C: Integratable<N>, const N: usize> {
     /// Number of times the component was called during integration.
     pub component_calls: u32,
 
-    /// The input provided to the solver, used to reconstruct intermediate inputs.
+    /// The original input, used to reconstruct component inputs from solver states.
     pub initial_conditions: C::Input,
 
     /// The full sequence of integration states produced by the solver.
