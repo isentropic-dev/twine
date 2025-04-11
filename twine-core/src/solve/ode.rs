@@ -3,23 +3,24 @@ use crate::Component;
 /// A trait for components that represent systems of ordinary differential
 /// equations (ODEs) with `N` state variables.
 ///
-/// This trait enables a [`Component`] to be integrated using a numerical ODE
-/// solver by converting between the solver’s [`State<N>`] representation and
+/// This trait enables integration of a [`Component`] using a numerical ODE
+/// solver by mapping between the system’s [`State<N>`], its derivatives, and
 /// the component’s input/output types.
 pub trait Integratable<const N: usize>: Component {
-    /// Applies solver state to initial conditions to produce the component's input.
+    /// Constructs the component's input from the system state and initial conditions.
     ///
-    /// Called at each solver step to update the component input.
+    /// Called at each solver step to update the component's input.
     fn apply_state(initial_conditions: &Self::Input, state: State<N>) -> Self::Input;
 
-    /// Extracts solver state from the component's input.
+    /// Extracts the system state from the component's input.
     ///
-    /// Called once to determine the initial solver state for integration.
+    /// Called once to initialize the state for the solver.
     fn extract_state(input: &Self::Input) -> State<N>;
 
-    /// Extracts state derivatives from the component's output.
+    /// Extracts the state derivatives from the component’s output.
     ///
-    /// Derivatives must match the order of `y` in [`State`].
+    /// Called at each solver step. The order of the returned `dy/dx` values
+    /// must match the order of `y` in [`State<N>`].
     fn extract_derivative(output: &Self::Output) -> [f64; N];
 }
 
@@ -28,7 +29,7 @@ pub trait Integratable<const N: usize>: Component {
 /// This struct holds the independent variable (`x`) and the corresponding
 /// values of the dependent state variables (`y`) at that point.
 ///
-/// The order of `y` defines the meaning of each derivative returned by
+/// The order of `y` must match the order of the derivative values returned by
 /// [`Integratable::extract_derivative`].
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct State<const N: usize> {
