@@ -13,6 +13,8 @@ keywords = ["twine", "framework", "functional", "composable", "modeling", "compo
 twine-core = { version = "0.1", path = "../twine-core" }
 serde = { version = "1.0", features = ["derive"] }
 uom = { version = "0.36.0", features = ["serde"] }
+ode_solvers = "0.6.1"
+thiserror = "2.0.12"
 
 [dev-dependencies]
 approx = "0.5.1"
