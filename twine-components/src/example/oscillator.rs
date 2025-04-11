@@ -1,6 +1,6 @@
 use std::convert::Infallible;
 
-use twine_core::{solve::ode, Component};
+use twine_core::Component;
 use uom::{
     si::{
         acceleration::meter_per_second_squared,
@@ -144,25 +144,6 @@ impl Component for Oscillator {
             velocity,
             acceleration: -stiffness / mass * position,
         })
-    }
-}
-
-impl ode::Integratable<2> for Oscillator {
-    fn apply_state(input: &Self::Input, state: ode::State<2>) -> Self::Input {
-        let position = state.y[0];
-        let velocity = state.y[1];
-        (*input).position_si(position).velocity_si(velocity)
-    }
-
-    fn extract_state(input: &Self::Input) -> ode::State<2> {
-        ode::State {
-            x: 0.0,
-            y: [input.state.position.value, input.state.velocity.value],
-        }
-    }
-
-    fn extract_derivative(output: &Self::Output) -> [f64; 2] {
-        [output.velocity.value, output.acceleration.value]
     }
 }
 

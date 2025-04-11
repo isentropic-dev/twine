@@ -12,24 +12,42 @@ pub struct Solver<C: Integratable<N>, const N: usize> {
     component: C,
 }
 
-/// Input for [`Solver`].
+/// Input for [`Solver::call`].
 #[derive(Debug)]
 pub struct SolverInput<C: Integratable<N>, const N: usize> {
+    /// The initial conditions for integration.
+    ///
+    /// This input defines the initial system [`State`] using
+    /// [`Integratable::extract_state`] and is used to reconstruct component
+    /// inputs during integration with [`Integratable::apply_state`].
     pub initial_conditions: C::Input,
+
+    /// The endpoint of the integration interval.
     pub x_end: f64,
+
+    /// The step size used by the solver.
     pub x_step: f64,
+
+    /// The numerical integration method to use.
     pub method: Method,
 }
 
-/// Output for [`Solver`].
+/// Output for [`Solver::call`].
 #[derive(Debug)]
 pub struct SolverOutput<C: Integratable<N>, const N: usize> {
-    pub call_count: u32,
+    /// Number of times the component was called during integration.
+    pub component_calls: u32,
+
+    /// The input provided to the solver, used to reconstruct intermediate inputs.
     pub initial_conditions: C::Input,
+
+    /// The full sequence of integration states produced by the solver.
     pub steps: Vec<State<N>>,
 }
 
-/// Error for [`Solver`].
+/// Error returned by [`Solver::call`].
+///
+/// Wraps integration errors and component call failures.
 #[derive(Debug, Error)]
 pub enum SolverError {
     #[error(transparent)]
@@ -43,7 +61,7 @@ pub enum SolverError {
 }
 
 /// Supported numerical integration methods for the solver.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Method {
     /// Classic fixed-step 4th-order Runge–Kutta method.
     ///
@@ -218,13 +236,14 @@ impl<C: Integratable<N>, const N: usize> Component for Solver<C, N> {
             .collect();
 
         Ok(SolverOutput {
-            call_count: stats.num_eval,
+            component_calls: stats.num_eval,
             initial_conditions,
             steps,
         })
     }
 }
 
+/// Internal wrapper that adapts a component into an ODE solver system.
 struct OdeSystem<'a, C: Integratable<N>, const N: usize> {
     component: &'a C,
     initial_conditions: &'a C::Input,
@@ -268,7 +287,6 @@ mod tests {
     use super::*;
 
     /// A test component representing a one-dimensional linear ODE: dy/dx = slope.
-    #[derive(Copy, Clone)]
     struct Linear {
         slope: f64,
     }
@@ -284,16 +302,43 @@ mod tests {
     }
 
     impl Integratable<1> for Linear {
+        fn apply_state(_initial_conditions: &Self::Input, state: State<1>) -> Self::Input {
+            state
+        }
+
         fn extract_state(input: &Self::Input) -> State<1> {
             *input
         }
 
-        fn apply_state(_input: &Self::Input, state: State<1>) -> Self::Input {
-            state
-        }
-
         fn extract_derivative(output: &Self::Output) -> [f64; 1] {
             [*output]
+        }
+    }
+
+    /// Implements `Integratable` for the `Oscillator` component.
+    ///
+    /// The oscillator component does not carry its own time information, so
+    /// this implementation assumes that initial conditions are always specified
+    /// at `x = 0` (i.e., time = 0). This is sufficient for test cases where the
+    /// solver is responsible for advancing time from zero.
+    impl Integratable<2> for oscillator::Oscillator {
+        fn apply_state(initial_conditions: &Self::Input, state: State<2>) -> Self::Input {
+            let position = state.y[0];
+            let velocity = state.y[1];
+            (*initial_conditions)
+                .position_si(position)
+                .velocity_si(velocity)
+        }
+
+        fn extract_state(input: &Self::Input) -> State<2> {
+            State {
+                x: 0.0,
+                y: [input.state.position.value, input.state.velocity.value],
+            }
+        }
+
+        fn extract_derivative(output: &Self::Output) -> [f64; 2] {
+            [output.velocity.value, output.acceleration.value]
         }
     }
 
