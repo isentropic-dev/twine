@@ -7,15 +7,59 @@ use twine_core::Component;
 
 use super::{error::InterpError, extrapolate::Extrapolate};
 
+/// Interpolation strategies supported for three-dimensional interpolation.
+///
+/// Used with [`Interp3D::new`] to control how values are estimated between grid points.
 #[derive(Debug, Clone, Copy)]
 pub enum Strategy3D {
+    /// Trilinear interpolation between surrounding grid points.
     Linear,
+
+    /// Nearest-neighbor interpolation based on the closest grid point.
     Nearest,
 }
 
 pub struct Interp3D(Interp3DOwned<f64, Strategy3DEnum>);
 
 impl Interp3D {
+    /// Creates a new 3D interpolator from grid coordinates, values, strategy, and extrapolation behavior.
+    ///
+    /// # Arguments
+    ///
+    /// * `x` - 1D array of grid coordinates along the x-axis.
+    /// * `y` - 1D array of grid coordinates along the y-axis.
+    /// * `z` - 1D array of grid coordinates along the z-axis.
+    /// * `f_xyz` - 3D array of values corresponding to each `(x, y, z)` combination.  
+    ///   Must have shape `(x.len(), y.len(), z.len())`.
+    /// * `strategy` - Interpolation strategy to use (e.g., linear or nearest).
+    /// * `extrapolate` - Behavior to use when the input is outside the bounds of the grid.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the input arrays have incompatible shapes or other validation fails.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ndarray::array;
+    /// use twine_components::interpolation::{Interp3D, Strategy3D, Extrapolate};
+    /// use twine_core::Component;
+    ///
+    /// let interp = Interp3D::new(
+    ///     array![1., 2.],
+    ///     array![1., 2.],
+    ///     array![1., 2.],
+    ///     array![
+    ///         [ [0.6, 0.8], [0.8, 1.0] ],
+    ///         [ [0.8, 1.0], [1.0, 1.2] ],
+    ///     ],
+    ///     &Strategy3D::Linear,
+    ///     Extrapolate::Clamp,
+    /// ).unwrap();
+    ///
+    /// let value = interp.call([1.5, 1.5, 1.5]).unwrap();
+    /// assert!(value == 0.9);
+    /// ```
     pub fn new(
         x: Array1<f64>,
         y: Array1<f64>,
