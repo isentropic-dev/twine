@@ -19,9 +19,9 @@ pub struct Interp1D(Interp1DOwned<f64, Strategy1DEnum>);
 
 impl Interp1D {
     #[allow(clippy::missing_errors_doc)]
-    pub fn new<T: Into<Array1<f64>>>(
-        x: T,
-        f_x: T,
+    pub fn new(
+        x: Array1<f64>,
+        f_x: Array1<f64>,
         strategy: &Strategy1D,
         extrapolate: Extrapolate<f64>,
     ) -> Result<Self, InterpError> {
@@ -66,6 +66,7 @@ impl Component for Interp1D {
 
 #[cfg(test)]
 mod tests {
+    use ndarray::array;
     use twine_core::Component;
 
     use super::*;
@@ -81,8 +82,8 @@ mod tests {
 
         for (strategy, expected) in test_cases {
             let interp = Interp1D::new(
-                vec![0., 1., 2.],
-                vec![0.0, 0.4, 0.8],
+                array![0., 1., 2.],
+                array![0.0, 0.4, 0.8],
                 &strategy,
                 Extrapolate::Error,
             )
