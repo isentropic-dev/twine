@@ -7,11 +7,21 @@ use twine_core::Component;
 
 use super::{error::InterpError, extrapolate::Extrapolate};
 
+/// Interpolation strategies supported for one-dimensional interpolation.
+///
+/// Used with [`Interp1D::new`] to control how values are estimated between grid points.
 #[derive(Debug, Clone, Copy)]
 pub enum Strategy1D {
+    /// Linear interpolation between adjacent grid points.
     Linear,
+
+    /// Nearest-neighbor interpolation based on the closest grid point.
     Nearest,
+
+    /// Nearest-neighbor interpolation that selects the point to the left of the input.
     LeftNearest,
+
+    /// Nearest-neighbor interpolation that selects the point to the right of the input.
     RightNearest,
 }
 
