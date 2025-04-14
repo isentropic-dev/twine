@@ -68,16 +68,16 @@ impl Interp2D {
     ) -> Result<Self, InterpError> {
         match strategy {
             Strategy2D::Linear => Ok(Self(Interp2DOwned::new(
-                x.into(),
-                y.into(),
-                f_xy.into(),
+                x,
+                y,
+                f_xy,
                 ninterp::strategy::Linear.into(),
                 extrapolate.into(),
             )?)),
             Strategy2D::Nearest => Ok(Self(Interp2DOwned::new(
-                x.into(),
-                y.into(),
-                f_xy.into(),
+                x,
+                y,
+                f_xy,
                 ninterp::strategy::Nearest.into(),
                 extrapolate.into(),
             )?)),
