@@ -18,7 +18,36 @@ pub enum Strategy1D {
 pub struct Interp1D(Interp1DOwned<f64, Strategy1DEnum>);
 
 impl Interp1D {
-    #[allow(clippy::missing_errors_doc)]
+    /// Creates a new 1D interpolator from grid coordinates, values, strategy, and extrapolation behavior.
+    ///
+    /// # Arguments
+    ///
+    /// * `x` - 1D array of grid coordinates.
+    /// * `f_x` - 1D array of values corresponding to each `x`. Must be the same length as `x`.
+    /// * `strategy` - Interpolation strategy to use (e.g., linear, nearest, left nearest, right nearest).
+    /// * `extrapolate` - Behavior to use when the input is outside the bounds of the grid.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the input arrays have mismatched lengths or are otherwise invalid.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ndarray::array;
+    /// use twine_core::Component;
+    /// use twine_components::interpolation::{Interp1D, Strategy1D, Extrapolate};
+    ///
+    /// let interp = Interp1D::new(
+    ///     array![0., 1., 2.],
+    ///     array![0.0, 0.4, 0.8],
+    ///     &Strategy1D::Linear,
+    ///     Extrapolate::Error,
+    /// ).unwrap();
+    ///
+    /// let value = interp.call(1.4).unwrap();
+    /// assert!(value == 0.56);
+    /// ```
     pub fn new(
         x: Array1<f64>,
         f_x: Array1<f64>,
