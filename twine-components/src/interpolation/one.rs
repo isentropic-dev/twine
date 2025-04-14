@@ -66,26 +66,26 @@ impl Interp1D {
     ) -> Result<Self, InterpError> {
         match strategy {
             Strategy1D::Linear => Ok(Self(Interp1DOwned::new(
-                x.into(),
-                f_x.into(),
+                x,
+                f_x,
                 ninterp::strategy::Linear.into(),
                 extrapolate.into(),
             )?)),
             Strategy1D::Nearest => Ok(Self(Interp1DOwned::new(
-                x.into(),
-                f_x.into(),
+                x,
+                f_x,
                 ninterp::strategy::Nearest.into(),
                 extrapolate.into(),
             )?)),
             Strategy1D::LeftNearest => Ok(Self(Interp1DOwned::new(
-                x.into(),
-                f_x.into(),
+                x,
+                f_x,
                 ninterp::strategy::LeftNearest.into(),
                 extrapolate.into(),
             )?)),
             Strategy1D::RightNearest => Ok(Self(Interp1DOwned::new(
-                x.into(),
-                f_x.into(),
+                x,
+                f_x,
                 ninterp::strategy::RightNearest.into(),
                 extrapolate.into(),
             )?)),
