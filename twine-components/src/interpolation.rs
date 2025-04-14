@@ -1,6 +1,7 @@
 pub mod error;
 pub mod extrapolate;
 pub mod one;
+pub mod three;
 pub mod two;
 
 pub use extrapolate::Extrapolate;
