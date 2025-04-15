@@ -2941,7 +2941,9 @@ name = "twine-components"
 version = "0.1.1"
 dependencies = [
  "approx",
+ "ode_solvers",
  "serde",
+ "thiserror 2.0.12",
  "twine-core",
  "uom",
 ]
@@ -2950,9 +2952,7 @@ dependencies = [
 name = "twine-core"
 version = "0.1.1"
 dependencies = [
- "ode_solvers",
  "petgraph",
- "uom",
 ]
 
 [[package]]
