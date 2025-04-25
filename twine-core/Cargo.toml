@@ -11,3 +11,4 @@ keywords = ["twine", "framework", "functional", "composable", "modeling"]
 
 [dependencies]
 petgraph = "0.7.1"
+uom = "0.35.0"
