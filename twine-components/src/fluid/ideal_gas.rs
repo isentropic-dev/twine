@@ -9,21 +9,56 @@ use uom::si::{
     thermodynamic_temperature::kelvin,
 };
 
-/// Defines the thermodynamic state of an ideal gas.
+/// A thermodynamic model for an ideal gas.
+///
+/// `IdealGasModel` implements the ideal gas law, relating pressure, density,
+/// and temperature by the equation `P = ρ⋅R⋅T`, where:
+/// - `P` is pressure,
+/// - `ρ` is mass density,
+/// - `R` is the specific gas constant,
+/// - `T` is absolute temperature.
+///
+/// The model assumes idealized behavior and is valid across the range of
+/// pressures and temperatures where real gas effects are negligible.
+///
+/// # State Preservation
+///
+/// When creating a new fluid state by modifying a property (e.g., temperature
+/// or pressure), the model assumes constant volume (constant density) unless
+/// otherwise specified.
+///
+/// Specifically:
+/// - Modifying temperature preserves the reference density, adjusting pressure accordingly.
+/// - Modifying pressure preserves the reference density, adjusting temperature accordingly.
+#[derive(Debug, Clone)]
+pub struct IdealGasModel {
+    specific_gas_constant: SpecificHeatCapacity,
+}
+
+/// Represents the thermodynamic state of an ideal gas.
+///
+/// `IdealGasState` holds the fundamental properties needed to characterize an
+/// ideal gas: absolute temperature and mass density.
+/// Pressure and other derived quantities can be computed dynamically from these
+/// values using the ideal gas law.
 #[derive(Debug, Clone)]
 pub struct IdealGasState {
     pub temperature: ThermodynamicTemperature,
     pub density: MassDensity,
 }
 
-/// A model for an ideal gas fluid.
-#[derive(Debug, Clone)]
-pub struct IdealGasModel {
-    specific_gas_constant: SpecificHeatCapacity,
-}
-
 impl IdealGasModel {
-    /// Create a new ideal gas model for air.
+    /// Creates a new ideal gas model with a user-specified specific gas constant.
+    #[must_use]
+    pub fn new(specific_gas_constant: SpecificHeatCapacity) -> Self {
+        Self {
+            specific_gas_constant,
+        }
+    }
+
+    /// Returns a preconfigured ideal gas model for dry air.
+    ///
+    /// Assumes a specific gas constant of 287.053 J/(kg·K).
     #[must_use]
     pub fn air() -> Self {
         Self {
@@ -196,7 +231,7 @@ mod tests {
         let ideal_gas_air = IdealGasModel::air();
         let initial_state = air_at_sea_level();
 
-        // Increase the temperature at constant volume.
+        // Increase the temperature at constant density (i.e., volume).
         let new_temperature = ThermodynamicTemperature::new::<kelvin>(350.0);
         let higher_temp_state = ideal_gas_air
             .new_state_from_temperature(&initial_state, new_temperature)
