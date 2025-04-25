@@ -145,22 +145,25 @@ pub trait FromPressureDensity: FluidModel {
 }
 
 #[cfg(test)]
+#[allow(clippy::float_cmp)]
 mod tests {
     use super::*;
+
     use uom::si::{
-        mass_density::kilogram_per_cubic_meter, pressure::pascal, thermodynamic_temperature::kelvin,
+        f64::{MolarHeatCapacity, MolarMass},
+        mass_density::kilogram_per_cubic_meter,
+        molar_heat_capacity::joule_per_kelvin_mole,
+        molar_mass::kilogram_per_mole,
+        pressure::pascal,
+        thermodynamic_temperature::kelvin,
     };
-    use uom::si::f64::Quantity;
-    use uom::si::molar_gas_constant::joule_per_mole_kelvin;
-    use uom::si::molar_gas_constant::dimension::Dimension as MolarGasConstantDimension;
-    use uom::si::molar_mass::kilogram_per_mole;
-    use uom::si::molar_mass::dimension::Dimension as MolarMassDimension;
 
-    // Define the universal gas constant as a uom Quantity (J/(mol·K)).
-    type MolarGasConstant = Quantity<MolarGasConstantDimension, uom::si::SI<f64>, f64>;
-    type MolarMass = Quantity<MolarMassDimension, uom::si::SI<f64>, f64>;
+    // // // // Define the universal gas constant as a uom Quantity (J/(mol·K)).
+    // const UNIVERSAL_GAS_CONSTANT: MolarHeatCapacity =
+    //     MolarHeatCapacity::new::<joule_per_kelvin_mole>(8.314);
 
-    const UNIVERSAL_GAS_CONSTANT: MolarGasConstant = MolarGasConstant::new::<joule_per_mole_kelvin>(8.314);
+    // const UNIVERSAL_GAS_CONSTANT: MolarGasConstant =
+    //     MolarGasConstant::new::<joule_per_mole_kelvin>(8.314);
 
     /// A state representation for an ideal gas.
     #[derive(Debug, Clone)]
@@ -172,15 +175,15 @@ mod tests {
     /// A model for ideal gas calculations.
     #[derive(Debug, Clone)]
     struct IdealGasModel {
-        molar_mass: MolarMass,         // kg/mol
-        gas_constant: MolarGasConstant, // J/(mol·K)
+        molar_mass: MolarMass,           // kg/mol
+        gas_constant: MolarHeatCapacity, // J/(mol·K)
     }
 
     impl IdealGasModel {
         fn air() -> Self {
             Self {
                 molar_mass: MolarMass::new::<kilogram_per_mole>(0.02896),
-                gas_constant: UNIVERSAL_GAS_CONSTANT,
+                gas_constant: MolarHeatCapacity::new::<joule_per_kelvin_mole>(8.314),
             }
         }
 
@@ -197,7 +200,9 @@ mod tests {
             density: MassDensity,
         ) -> ThermodynamicTemperature {
             // T = PM/(ρR)
-            pressure * self.molar_mass / (density * self.gas_constant)
+            ThermodynamicTemperature::new::<kelvin>(
+                (pressure * self.molar_mass / (density * self.gas_constant)).value,
+            )
         }
 
         // Calculate density from temperature and pressure: ρ = PM/(RT)
@@ -250,36 +255,12 @@ mod tests {
     impl FromTemperaturePressure for IdealGasModel {
         fn new_state_from_temperature_pressure(
             &self,
-            _reference: &Self::State,
+            reference: &Self::State,
             temperature: ThermodynamicTemperature,
             pressure: Pressure,
         ) -> Result<Self::State, FluidStateError> {
             let density = self.calculate_density(temperature, pressure);
-            self.new_state_from_temperature_density(_reference, temperature, density)
-        }
-    }
-
-    impl FromTemperature for IdealGasModel {
-        fn new_state_from_temperature(
-            &self,
-            reference: &Self::State,
-            temperature: ThermodynamicTemperature,
-        ) -> Result<Self::State, FluidStateError> {
-            // For ideal gas, we'll assume constant pressure when changing temperature
-            let pressure = self.pressure(reference);
-            self.new_state_from_temperature_pressure(reference, temperature, pressure)
-        }
-    }
-
-    impl FromPressure for IdealGasModel {
-        fn new_state_from_pressure(
-            &self,
-            reference: &Self::State,
-            pressure: Pressure,
-        ) -> Result<Self::State, FluidStateError> {
-            // For ideal gas, we'll assume constant temperature when changing pressure
-            let temperature = self.temperature(reference);
-            self.new_state_from_temperature_pressure(reference, temperature, pressure)
+            self.new_state_from_temperature_density(reference, temperature, density)
         }
     }
 
@@ -295,32 +276,52 @@ mod tests {
         }
     }
 
+    impl FromTemperature for IdealGasModel {
+        fn new_state_from_temperature(
+            &self,
+            reference: &Self::State,
+            temperature: ThermodynamicTemperature,
+        ) -> Result<Self::State, FluidStateError> {
+            // Assume constant pressure when changing temperature
+            let pressure = self.pressure(reference);
+            self.new_state_from_temperature_pressure(reference, temperature, pressure)
+        }
+    }
+
+    impl FromPressure for IdealGasModel {
+        fn new_state_from_pressure(
+            &self,
+            reference: &Self::State,
+            pressure: Pressure,
+        ) -> Result<Self::State, FluidStateError> {
+            // Assume constant temperature when changing pressure
+            let temperature = self.temperature(reference);
+            self.new_state_from_temperature_pressure(reference, temperature, pressure)
+        }
+    }
+
     #[test]
     fn test_ideal_gas_properties() {
-        // Create an ideal gas model
-        let model = IdealGasModel::air();
+        let ideal_gas_air = IdealGasModel::air();
 
         // Create an initial state for air at standard conditions
-        let initial_state = IdealGasState {
+        let state = IdealGasState {
             temperature: ThermodynamicTemperature::new::<kelvin>(300.0),
             density: MassDensity::new::<kilogram_per_cubic_meter>(1.2),
         };
 
-        // Use the initial state as a reference for further operations
-        let state = initial_state.clone();
-
         // Test temperature getter
-        assert_eq!(model.temperature(&state).get::<kelvin>(), 300.0);
+        assert_eq!(ideal_gas_air.temperature(&state).get::<kelvin>(), 300.0);
 
         // Test pressure calculation
-        let pressure = model.pressure(&state);
+        let pressure = ideal_gas_air.pressure(&state);
         println!(
             "Pressure at 300K, 1.2 kg/m³: {} Pa",
             pressure.get::<pascal>()
         );
 
         // Test creating state from temperature and pressure
-        let tp_state = model
+        let tp_state = ideal_gas_air
             .new_state_from_temperature_pressure(
                 &state,
                 ThermodynamicTemperature::new::<kelvin>(300.0),
@@ -329,34 +330,10 @@ mod tests {
             .unwrap();
         println!(
             "Density at 300K, 101325 Pa: {} kg/m³",
-            model.density(&tp_state).get::<kilogram_per_cubic_meter>()
+            ideal_gas_air
+                .density(&tp_state)
+                .get::<kilogram_per_cubic_meter>()
         );
-
-        // // Test creating state from pressure and enthalpy
-        // let ph_state = model
-        //     .new_state_from_pressure_enthalpy(
-        //         &state,
-        //         UomPressure::new::<pascal>(101325.0),
-        //         SpecificEnthalpy::new::<joule_per_kilogram>(300000.0),
-        //     )
-        //     .unwrap();
-        // println!(
-        //     "Temperature at 101325 Pa, 300000 J/kg: {} K",
-        //     model.temperature(&ph_state).get::<kelvin>()
-        // );
-
-        // // Test creating state from pressure and density
-        // let pd_state = model
-        //     .new_state_from_pressure_density(
-        //         &state,
-        //         UomPressure::new::<pascal>(101325.0),
-        //         MassDensity::new::<kilogram_per_cubic_meter>(1.2),
-        //     )
-        //     .unwrap();
-        // println!(
-        //     "Temperature at 101325 Pa, 1.2 kg/m³: {} K",
-        //     model.temperature(&pd_state).get::<kelvin>()
-        // );
 
         // Verify ideal gas law relationships
         let test_state = IdealGasState {
@@ -364,13 +341,13 @@ mod tests {
             density: MassDensity::new::<kilogram_per_cubic_meter>(1.293),
         };
 
-        let test_pressure = model.pressure(&test_state);
+        let test_pressure = ideal_gas_air.pressure(&test_state);
 
         // P = ρRT/M - calculate directly with uom types
-        let calculated_pressure = model.density(&test_state) 
-            * model.gas_constant 
-            * model.temperature(&test_state) 
-            / model.molar_mass;
+        let calculated_pressure = ideal_gas_air.density(&test_state)
+            * ideal_gas_air.gas_constant
+            * ideal_gas_air.temperature(&test_state)
+            / ideal_gas_air.molar_mass;
 
         // Compare the pressures directly using uom's comparison
         assert!((test_pressure - calculated_pressure).abs() < Pressure::new::<pascal>(0.001));
