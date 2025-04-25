@@ -182,13 +182,6 @@ mod tests {
         thermodynamic_temperature::kelvin,
     };
 
-    // // // // Define the universal gas constant as a uom Quantity (J/(mol·K)).
-    // const UNIVERSAL_GAS_CONSTANT: MolarHeatCapacity =
-    //     MolarHeatCapacity::new::<joule_per_kelvin_mole>(8.314);
-
-    // const UNIVERSAL_GAS_CONSTANT: MolarGasConstant =
-    //     MolarGasConstant::new::<joule_per_mole_kelvin>(8.314);
-
     /// A state representation for an ideal gas.
     #[derive(Debug, Clone)]
     struct IdealGasState {
