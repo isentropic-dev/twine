@@ -12,13 +12,13 @@ use uom::si::f64::{
     SpecificEnthalpy,
 };
 
-/// Base trait for fluid state representations.
+/// Base trait for fluid models.
 ///
 /// This trait serves as the foundation for all fluid property traits.
 /// Implementors define their own state representation through the associated
 /// `State` type, which could be as simple as temperature and density for
 /// ideal gases, or more complex structures for real fluids.
-pub trait FluidState: Sized + Clone + Debug {
+pub trait FluidModel: Sized + Clone + Debug {
     /// The type that represents the complete state of the fluid.
     type State: Clone + Debug;
     
@@ -26,58 +26,99 @@ pub trait FluidState: Sized + Clone + Debug {
     ///
     /// This is the canonical way to create a fluid state, as temperature
     /// and density are sufficient to define the state for many fluids.
-    fn new(temperature: ThermodynamicTemperature, density: MassDensity) -> Self;
+    fn new_state(&self, temperature: ThermodynamicTemperature, density: MassDensity) -> Self::State;
 }
 
+/// Error type for fluid state operations.
+#[derive(Debug, Clone)]
+pub enum FluidStateError {
+    /// The operation is not supported for this fluid model.
+    Unsupported(String),
+    /// The provided properties are inconsistent or invalid.
+    InvalidProperties(String),
+    /// A calculation error occurred.
+    CalculationError(String),
+}
+
+impl std::fmt::Display for FluidStateError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Unsupported(msg) => write!(f, "Unsupported operation: {}", msg),
+            Self::InvalidProperties(msg) => write!(f, "Invalid properties: {}", msg),
+            Self::CalculationError(msg) => write!(f, "Calculation error: {}", msg),
+        }
+    }
+}
+
+impl std::error::Error for FluidStateError {}
+
 /// Trait for accessing temperature from a fluid state.
-pub trait TemperatureProvider: FluidState {
+pub trait TemperatureProvider: FluidModel {
     /// Returns the temperature of the fluid state.
-    fn temperature(&self) -> ThermodynamicTemperature;
+    fn temperature(&self, state: &Self::State) -> ThermodynamicTemperature;
 }
 
 /// Trait for accessing pressure from a fluid state.
-pub trait PressureProvider: FluidState {
+pub trait PressureProvider: FluidModel {
     /// Returns the pressure of the fluid state.
-    fn pressure(&self) -> UomPressure;
+    fn pressure(&self, state: &Self::State) -> UomPressure;
 }
 
 /// Trait for accessing density from a fluid state.
-pub trait DensityProvider: FluidState {
+pub trait DensityProvider: FluidModel {
     /// Returns the density of the fluid state.
-    fn density(&self) -> MassDensity;
+    fn density(&self, state: &Self::State) -> MassDensity;
 }
 
 /// Trait for accessing enthalpy from a fluid state.
-pub trait EnthalpyProvider: FluidState {
+pub trait EnthalpyProvider: FluidModel {
     /// Returns the specific enthalpy of the fluid state.
-    fn enthalpy(&self) -> SpecificEnthalpy;
+    fn enthalpy(&self, state: &Self::State) -> SpecificEnthalpy;
 }
 
 /// Trait for creating a fluid state from temperature and pressure.
-pub trait FromTemperaturePressure: FluidState {
+pub trait FromTemperaturePressure: FluidModel {
     /// Creates a new fluid state from temperature and pressure.
-    fn new_from_temperature_pressure(
+    ///
+    /// Uses the reference state to preserve other properties when possible.
+    /// If the fluid model cannot preserve certain properties when changing
+    /// temperature and pressure, it should document this behavior.
+    fn new_state_from_temperature_pressure(
+        &self,
+        reference: &Self::State,
         temperature: ThermodynamicTemperature, 
         pressure: UomPressure
-    ) -> Self;
+    ) -> Result<Self::State, FluidStateError>;
 }
 
 /// Trait for creating a fluid state from pressure and enthalpy.
-pub trait FromPressureEnthalpy: FluidState {
+pub trait FromPressureEnthalpy: FluidModel {
     /// Creates a new fluid state from pressure and enthalpy.
-    fn new_from_pressure_enthalpy(
+    ///
+    /// Uses the reference state to preserve other properties when possible.
+    /// If the fluid model cannot preserve certain properties when changing
+    /// pressure and enthalpy, it should document this behavior.
+    fn new_state_from_pressure_enthalpy(
+        &self,
+        reference: &Self::State,
         pressure: UomPressure,
         enthalpy: SpecificEnthalpy
-    ) -> Self;
+    ) -> Result<Self::State, FluidStateError>;
 }
 
 /// Trait for creating a fluid state from pressure and density.
-pub trait FromPressureDensity: FluidState {
+pub trait FromPressureDensity: FluidModel {
     /// Creates a new fluid state from pressure and density.
-    fn new_from_pressure_density(
+    ///
+    /// Uses the reference state to preserve other properties when possible.
+    /// If the fluid model cannot preserve certain properties when changing
+    /// pressure and density, it should document this behavior.
+    fn new_state_from_pressure_density(
+        &self,
+        reference: &Self::State,
         pressure: UomPressure,
         density: MassDensity
-    ) -> Self;
+    ) -> Result<Self::State, FluidStateError>;
 }
 
 #[cfg(test)]
