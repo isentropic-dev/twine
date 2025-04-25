@@ -174,11 +174,10 @@ mod tests {
     use super::*;
 
     use uom::si::{
-        f64::{MolarHeatCapacity, MolarMass},
+        f64::SpecificHeatCapacity,
         mass_density::kilogram_per_cubic_meter,
-        molar_heat_capacity::joule_per_kelvin_mole,
-        molar_mass::kilogram_per_mole,
         pressure::pascal,
+        specific_heat_capacity::joule_per_kilogram_kelvin,
         thermodynamic_temperature::kelvin,
     };
 
@@ -192,44 +191,42 @@ mod tests {
     /// A model for ideal gas calculations.
     #[derive(Debug, Clone)]
     struct IdealGasModel {
-        molar_mass: MolarMass,
-        gas_constant: MolarHeatCapacity,
+        specific_gas_constant: SpecificHeatCapacity, // J/(kg·K)
     }
 
     impl IdealGasModel {
         fn air() -> Self {
+            // R_specific = R_universal / M
+            // For air: 8.314 J/(mol·K) / 0.02896 kg/mol = 287.08 J/(kg·K)
             Self {
-                molar_mass: MolarMass::new::<kilogram_per_mole>(0.02896),
-                gas_constant: MolarHeatCapacity::new::<joule_per_kelvin_mole>(8.314),
+                specific_gas_constant: SpecificHeatCapacity::new::<joule_per_kilogram_kelvin>(287.08),
             }
         }
 
-        // Calculate pressure using ideal gas law: P = ρRT/M
+        // Calculate pressure using ideal gas law: P = ρRT
         fn calculate_pressure(&self, state: &IdealGasState) -> Pressure {
-            // P = ρRT/M
-            state.density * self.gas_constant * state.temperature / self.molar_mass
+            // P = ρRT
+            state.density * self.specific_gas_constant * state.temperature
         }
 
-        // Calculate temperature from pressure and density: T = PM/(ρR)
+        // Calculate temperature from pressure and density: T = P/(ρR)
         fn calculate_temperature(
             &self,
             pressure: Pressure,
             density: MassDensity,
         ) -> ThermodynamicTemperature {
-            // T = PM/(ρR)
-            ThermodynamicTemperature::new::<kelvin>(
-                (pressure * self.molar_mass / (density * self.gas_constant)).value,
-            )
+            // T = P/(ρR)
+            pressure / (density * self.specific_gas_constant)
         }
 
-        // Calculate density from temperature and pressure: ρ = PM/(RT)
+        // Calculate density from temperature and pressure: ρ = P/(RT)
         fn calculate_density(
             &self,
             temperature: ThermodynamicTemperature,
             pressure: Pressure,
         ) -> MassDensity {
-            // ρ = PM/(RT)
-            pressure * self.molar_mass / (self.gas_constant * temperature)
+            // ρ = P/(RT)
+            pressure / (self.specific_gas_constant * temperature)
         }
     }
 
@@ -352,8 +349,7 @@ mod tests {
 
         // Calculate pressure using the ideal gas law directly
         let calculated_pressure =
-            model.density(&state) * model.gas_constant * model.temperature(&state)
-                / model.molar_mass;
+            model.density(&state) * model.specific_gas_constant * model.temperature(&state);
 
         // Verify the pressures match
         assert!((pressure - calculated_pressure).abs() < Pressure::new::<pascal>(0.001));
