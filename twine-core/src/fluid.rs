@@ -21,12 +21,6 @@ use uom::si::f64::{
 pub trait FluidModel: Sized + Clone + Debug {
     /// The type that represents the complete state of the fluid.
     type State: Clone + Debug;
-    
-    /// Creates a new fluid state from temperature and density.
-    ///
-    /// This is the canonical way to create a fluid state, as temperature
-    /// and density are sufficient to define the state for many fluids.
-    fn new_state(&self, temperature: ThermodynamicTemperature, density: MassDensity) -> Self::State;
 }
 
 /// Error type for fluid state operations.
@@ -103,6 +97,48 @@ pub trait FromPressureEnthalpy: FluidModel {
         reference: &Self::State,
         pressure: UomPressure,
         enthalpy: SpecificEnthalpy
+    ) -> Result<Self::State, FluidStateError>;
+}
+
+/// Trait for creating a fluid state from temperature.
+pub trait FromTemperature: FluidModel {
+    /// Creates a new fluid state from temperature.
+    ///
+    /// Uses the reference state to preserve other properties when possible.
+    /// If the fluid model cannot preserve certain properties when changing
+    /// temperature, it should document this behavior.
+    fn new_state_from_temperature(
+        &self,
+        reference: &Self::State,
+        temperature: ThermodynamicTemperature
+    ) -> Result<Self::State, FluidStateError>;
+}
+
+/// Trait for creating a fluid state from pressure.
+pub trait FromPressure: FluidModel {
+    /// Creates a new fluid state from pressure.
+    ///
+    /// Uses the reference state to preserve other properties when possible.
+    /// If the fluid model cannot preserve certain properties when changing
+    /// pressure, it should document this behavior.
+    fn new_state_from_pressure(
+        &self,
+        reference: &Self::State,
+        pressure: UomPressure
+    ) -> Result<Self::State, FluidStateError>;
+}
+
+/// Trait for creating a fluid state from density.
+pub trait FromDensity: FluidModel {
+    /// Creates a new fluid state from density.
+    ///
+    /// Uses the reference state to preserve other properties when possible.
+    /// If the fluid model cannot preserve certain properties when changing
+    /// density, it should document this behavior.
+    fn new_state_from_density(
+        &self,
+        reference: &Self::State,
+        density: MassDensity
     ) -> Result<Self::State, FluidStateError>;
 }
 
@@ -198,7 +234,10 @@ mod tests {
 
     impl FluidModel for IdealGasModel {
         type State = IdealGasState;
-        
+    }
+    
+    // Helper method to create a new state (moved from the trait implementation)
+    impl IdealGasModel {
         fn new_state(&self, temperature: ThermodynamicTemperature, density: MassDensity) -> Self::State {
             IdealGasState {
                 temperature,
@@ -256,6 +295,42 @@ mod tests {
         }
     }
     
+    impl FromTemperature for IdealGasModel {
+        fn new_state_from_temperature(
+            &self,
+            reference: &Self::State,
+            temperature: ThermodynamicTemperature
+        ) -> Result<Self::State, FluidStateError> {
+            // For ideal gas, we'll assume constant pressure when changing temperature
+            let pressure = self.pressure(reference);
+            self.new_state_from_temperature_pressure(reference, temperature, pressure)
+        }
+    }
+    
+    impl FromPressure for IdealGasModel {
+        fn new_state_from_pressure(
+            &self,
+            reference: &Self::State,
+            pressure: UomPressure
+        ) -> Result<Self::State, FluidStateError> {
+            // For ideal gas, we'll assume constant temperature when changing pressure
+            let temperature = self.temperature(reference);
+            self.new_state_from_temperature_pressure(reference, temperature, pressure)
+        }
+    }
+    
+    impl FromDensity for IdealGasModel {
+        fn new_state_from_density(
+            &self,
+            reference: &Self::State,
+            density: MassDensity
+        ) -> Result<Self::State, FluidStateError> {
+            // For ideal gas, we'll assume constant temperature when changing density
+            let temperature = self.temperature(reference);
+            Ok(self.new_state(temperature, density))
+        }
+    }
+    
     impl FromPressureDensity for IdealGasModel {
         fn new_state_from_pressure_density(
             &self,
@@ -273,11 +348,14 @@ mod tests {
         // Create an ideal gas model
         let model = IdealGasModel::new();
         
-        // Create a state for air at standard conditions
-        let state = model.new_state(
-            ThermodynamicTemperature::new::<kelvin>(300.0),
-            MassDensity::new::<kilogram_per_cubic_meter>(1.2)
-        );
+        // Create an initial state for air at standard conditions
+        let initial_state = IdealGasState {
+            temperature: ThermodynamicTemperature::new::<kelvin>(300.0),
+            density: MassDensity::new::<kilogram_per_cubic_meter>(1.2),
+        };
+        
+        // Use the initial state as a reference for further operations
+        let state = initial_state.clone();
 
         // Test temperature getter
         assert_eq!(model.temperature(&state).get::<kelvin>(), 300.0);
@@ -311,10 +389,10 @@ mod tests {
         println!("Temperature at 101325 Pa, 1.2 kg/m³: {} K", model.temperature(&pd_state).get::<kelvin>());
         
         // Verify ideal gas law relationships
-        let test_state = model.new_state(
-            ThermodynamicTemperature::new::<kelvin>(273.15),
-            MassDensity::new::<kilogram_per_cubic_meter>(1.293)
-        );
+        let test_state = IdealGasState {
+            temperature: ThermodynamicTemperature::new::<kelvin>(273.15),
+            density: MassDensity::new::<kilogram_per_cubic_meter>(1.293),
+        };
         
         let test_pressure = model.pressure(&test_state);
         
@@ -325,5 +403,44 @@ mod tests {
                                  model.molar_mass;
         
         assert!((test_pressure.get::<pascal>() - calculated_pressure).abs() < 0.001);
+    }
+    
+    #[test]
+    fn test_new_traits() {
+        // Create an ideal gas model
+        let model = IdealGasModel::new();
+        
+        // Create an initial state
+        let initial_state = IdealGasState {
+            temperature: ThermodynamicTemperature::new::<kelvin>(300.0),
+            density: MassDensity::new::<kilogram_per_cubic_meter>(1.2),
+        };
+        
+        // Test FromTemperature
+        let temp_state = model.new_state_from_temperature(
+            &initial_state,
+            ThermodynamicTemperature::new::<kelvin>(350.0)
+        ).unwrap();
+        assert_eq!(model.temperature(&temp_state).get::<kelvin>(), 350.0);
+        println!("New density after temperature change: {} kg/m³", 
+                 model.density(&temp_state).get::<kilogram_per_cubic_meter>());
+        
+        // Test FromPressure
+        let press_state = model.new_state_from_pressure(
+            &initial_state,
+            UomPressure::new::<pascal>(150000.0)
+        ).unwrap();
+        assert_eq!(model.pressure(&press_state).get::<pascal>(), 150000.0);
+        println!("New density after pressure change: {} kg/m³", 
+                 model.density(&press_state).get::<kilogram_per_cubic_meter>());
+        
+        // Test FromDensity
+        let dens_state = model.new_state_from_density(
+            &initial_state,
+            MassDensity::new::<kilogram_per_cubic_meter>(1.5)
+        ).unwrap();
+        assert_eq!(model.density(&dens_state).get::<kilogram_per_cubic_meter>(), 1.5);
+        println!("New pressure after density change: {} Pa", 
+                 model.pressure(&dens_state).get::<pascal>());
     }
 }
