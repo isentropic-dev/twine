@@ -20,55 +20,51 @@ pub trait FluidPropertyModel: Sized + Clone + Debug {
     type State: Clone + Debug;
 }
 
-/// Trait for accessing temperature from a fluid state.
+/// Provides access to the temperature of a fluid state.
 pub trait TemperatureProvider: FluidPropertyModel {
     /// Returns the temperature of the fluid state.
     fn temperature(&self, state: &Self::State) -> ThermodynamicTemperature;
 }
 
-/// Trait for accessing density from a fluid state.
+/// Provides access to the density of a fluid state.
 pub trait DensityProvider: FluidPropertyModel {
     /// Returns the density of the fluid state.
     fn density(&self, state: &Self::State) -> MassDensity;
 }
 
-/// Trait for accessing pressure from a fluid state.
+/// Provides access to the pressure of a fluid state.
 pub trait PressureProvider: FluidPropertyModel {
     /// Returns the pressure of the fluid state.
     fn pressure(&self, state: &Self::State) -> Pressure;
 }
 
-/// Trait for accessing the specific heat at constant pressure (`cp`) of a fluid state.
-///
-/// # Errors
-///
-/// Returns an error if the specific heat is undefined at the given state, such
-/// as within a two-phase region or near a critical point where `cp` may become
-/// singular or undefined.
+/// Provides access to the specific heat at constant pressure (`cp`) of a fluid state.
 pub trait CpProvider: FluidPropertyModel {
     /// Returns the specific heat at constant pressure (`cp`) of the fluid state.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the specific heat is undefined at the given state,
+    /// such as within a two-phase region or near a critical point.
     fn cp(&self, state: &Self::State) -> Result<SpecificHeatCapacity, FluidPropertyError>;
 }
 
-/// Trait for accessing the specific heat at constant volume (`cv`) of a fluid state.
-///
-/// # Errors
-///
-/// Returns an error if the specific heat is undefined at the given state, such
-/// as within a two-phase region or near a critical point where `cv` may become
-/// singular or undefined.
+/// Provides access to the specific heat at constant volume (`cv`) of a fluid state.
 pub trait CvProvider: FluidPropertyModel {
     /// Returns the specific heat at constant volume (`cv`) of the fluid state.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the specific heat is undefined at the given state,
+    /// such as within a two-phase region or near a critical point.
     fn cv(&self, state: &Self::State) -> Result<SpecificHeatCapacity, FluidPropertyError>;
 }
 
-/// Trait for creating a fluid state from temperature.
+/// Creates a new fluid state from a provided temperature.
 pub trait NewStateFromTemperature: FluidPropertyModel {
     /// Creates a new fluid state from the provided temperature.
     ///
     /// Uses the reference state to preserve other properties when possible.
-    /// If the fluid model cannot preserve certain properties when changing
-    /// temperature, it should document this behavior.
     ///
     /// # Errors
     ///
@@ -80,13 +76,11 @@ pub trait NewStateFromTemperature: FluidPropertyModel {
     ) -> Result<Self::State, FluidStateError>;
 }
 
-/// Trait for creating a fluid state from density.
+/// Creates a new fluid state from a provided density.
 pub trait NewStateFromDensity: FluidPropertyModel {
     /// Creates a new fluid state from the provided density.
     ///
     /// Uses the reference state to preserve other properties when possible.
-    /// If the fluid model cannot preserve certain properties when changing
-    /// density, it should document this behavior.
     ///
     /// # Errors
     ///
@@ -98,13 +92,11 @@ pub trait NewStateFromDensity: FluidPropertyModel {
     ) -> Result<Self::State, FluidStateError>;
 }
 
-/// Trait for creating a fluid state from pressure.
+/// Creates a new fluid state from a provided pressure.
 pub trait NewStateFromPressure: FluidPropertyModel {
     /// Creates a new fluid state from the provided pressure.
     ///
     /// Uses the reference state to preserve other properties when possible.
-    /// If the fluid model cannot preserve certain properties when changing
-    /// pressure, it should document this behavior.
     ///
     /// # Errors
     ///
@@ -116,13 +108,11 @@ pub trait NewStateFromPressure: FluidPropertyModel {
     ) -> Result<Self::State, FluidStateError>;
 }
 
-/// Trait for creating a fluid state from temperature and density.
+/// Creates a new fluid state from a provided temperature and density.
 pub trait NewStateFromTemperatureDensity: FluidPropertyModel {
     /// Creates a new fluid state from the provided temperature and density.
     ///
     /// Uses the reference state to preserve other properties when possible.
-    /// If the fluid model cannot preserve certain properties when changing
-    /// temperature and density, it should document this behavior.
     ///
     /// # Errors
     ///
@@ -135,13 +125,11 @@ pub trait NewStateFromTemperatureDensity: FluidPropertyModel {
     ) -> Result<Self::State, FluidStateError>;
 }
 
-/// Trait for creating a fluid state from temperature and pressure.
+/// Creates a new fluid state from a provided temperature and pressure.
 pub trait NewStateFromTemperaturePressure: FluidPropertyModel {
     /// Creates a new fluid state from the provided temperature and pressure.
     ///
     /// Uses the reference state to preserve other properties when possible.
-    /// If the fluid model cannot preserve certain properties when changing
-    /// temperature and pressure, it should document this behavior.
     ///
     /// # Errors
     ///
@@ -154,13 +142,11 @@ pub trait NewStateFromTemperaturePressure: FluidPropertyModel {
     ) -> Result<Self::State, FluidStateError>;
 }
 
-/// Trait for creating a fluid state from pressure and density.
+/// Creates a new fluid state from a provided pressure and density.
 pub trait NewStateFromPressureDensity: FluidPropertyModel {
     /// Creates a new fluid state from the provided pressure and density.
     ///
     /// Uses the reference state to preserve other properties when possible.
-    /// If the fluid model cannot preserve certain properties when changing
-    /// pressure and density, it should document this behavior.
     ///
     /// # Errors
     ///
