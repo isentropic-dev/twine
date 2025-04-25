@@ -215,12 +215,11 @@ mod tests {
             pressure: Pressure,
             density: MassDensity,
         ) -> ThermodynamicTemperature {
-            // Note: We're creating a ThermodynamicTemperature directly from a calculation.
-            // This is safe because:
-            // 1. The ideal gas law gives us an absolute temperature, not a temperature interval
-            // 2. The calculation P/(ρR) always yields a positive value for valid inputs
-            // 3. We're using the .value accessor to extract the raw f64 value before creating
-            //    the ThermodynamicTemperature, ensuring proper type conversion
+            // We're creating a `ThermodynamicTemperature` directly from a
+            // calculated `TemperatureInterval`, which is safe because the
+            // ideal gas law gives us an absolute temperature in Kelvin and
+            // the `.value` accessor for a `TemperatureInterval` returns the
+            // temperature difference in Kelvin.
             ThermodynamicTemperature::new::<kelvin>(
                 (pressure / (density * self.specific_gas_constant)).value,
             )
