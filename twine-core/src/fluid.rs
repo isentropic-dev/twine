@@ -75,7 +75,8 @@ mod tests {
         pressure::pascal,
         thermodynamic_temperature::kelvin,
     };
-    use std::f64::consts::R as UNIVERSAL_GAS_CONSTANT;
+    // Define the universal gas constant (J/(mol·K))
+    const UNIVERSAL_GAS_CONSTANT: f64 = 8.314;
 
     /// An ideal gas state that uses temperature as the primary state variable
     /// and calculates pressure and density using the ideal gas law.
@@ -91,7 +92,7 @@ mod tests {
             Self {
                 temperature,
                 molar_mass,
-                gas_constant: 8.314, // J/(mol·K)
+                gas_constant: UNIVERSAL_GAS_CONSTANT, // J/(mol·K)
             }
         }
 
