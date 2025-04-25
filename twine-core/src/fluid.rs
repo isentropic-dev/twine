@@ -150,8 +150,17 @@ mod tests {
     use uom::si::{
         mass_density::kilogram_per_cubic_meter, pressure::pascal, thermodynamic_temperature::kelvin,
     };
-    // Define the universal gas constant (J/(mol·K)).
-    const UNIVERSAL_GAS_CONSTANT: f64 = 8.314;
+    use uom::si::f64::Quantity;
+    use uom::si::molar_gas_constant::joule_per_mole_kelvin;
+    use uom::si::molar_gas_constant::dimension::Dimension as MolarGasConstantDimension;
+    use uom::si::molar_mass::kilogram_per_mole;
+    use uom::si::molar_mass::dimension::Dimension as MolarMassDimension;
+
+    // Define the universal gas constant as a uom Quantity (J/(mol·K)).
+    type MolarGasConstant = Quantity<MolarGasConstantDimension, uom::si::SI<f64>, f64>;
+    type MolarMass = Quantity<MolarMassDimension, uom::si::SI<f64>, f64>;
+
+    const UNIVERSAL_GAS_CONSTANT: MolarGasConstant = MolarGasConstant::new::<joule_per_mole_kelvin>(8.314);
 
     /// A state representation for an ideal gas.
     #[derive(Debug, Clone)]
@@ -163,24 +172,22 @@ mod tests {
     /// A model for ideal gas calculations.
     #[derive(Debug, Clone)]
     struct IdealGasModel {
-        molar_mass: f64,   // kg/mol
-        gas_constant: f64, // J/(mol·K)
+        molar_mass: MolarMass,         // kg/mol
+        gas_constant: MolarGasConstant, // J/(mol·K)
     }
 
     impl IdealGasModel {
         fn air() -> Self {
             Self {
-                molar_mass: 0.02896,
+                molar_mass: MolarMass::new::<kilogram_per_mole>(0.02896),
                 gas_constant: UNIVERSAL_GAS_CONSTANT,
             }
         }
 
         // Calculate pressure using ideal gas law: P = ρRT/M
         fn calculate_pressure(&self, state: &IdealGasState) -> Pressure {
-            let rho = state.density.get::<kilogram_per_cubic_meter>();
-            let temp = state.temperature.get::<kelvin>();
-            let pressure_value = rho * self.gas_constant * temp / self.molar_mass;
-            Pressure::new::<pascal>(pressure_value)
+            // P = ρRT/M
+            state.density * self.gas_constant * state.temperature / self.molar_mass
         }
 
         // Calculate temperature from pressure and density: T = PM/(ρR)
@@ -189,10 +196,8 @@ mod tests {
             pressure: Pressure,
             density: MassDensity,
         ) -> ThermodynamicTemperature {
-            let p = pressure.get::<pascal>();
-            let rho = density.get::<kilogram_per_cubic_meter>();
-            let temp_value = p * self.molar_mass / (rho * self.gas_constant);
-            ThermodynamicTemperature::new::<kelvin>(temp_value)
+            // T = PM/(ρR)
+            pressure * self.molar_mass / (density * self.gas_constant)
         }
 
         // Calculate density from temperature and pressure: ρ = PM/(RT)
@@ -201,10 +206,8 @@ mod tests {
             temperature: ThermodynamicTemperature,
             pressure: Pressure,
         ) -> MassDensity {
-            let temp = temperature.get::<kelvin>();
-            let p = pressure.get::<pascal>();
-            let density_value = p * self.molar_mass / (self.gas_constant * temp);
-            MassDensity::new::<kilogram_per_cubic_meter>(density_value)
+            // ρ = PM/(RT)
+            pressure * self.molar_mass / (self.gas_constant * temperature)
         }
     }
 
@@ -363,13 +366,14 @@ mod tests {
 
         let test_pressure = model.pressure(&test_state);
 
-        // P = ρRT/M
-        let calculated_pressure = model.density(&test_state).get::<kilogram_per_cubic_meter>()
-            * model.gas_constant
-            * model.temperature(&test_state).get::<kelvin>()
+        // P = ρRT/M - calculate directly with uom types
+        let calculated_pressure = model.density(&test_state) 
+            * model.gas_constant 
+            * model.temperature(&test_state) 
             / model.molar_mass;
 
-        assert!((test_pressure.get::<pascal>() - calculated_pressure).abs() < 0.001);
+        // Compare the pressures directly using uom's comparison
+        assert!((test_pressure - calculated_pressure).abs() < Pressure::new::<pascal>(0.001));
     }
 
     #[test]
