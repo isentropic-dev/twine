@@ -204,24 +204,6 @@ pub trait NewStateFromPressureDensity: FluidPropertyModel {
     ) -> Result<Self::State, FluidStateError>;
 }
 
-/// Errors that occur when constructing a new fluid state from input properties.
-#[derive(Debug, Clone, PartialEq, Eq, Error)]
-pub enum FluidStateError {
-    /// One or more input values are physically invalid or inconsistent.
-    ///
-    /// This error occurs when inputs violate physical laws, are out of the
-    /// model's valid domain, or are otherwise unsuitable for creating a state.
-    #[error("Invalid input: {0}")]
-    InvalidInput(String),
-
-    /// A numerical or internal calculation error occurred during state construction.
-    ///
-    /// This error occurs when the model fails due to issues unrelated to
-    /// physical validity — such as division by zero or convergence failure.
-    #[error("Calculation error: {0}")]
-    CalculationError(String),
-}
-
 /// Errors that occur when evaluating fluid properties at a given state.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum FluidPropertyError {
@@ -239,6 +221,24 @@ pub enum FluidPropertyError {
     },
 
     /// A numerical or internal calculation error occurred during property evaluation.
+    ///
+    /// This error occurs when the model fails due to issues unrelated to
+    /// physical validity — such as division by zero or convergence failure.
+    #[error("Calculation error: {0}")]
+    CalculationError(String),
+}
+
+/// Errors that occur when constructing a new fluid state from input properties.
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum FluidStateError {
+    /// One or more input values are physically invalid or inconsistent.
+    ///
+    /// This error occurs when inputs violate physical laws, are out of the
+    /// model's valid domain, or are otherwise unsuitable for creating a state.
+    #[error("Invalid input: {0}")]
+    InvalidInput(String),
+
+    /// A numerical or internal calculation error occurred during state construction.
     ///
     /// This error occurs when the model fails due to issues unrelated to
     /// physical validity — such as division by zero or convergence failure.
