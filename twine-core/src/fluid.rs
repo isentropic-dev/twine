@@ -64,7 +64,14 @@ pub trait CvProvider: FluidPropertyModel {
 pub trait NewStateFromTemperature: FluidPropertyModel {
     /// Creates a new fluid state from the provided temperature.
     ///
-    /// Uses the reference state to preserve other properties when possible.
+    /// The new state is derived by modifying the temperature of the reference state.
+    ///
+    /// Preservation of other properties (such as density, pressure, phase
+    /// information, or model-specific metadata) is determined by the fluid
+    /// property model implementation.
+    ///
+    /// Implementations should document which aspects of the reference state are
+    /// preserved or recalculated during state creation.
     ///
     /// # Errors
     ///
@@ -80,7 +87,14 @@ pub trait NewStateFromTemperature: FluidPropertyModel {
 pub trait NewStateFromDensity: FluidPropertyModel {
     /// Creates a new fluid state from the provided density.
     ///
-    /// Uses the reference state to preserve other properties when possible.
+    /// The new state is derived by modifying the density of the reference state.
+    ///
+    /// Preservation of other properties (such as temperature, pressure, phase
+    /// information, or model-specific metadata) is determined by the fluid
+    /// property model implementation.
+    ///
+    /// Implementations should document which aspects of the reference state are
+    /// preserved or recalculated during state creation.
     ///
     /// # Errors
     ///
@@ -96,7 +110,14 @@ pub trait NewStateFromDensity: FluidPropertyModel {
 pub trait NewStateFromPressure: FluidPropertyModel {
     /// Creates a new fluid state from the provided pressure.
     ///
-    /// Uses the reference state to preserve other properties when possible.
+    /// The new state is derived by modifying the pressure of the reference state.
+    ///
+    /// Preservation of other properties (such as temperature, density, phase
+    /// information, or model-specific metadata) is determined by the fluid
+    /// property model implementation.
+    ///
+    /// Implementations should document which aspects of the reference state are
+    /// preserved or recalculated during state creation.
     ///
     /// # Errors
     ///
@@ -112,11 +133,19 @@ pub trait NewStateFromPressure: FluidPropertyModel {
 pub trait NewStateFromTemperatureDensity: FluidPropertyModel {
     /// Creates a new fluid state from the provided temperature and density.
     ///
-    /// Uses the reference state to preserve other properties when possible.
+    /// The new state is derived by modifying the temperature and density of the
+    /// reference state.
+    ///
+    /// Preservation of other properties is determined by the fluid property
+    /// model implementation.
+    ///
+    /// Implementations should document which aspects of the reference state are
+    /// preserved or recalculated during state creation.
     ///
     /// # Errors
     ///
-    /// Returns an error if the temperature or density is invalid or if the calculation fails.
+    /// Returns an error if the temperature or density is invalid or if the
+    /// calculation fails.
     fn new_state_from_temperature_density(
         &self,
         reference: &Self::State,
@@ -129,11 +158,19 @@ pub trait NewStateFromTemperatureDensity: FluidPropertyModel {
 pub trait NewStateFromTemperaturePressure: FluidPropertyModel {
     /// Creates a new fluid state from the provided temperature and pressure.
     ///
-    /// Uses the reference state to preserve other properties when possible.
+    /// The new state is derived by modifying the temperature and pressure of
+    /// the reference state.
+    ///
+    /// Preservation of other properties is determined by the fluid property
+    /// model implementation.
+    ///
+    /// Implementations should document which aspects of the reference state are
+    /// preserved or recalculated during state creation.
     ///
     /// # Errors
     ///
-    /// Returns an error if the temperature or pressure is invalid or if the calculation fails.
+    /// Returns an error if the temperature or pressure is invalid or if the
+    /// calculation fails.
     fn new_state_from_temperature_pressure(
         &self,
         reference: &Self::State,
@@ -146,11 +183,19 @@ pub trait NewStateFromTemperaturePressure: FluidPropertyModel {
 pub trait NewStateFromPressureDensity: FluidPropertyModel {
     /// Creates a new fluid state from the provided pressure and density.
     ///
-    /// Uses the reference state to preserve other properties when possible.
+    /// The new state is derived by modifying the pressure and density of the
+    /// reference state.
+    ///
+    /// Preservation of other properties is determined by the fluid property
+    /// model implementation.
+    ///
+    /// Implementations should document which aspects of the reference state are
+    /// preserved or recalculated during state creation.
     ///
     /// # Errors
     ///
-    /// Returns an error if the pressure or density is invalid or if the calculation fails.
+    /// Returns an error if the pressure or density is invalid or if the
+    /// calculation fails.
     fn new_state_from_pressure_density(
         &self,
         reference: &Self::State,
@@ -160,13 +205,6 @@ pub trait NewStateFromPressureDensity: FluidPropertyModel {
 }
 
 /// Errors that occur when constructing a new fluid state from input properties.
-///
-/// `FluidStateError` represents failures encountered during the creation of a fluid
-/// state from thermodynamic inputs such as temperature, pressure, or density.
-/// This includes:
-///
-/// - Physically invalid or inconsistent input values.
-/// - Numerical or internal calculation errors during state construction.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum FluidStateError {
     /// One or more input values are physically invalid or inconsistent.
@@ -179,8 +217,7 @@ pub enum FluidStateError {
     /// A numerical or internal calculation error occurred during state construction.
     ///
     /// This error occurs when the model fails due to issues unrelated to
-    /// physical validity — such as division by zero, convergence failure, or
-    /// floating-point overflow.
+    /// physical validity — such as division by zero or convergence failure.
     #[error("Calculation error: {0}")]
     CalculationError(String),
 }
@@ -202,6 +239,9 @@ pub enum FluidPropertyError {
     },
 
     /// A numerical or internal calculation error occurred during property evaluation.
+    ///
+    /// This error occurs when the model fails due to issues unrelated to
+    /// physical validity — such as division by zero or convergence failure.
     #[error("Calculation error: {0}")]
     CalculationError(String),
 }
