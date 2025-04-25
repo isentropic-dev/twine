@@ -64,6 +64,10 @@ pub trait FromTemperature: FluidModel {
     /// Uses the reference state to preserve other properties when possible.
     /// If the fluid model cannot preserve certain properties when changing
     /// temperature, it should document this behavior.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the temperature is invalid or if the calculation fails.
     fn new_state_from_temperature(
         &self,
         reference: &Self::State,
@@ -78,6 +82,10 @@ pub trait FromDensity: FluidModel {
     /// Uses the reference state to preserve other properties when possible.
     /// If the fluid model cannot preserve certain properties when changing
     /// density, it should document this behavior.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the density is invalid or if the calculation fails.
     fn new_state_from_density(
         &self,
         reference: &Self::State,
@@ -92,6 +100,10 @@ pub trait FromPressure: FluidModel {
     /// Uses the reference state to preserve other properties when possible.
     /// If the fluid model cannot preserve certain properties when changing
     /// pressure, it should document this behavior.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the pressure is invalid or if the calculation fails.
     fn new_state_from_pressure(
         &self,
         reference: &Self::State,
@@ -106,6 +118,10 @@ pub trait FromTemperatureDensity: FluidModel {
     /// Uses the reference state to preserve other properties when possible.
     /// If the fluid model cannot preserve certain properties when changing
     /// temperature and density, it should document this behavior.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the temperature or density is invalid or if the calculation fails.
     fn new_state_from_temperature_density(
         &self,
         reference: &Self::State,
@@ -121,6 +137,10 @@ pub trait FromTemperaturePressure: FluidModel {
     /// Uses the reference state to preserve other properties when possible.
     /// If the fluid model cannot preserve certain properties when changing
     /// temperature and pressure, it should document this behavior.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the temperature or pressure is invalid or if the calculation fails.
     fn new_state_from_temperature_pressure(
         &self,
         reference: &Self::State,
@@ -136,6 +156,10 @@ pub trait FromPressureDensity: FluidModel {
     /// Uses the reference state to preserve other properties when possible.
     /// If the fluid model cannot preserve certain properties when changing
     /// pressure and density, it should document this behavior.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the pressure or density is invalid or if the calculation fails.
     fn new_state_from_pressure_density(
         &self,
         reference: &Self::State,
@@ -282,9 +306,9 @@ mod tests {
             reference: &Self::State,
             temperature: ThermodynamicTemperature,
         ) -> Result<Self::State, FluidStateError> {
-            // Assume constant pressure when changing temperature
-            let pressure = self.pressure(reference);
-            self.new_state_from_temperature_pressure(reference, temperature, pressure)
+            // Assume constant volume (density) when changing temperature
+            let density = self.density(reference);
+            self.new_state_from_temperature_density(reference, temperature, density)
         }
     }
 
@@ -294,9 +318,9 @@ mod tests {
             reference: &Self::State,
             pressure: Pressure,
         ) -> Result<Self::State, FluidStateError> {
-            // Assume constant temperature when changing pressure
-            let temperature = self.temperature(reference);
-            self.new_state_from_temperature_pressure(reference, temperature, pressure)
+            // Assume constant volume (density) when changing pressure
+            let temperature = self.calculate_temperature(pressure, self.density(reference));
+            self.new_state_from_temperature_density(reference, temperature, self.density(reference))
         }
     }
 
