@@ -9,8 +9,13 @@ use uom::si::f64::{
     MassDensity,
     Pressure as UomPressure,
     ThermodynamicTemperature,
-    SpecificEnthalpy,
 };
+use uom::si::f64::Quantity;
+use uom::si::energy_per_mass::joule_per_kilogram;
+use uom::si::energy_per_mass::dimension::Dimension as EnergyPerMassDimension;
+
+// Define SpecificEnthalpy as energy per mass (J/kg)
+type SpecificEnthalpy = Quantity<EnergyPerMassDimension, uom::si::SI<f64>, f64>;
 
 /// Base trait for fluid models.
 ///
@@ -164,7 +169,7 @@ mod tests {
         mass_density::kilogram_per_cubic_meter,
         pressure::pascal,
         thermodynamic_temperature::kelvin,
-        specific_enthalpy::joule_per_kilogram,
+        energy_per_mass::joule_per_kilogram,
     };
     // Define the universal gas constant (J/(mol·K))
     const UNIVERSAL_GAS_CONSTANT: f64 = 8.314;
@@ -238,7 +243,7 @@ mod tests {
     
     // Helper method to create a new state (moved from the trait implementation)
     impl IdealGasModel {
-        fn new_state(&self, temperature: ThermodynamicTemperature, density: MassDensity) -> Self::State {
+        fn new_state(&self, temperature: ThermodynamicTemperature, density: MassDensity) -> IdealGasState {
             IdealGasState {
                 temperature,
                 density,
