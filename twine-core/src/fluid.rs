@@ -5,10 +5,10 @@
 //! a consistent interface for accessing and modifying properties.
 
 use std::fmt::Debug;
-use uom::si::{
-    mass_density::MassDensity,
-    pressure::Pressure as UomPressure,
-    thermodynamic_temperature::ThermodynamicTemperature,
+use uom::si::f64::{
+    MassDensity,
+    Pressure as UomPressure,
+    ThermodynamicTemperature,
 };
 
 /// Base trait for fluid state representations.
