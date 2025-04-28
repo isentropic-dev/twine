@@ -1,7 +1,7 @@
 mod component;
-pub mod fluid;
 pub mod graph;
 pub mod solve;
+pub mod thermo;
 mod twine;
 
 pub use component::Component;
