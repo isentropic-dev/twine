@@ -1,10 +1,13 @@
-use twine_core::fluid::{
-    DensityProvider, FluidPropertyModel, FluidStateError, NewStateFromPressure,
-    NewStateFromPressureDensity, NewStateFromTemperature, NewStateFromTemperatureDensity,
-    NewStateFromTemperaturePressure, PressureProvider, TemperatureProvider,
+use twine_core::thermo::{
+    fluid::{
+        DensityProvider, FluidPropertyModel, FluidStateError, NewStateFromPressure,
+        NewStateFromPressureDensity, NewStateFromTemperature, NewStateFromTemperatureDensity,
+        NewStateFromTemperaturePressure, PressureProvider, TemperatureProvider,
+    },
+    units::SpecificGasConstant,
 };
 use uom::si::{
-    f64::{MassDensity, Pressure, SpecificHeatCapacity, ThermodynamicTemperature},
+    f64::{MassDensity, Pressure, ThermodynamicTemperature},
     specific_heat_capacity::joule_per_kilogram_kelvin,
     thermodynamic_temperature::kelvin,
 };
@@ -32,7 +35,7 @@ use uom::si::{
 /// - Modifying pressure preserves the reference density, adjusting temperature accordingly.
 #[derive(Debug, Clone)]
 pub struct IdealGasModel {
-    specific_gas_constant: SpecificHeatCapacity,
+    specific_gas_constant: SpecificGasConstant,
 }
 
 /// Represents the thermodynamic state of an ideal gas.
@@ -50,7 +53,7 @@ pub struct IdealGasState {
 impl IdealGasModel {
     /// Creates a new ideal gas model with a user-specified specific gas constant.
     #[must_use]
-    pub fn new(specific_gas_constant: SpecificHeatCapacity) -> Self {
+    pub fn new(specific_gas_constant: SpecificGasConstant) -> Self {
         Self {
             specific_gas_constant,
         }
@@ -60,10 +63,10 @@ impl IdealGasModel {
     ///
     /// Assumes a specific gas constant of 287.053 J/(kg·K).
     #[must_use]
-    pub fn air() -> Self {
-        Self {
-            specific_gas_constant: SpecificHeatCapacity::new::<joule_per_kilogram_kelvin>(287.053),
-        }
+    pub fn dry_air() -> Self {
+        Self::new(SpecificGasConstant::new::<joule_per_kilogram_kelvin>(
+            287.053,
+        ))
     }
 
     // Calculate pressure using ideal gas law: P = ρ⋅R⋅T.
@@ -197,9 +200,9 @@ impl NewStateFromPressure for IdealGasModel {
 #[cfg(test)]
 #[allow(clippy::float_cmp)]
 mod tests {
-    use uom::si::{mass_density::kilogram_per_cubic_meter, pressure::kilopascal};
-
     use super::*;
+
+    use uom::si::{mass_density::kilogram_per_cubic_meter, pressure::kilopascal};
 
     /// Air at standard sea-level conditions.
     fn air_at_sea_level() -> IdealGasState {
@@ -211,7 +214,7 @@ mod tests {
 
     #[test]
     fn basic_properties() {
-        let ideal_gas_air = IdealGasModel::air();
+        let ideal_gas_air = IdealGasModel::dry_air();
         let state = air_at_sea_level();
 
         assert_eq!(ideal_gas_air.temperature(&state).get::<kelvin>(), 288.15);
@@ -228,7 +231,7 @@ mod tests {
 
     #[test]
     fn temperature_pressure_relationships() {
-        let ideal_gas_air = IdealGasModel::air();
+        let ideal_gas_air = IdealGasModel::dry_air();
         let initial_state = air_at_sea_level();
 
         // Increase the temperature at constant density (i.e., volume).
