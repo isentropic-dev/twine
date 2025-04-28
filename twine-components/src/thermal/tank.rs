@@ -37,9 +37,9 @@ use uom::si::f64::{Area, MassRate, Power, ThermodynamicTemperature, Volume};
 /// - `c_v`        = specific heat at constant volume of the fluid (J/kg·K)
 ///
 /// The energy balance accounts for three contributions:
-/// - Enthalpy change due to mass flow through the tank
-/// - External heating applied directly to the fluid
-/// - Heat losses to the ambient environment through the tank walls
+/// - Enthalpy change due to mass flow through the tank.
+/// - External heating applied directly to the fluid.
+/// - Heat losses to the ambient environment through the tank walls.
 ///
 /// The tank volume and heat transfer area are treated as constant.
 /// The fluid mass is determined from the fluid density at the current tank
@@ -143,8 +143,8 @@ where
         let heat_loss = self.u_value
             * self.area
             * temperature_difference(
-                self.fluid.temperature(&input.tank_state),
                 input.ambient_temperature,
+                self.fluid.temperature(&input.tank_state),
             );
 
         // Net rate of heat transfer into the tank fluid.
