@@ -23,16 +23,18 @@ use uom::si::f64::{Area, MassRate, Power, ThermodynamicTemperature, Volume};
 /// The model solves the transient energy balance:
 ///
 /// ```text
-/// dT/dt = (ṁ · (h_in - h_out) + Q_in - Q_loss) / (m · c_v)
+/// dT/dt = (m_dot · (h_in - h_out) + Q_dot_in - Q_dot_loss) / (m · c_v)
 /// ```
 ///
-/// where:
-/// - `h_in`   = specific enthalpy of the incoming fluid
-/// - `h_out`  = specific enthalpy of the fluid leaving the tank
-/// - `Q_in`   = external heat input
-/// - `Q_loss` = heat loss to the environment through the tank's surface
-/// - `m`      = total mass of fluid inside the tank
-/// - `c_v`    = specific heat at constant volume of the fluid
+/// where (shown in SI units for clarity):
+/// - `dT/dt`      = rate of change of the tank fluid temperature (K/s)
+/// - `m_dot`      = mass flow rate through the tank (kg/s)
+/// - `h_in`       = specific enthalpy of the incoming fluid (J/kg)
+/// - `h_out`      = specific enthalpy of the fluid leaving the tank (J/kg)
+/// - `Q_dot_in`   = external heat input rate (W)
+/// - `Q_dot_loss` = heat loss rate to the environment (W)
+/// - `m`          = total mass of fluid inside the tank (kg)
+/// - `c_v`        = specific heat at constant volume of the fluid (J/kg·K)
 ///
 /// The energy balance accounts for three contributions:
 /// - Enthalpy change due to mass flow through the tank
@@ -44,10 +46,9 @@ use uom::si::f64::{Area, MassRate, Power, ThermodynamicTemperature, Volume};
 /// state and is treated as constant during evaluation of the instantaneous
 /// temperature derivative.
 ///
-/// # Errors
-///
-/// Errors may occur if specific heat capacity (`c_v`) is undefined at the
-/// current tank state.
+/// Note that the SI units shown above are for illustration purposes only.
+/// Units for all input and output values are automatically enforced and
+/// converted as necessary by the `uom` type system.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Tank<F: FluidPropertyModel> {
     /// Surface area available for heat exchange with the environment.
@@ -68,8 +69,8 @@ pub struct Tank<F: FluidPropertyModel> {
 
 /// Inputs required to evaluate the tank's energy balance.
 ///
-/// Specifies the environmental conditions, inlet fluid conditions, and the
-/// current thermodynamic state of the fluid inside the tank.
+/// Specifies the ambient conditions, the inlet fluid state, and the current
+/// tank fluid state.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TankInput<F: FluidPropertyModel> {
     /// Ambient temperature surrounding the tank, used to calculate heat loss.
@@ -138,7 +139,7 @@ where
     /// Returns a [`TankError`] if evaluation of the specific heat capacity fails at
     /// the current tank state.
     fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
-        // Heat transfer from the tank fluid to the environment.
+        // Rate of heat transfer from the tank fluid to the environment.
         let heat_loss = self.u_value
             * self.area
             * temperature_difference(
@@ -146,18 +147,15 @@ where
                 input.ambient_temperature,
             );
 
-        // Net heat transfer associated with mass flow through the tank.
-        let h_inlet = self.fluid.enthalpy(&input.inlet_state);
-        let h_tank = self.fluid.enthalpy(&input.tank_state);
-        let inlet_heat_transfer = input.mass_flow_rate * (h_inlet - h_tank);
-
-        // Net heat transfer rate into the tank.
-        let q_dot_net = input.heat_input + inlet_heat_transfer - heat_loss;
+        // Net rate of heat transfer into the tank fluid.
+        let h_in = self.fluid.enthalpy(&input.inlet_state);
+        let h_out = self.fluid.enthalpy(&input.tank_state);
+        let q_dot_net = input.mass_flow_rate * (h_in - h_out) + input.heat_input - heat_loss;
 
         // Fluid temperature derivative based on the energy balance.
-        let m_fluid = self.volume * self.fluid.density(&input.tank_state);
-        let cv_fluid = self.fluid.cv(&input.tank_state)?;
-        let tank_temperature_derivative = q_dot_net / (m_fluid * cv_fluid);
+        let m = self.volume * self.fluid.density(&input.tank_state);
+        let c_v = self.fluid.cv(&input.tank_state)?;
+        let tank_temperature_derivative = q_dot_net / (m * c_v);
 
         Ok(TankOutput {
             heat_loss,
