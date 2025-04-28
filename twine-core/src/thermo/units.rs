@@ -1,6 +1,9 @@
+use std::ops::Deref;
+
+use thiserror::Error;
 use uom::{
     si::{
-        f64::{TemperatureInterval, ThermodynamicTemperature},
+        f64::{MassRate, TemperatureInterval, ThermodynamicTemperature},
         temperature_interval::kelvin as delta_kelvin,
         thermodynamic_temperature::kelvin as abs_kelvin,
         Quantity, ISQ, SI,
@@ -28,6 +31,52 @@ pub type TemperatureRate = Quantity<ISQ<Z0, Z0, N1, Z0, P1, Z0, Z0>, SI<f64>, f6
 /// Typically used to model heat loss through a surface with `Q = U⋅A⋅ΔT`.
 pub type UValue = Quantity<ISQ<Z0, P1, N3, Z0, N1, Z0, Z0>, SI<f64>, f64>;
 
+/// Mass flow rate constrained to be non-negative.
+///
+/// Typically used to enforce the physical constraint that mass flow through a
+/// system must be positive or zero.
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub struct PositiveMassRate(MassRate);
+
+impl PositiveMassRate {
+    /// Creates a new `PositiveMassRate` if the value is non-negative.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`MassRateError`] if the provided `MassRate` is negative.
+    pub fn new(rate: MassRate) -> Result<Self, MassRateError> {
+        if rate.value >= 0.0 {
+            Ok(Self(rate))
+        } else {
+            Err(MassRateError::NegativeRate(rate.value))
+        }
+    }
+
+    /// Consumes the wrapper and returns the inner `MassRate`.
+    #[inline]
+    #[must_use]
+    pub fn into_inner(self) -> MassRate {
+        self.0
+    }
+}
+
+impl Deref for PositiveMassRate {
+    type Target = MassRate;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+/// Errors that can occur when creating a [`PositiveMassRate`].
+#[derive(Debug, Clone, Copy, PartialEq, Error)]
+pub enum MassRateError {
+    /// The provided mass rate was negative.
+    #[error("Mass flow rate must be non-negative, got {0} kg/s")]
+    NegativeRate(f64),
+}
+
 /// Computes the difference between two temperatures.
 ///
 /// A `TemperatureInterval` (representing a temperature change) is a distinct
@@ -54,6 +103,7 @@ pub type UValue = Quantity<ISQ<Z0, P1, N3, Z0, N1, Z0, Z0>, SI<f64>, f64>;
 /// # Returns
 ///
 /// A `TemperatureInterval` representing the signed difference `to - from`.
+#[inline]
 #[must_use]
 pub fn temperature_difference(
     from: ThermodynamicTemperature,
@@ -68,12 +118,31 @@ mod tests {
 
     use approx::assert_relative_eq;
     use uom::si::{
+        mass_rate::{kilogram_per_second, pound_per_hour},
         temperature_interval::{
             degree_celsius as delta_celsius, degree_rankine as delta_rankine,
             kelvin as delta_kelvin,
         },
         thermodynamic_temperature::{degree_celsius, degree_fahrenheit, kelvin},
     };
+
+    #[test]
+    fn positive_mass_rate_creation() {
+        // Positive mass flow rate should succeed.
+        let positive_rate = MassRate::new::<kilogram_per_second>(5.0);
+        let result = PositiveMassRate::new(positive_rate);
+        assert!(result.is_ok());
+
+        // Zero mass flow rate should succeed.
+        let zero_rate = MassRate::new::<pound_per_hour>(0.0);
+        let result = PositiveMassRate::new(zero_rate);
+        assert!(result.is_ok());
+
+        // Negative mass flow rate should fail.
+        let negative_rate = MassRate::new::<kilogram_per_second>(-2.0);
+        let result = PositiveMassRate::new(negative_rate);
+        assert_eq!(result, Err(MassRateError::NegativeRate(-2.0)));
+    }
 
     #[test]
     fn temperature_difference_sign_and_magnitude() {
