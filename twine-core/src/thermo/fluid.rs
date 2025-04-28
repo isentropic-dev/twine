@@ -9,6 +9,8 @@ use std::fmt::Debug;
 use thiserror::Error;
 use uom::si::f64::{MassDensity, Pressure, SpecificHeatCapacity, ThermodynamicTemperature};
 
+use super::units::{SpecificEnthalpy, SpecificEntropy};
+
 /// Base trait for fluid property models.
 ///
 /// This trait serves as the foundation for all fluid property traits.
@@ -36,6 +38,18 @@ pub trait DensityProvider: FluidPropertyModel {
 pub trait PressureProvider: FluidPropertyModel {
     /// Returns the pressure of the fluid state.
     fn pressure(&self, state: &Self::State) -> Pressure;
+}
+
+/// Provides access to the enthalpy of a fluid state.
+pub trait EnthalpyProvider: FluidPropertyModel {
+    /// Returns the enthalpy of the fluid state.
+    fn enthalpy(&self, state: &Self::State) -> SpecificEnthalpy;
+}
+
+/// Provides access to the entropy of a fluid state.
+pub trait EntropyProvider: FluidPropertyModel {
+    /// Returns the entropy of the fluid state.
+    fn entropy(&self, state: &Self::State) -> SpecificEntropy;
 }
 
 /// Provides access to the specific heat at constant pressure (`cp`) of a fluid state.
@@ -75,7 +89,7 @@ pub trait NewStateFromTemperature: FluidPropertyModel {
     ///
     /// # Errors
     ///
-    /// Returns an error if the temperature is invalid or if the calculation fails.
+    /// Fails if the provided temperature is invalid or if the calculation fails.
     fn new_state_from_temperature(
         &self,
         reference: &Self::State,
@@ -98,7 +112,7 @@ pub trait NewStateFromDensity: FluidPropertyModel {
     ///
     /// # Errors
     ///
-    /// Returns an error if the density is invalid or if the calculation fails.
+    /// Fails if the provided density is invalid or if the calculation fails.
     fn new_state_from_density(
         &self,
         reference: &Self::State,
@@ -121,7 +135,7 @@ pub trait NewStateFromPressure: FluidPropertyModel {
     ///
     /// # Errors
     ///
-    /// Returns an error if the pressure is invalid or if the calculation fails.
+    /// Fails if the provided pressure is invalid or if the calculation fails.
     fn new_state_from_pressure(
         &self,
         reference: &Self::State,
@@ -144,8 +158,8 @@ pub trait NewStateFromTemperatureDensity: FluidPropertyModel {
     ///
     /// # Errors
     ///
-    /// Returns an error if the temperature or density is invalid or if the
-    /// calculation fails.
+    /// Fails if the provided temperature and density do not represent a valid
+    /// thermodynamic state or if the calculation fails.
     fn new_state_from_temperature_density(
         &self,
         reference: &Self::State,
@@ -169,8 +183,8 @@ pub trait NewStateFromTemperaturePressure: FluidPropertyModel {
     ///
     /// # Errors
     ///
-    /// Returns an error if the temperature or pressure is invalid or if the
-    /// calculation fails.
+    /// Fails if the provided temperature and pressure do not represent a valid
+    /// thermodynamic state or if the calculation fails.
     fn new_state_from_temperature_pressure(
         &self,
         reference: &Self::State,
@@ -194,13 +208,63 @@ pub trait NewStateFromPressureDensity: FluidPropertyModel {
     ///
     /// # Errors
     ///
-    /// Returns an error if the pressure or density is invalid or if the
-    /// calculation fails.
+    /// Fails if the provided pressure and density do not represent a valid
+    /// thermodynamic state or if the calculation fails.
     fn new_state_from_pressure_density(
         &self,
         reference: &Self::State,
         pressure: Pressure,
         density: MassDensity,
+    ) -> Result<Self::State, FluidStateError>;
+}
+
+/// Creates a new fluid state from a provided pressure and enthalpy.
+pub trait NewStateFromPressureEnthalpy: FluidPropertyModel {
+    /// Creates a new fluid state from the provided pressure and enthalpy.
+    ///
+    /// The new state is derived by modifying the pressure and enthalpy of the
+    /// reference state.
+    ///
+    /// Preservation of other properties is determined by the fluid property
+    /// model implementation.
+    ///
+    /// Implementations should document which aspects of the reference state are
+    /// preserved or recalculated during state creation.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the provided pressure and enthalpy do not represent a valid
+    /// thermodynamic state or if the calculation fails.
+    fn new_state_from_pressure_enthalpy(
+        &self,
+        reference: &Self::State,
+        pressure: Pressure,
+        enthalpy: SpecificEnthalpy,
+    ) -> Result<Self::State, FluidStateError>;
+}
+
+/// Creates a new fluid state from a provided pressure and entropy.
+pub trait NewStateFromPressureEntropy: FluidPropertyModel {
+    /// Creates a new fluid state from the provided pressure and entropy.
+    ///
+    /// The new state is derived by modifying the pressure and entropy of the
+    /// reference state.
+    ///
+    /// Preservation of other properties is determined by the fluid property
+    /// model implementation.
+    ///
+    /// Implementations should document which aspects of the reference state are
+    /// preserved or recalculated during state creation.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the provided pressure and entropy do not represent a valid
+    /// thermodynamic state or if the calculation fails.
+    fn new_state_from_pressure_entropy(
+        &self,
+        reference: &Self::State,
+        pressure: Pressure,
+        entropy: SpecificEntropy,
     ) -> Result<Self::State, FluidStateError>;
 }
 
