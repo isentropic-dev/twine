@@ -12,7 +12,7 @@ use uom::si::{
     thermodynamic_temperature::kelvin,
 };
 
-/// A thermodynamic model for an ideal gas.
+/// A fluid property model using ideal gas assumptions.
 ///
 /// `IdealGasModel` implements the ideal gas law, relating pressure, density,
 /// and temperature by the equation `P = ρ⋅R⋅T`, where:
@@ -26,9 +26,9 @@ use uom::si::{
 ///
 /// # State Preservation
 ///
-/// When creating a new fluid state by modifying a property (e.g., temperature
-/// or pressure), the model assumes constant volume (constant density) unless
-/// otherwise specified.
+/// When creating a new fluid state by modifying a single property such as
+/// temperature or pressure, the model assumes constant volume (i.e., constant
+/// density) unless otherwise specified.
 ///
 /// Specifically:
 /// - Modifying temperature preserves the reference density, adjusting pressure accordingly.
