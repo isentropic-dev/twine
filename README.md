@@ -20,34 +20,34 @@ This behavior ensures:
 
 ## Declarative Composition with Macros
 
-Twine provides powerful macros that enable users to define higher-order components by declaratively wiring together individual components, specifying how each component's inputs are computed at runtime.
+Twine provides macros that let users define higher-order components by declaratively wiring together individual components, specifying how each component's input values are computed at runtime.
 This approach eliminates boilerplate and guarantees type correctness at compile time.
 
 ```rust
 #[composable]
-pub struct BuildingComponents {
-    // Provides hourly weather data including temperature, humidity, and solar radiation.
-    pub weather: HourlyWeather,
-    // Models thermal behavior of a building envelope with occupancy effects.
-    pub building: Building,
-    // Models heating, ventilation, and air conditioning system performance.
-    pub hvac: HvacSystem,
+struct HouseModelComponents {
+    /// Provides hourly weather data as a function of time.
+    weather: HourlyWeather,
+    /// Models thermal behavior of a building envelope with occupancy effects.
+    building: Building,
+    /// Models heating, ventilation, and air conditioning system performance.
+    hvac: HvacSystem,
 }
 
-/// Input parameters for the building simulation.
-pub struct SimulationInput {
+/// Inputs for the composed house model component.
+struct HouseModelInput {
     /// Current simulation time.
-    pub simulation_time: f64,
+    simulation_time: f64,
     /// Number of occupants in the building.
-    pub occupancy: u32,
+    occupancy: u32,
     /// Desired indoor temperature.
-    pub temp_setpoint: f64,
+    temp_setpoint: f64,
 }
 
-#[compose(SimulatedHome)]
+#[compose(HouseModel)]
 fn compose() {
-    type Input = SimulationInput;
-    type Components = BuildingComponents;
+    type Input = HouseModelInput;
+    type Components = HouseModelComponents;
 
     Connections {
         weather: WeatherInput {
@@ -71,16 +71,16 @@ fn compose() {
 }
 ```
 
-This generates a new `SimulatedHome` component that:
-- Takes a simple `SimulationInput` with user-specified simulation parameters.
+This code generates a `HouseModel` component that:
+- Determines the correct execution order based on dependencies.
 - Automatically routes values to the appropriate components.
 - Resolves the feedback loop between building and HVAC components.
-- Determines the correct execution order based on dependencies.
 
 The generated component implements the `Component` trait, so it can be used just like any other component in further compositions.
 
 ## Dependency Resolution & State Integration
 
-Twine automatically detects and resolves dependency cycles in composed components using iterative solvers that converge on a consistent state. It also identifies opportunities to execute independent components in parallel, improving performance without compromising modularity or reliability.
+Twine automatically detects and resolves dependency cycles in composed components by using iterative solvers that converge on a consistent state.
+It also identifies opportunities to execute independent components in parallel, improving performance without compromising modularity or reliability.
 
-Additionally, Twine provides built-in numerical integration to evolve system states over time, ensuring seamless simulation of dynamic systems while maintaining a functionally pure interface.
+Additionally, Twine provides built-in numerical integration to evolve system states over time, enabling seamless simulation of dynamic systems while preserving functional purity.
