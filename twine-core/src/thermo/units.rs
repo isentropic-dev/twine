@@ -4,6 +4,7 @@ use thiserror::Error;
 use uom::{
     si::{
         f64::{MassRate, TemperatureInterval, ThermodynamicTemperature},
+        mass_rate::kilogram_per_second,
         temperature_interval::kelvin as delta_kelvin,
         thermodynamic_temperature::kelvin as abs_kelvin,
         Quantity, ISQ, SI,
@@ -48,7 +49,9 @@ impl PositiveMassRate {
         if rate.value >= 0.0 {
             Ok(Self(rate))
         } else {
-            Err(MassRateError::NegativeRate(rate.value))
+            Err(MassRateError::NegativeRate(
+                rate.get::<kilogram_per_second>(),
+            ))
         }
     }
 
