@@ -3061,6 +3061,8 @@ name = "twine-core"
 version = "0.1.1"
 dependencies = [
  "petgraph",
+ "thiserror 2.0.12",
+ "uom",
 ]
 
 [[package]]

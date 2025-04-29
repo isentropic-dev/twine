@@ -1,4 +1,5 @@
 mod component;
+pub mod fluid;
 pub mod graph;
 pub mod solve;
 mod twine;
