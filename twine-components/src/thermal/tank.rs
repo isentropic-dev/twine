@@ -5,11 +5,11 @@ use twine_core::{
             CvProvider, DensityProvider, EnthalpyProvider, FluidPropertyError, FluidPropertyModel,
             TemperatureProvider,
         },
-        units::{temperature_difference, TemperatureRate, UValue},
+        units::{temperature_difference, PositiveMassRate, TemperatureRate, UValue},
     },
     Component,
 };
-use uom::si::f64::{Area, MassRate, Power, ThermodynamicTemperature, Volume};
+use uom::si::f64::{Area, Power, ThermodynamicTemperature, Volume};
 
 /// A fully mixed thermal energy storage tank.
 ///
@@ -85,7 +85,7 @@ pub struct TankInput<F: FluidPropertyModel> {
     /// Mass flow rate of fluid through the tank.
     ///
     /// Assumed equal at inlet and outlet to maintain constant tank mass.
-    pub mass_flow_rate: MassRate,
+    pub mass_flow_rate: PositiveMassRate,
 
     /// Current thermodynamic state of the fluid contained within the tank.
     pub tank_state: F::State,
@@ -148,9 +148,10 @@ where
             );
 
         // Net rate of heat transfer into the tank fluid.
+        let m_dot = input.mass_flow_rate.into_inner();
         let h_in = self.fluid.enthalpy(&input.inlet_state);
         let h_out = self.fluid.enthalpy(&input.tank_state);
-        let q_dot_net = input.mass_flow_rate * (h_in - h_out) + input.heat_input - heat_loss;
+        let q_dot_net = m_dot * (h_in - h_out) + input.heat_input - heat_loss;
 
         // Fluid temperature derivative based on the energy balance.
         let m = self.volume * self.fluid.density(&input.tank_state);
