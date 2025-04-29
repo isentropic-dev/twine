@@ -26,11 +26,11 @@ This approach eliminates boilerplate and guarantees type correctness at compile 
 ```rust
 #[composable]
 struct HouseModelComponents {
-    // Provides hourly weather data as a function of time.
+    /// Provides hourly weather data as a function of time.
     weather: HourlyWeather,
-    // Models thermal behavior of a building envelope with occupancy effects.
+    /// Models thermal behavior of a building envelope with occupancy effects.
     building: Building,
-    // Models heating, ventilation, and air conditioning system performance.
+    /// Models heating, ventilation, and air conditioning system performance.
     hvac: HvacSystem,
 }
 
