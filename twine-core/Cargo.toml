@@ -13,3 +13,6 @@ keywords = ["twine", "framework", "functional", "composable", "modeling"]
 petgraph = "0.7.1"
 thiserror = "2.0.12"
 uom = "0.36.0"
+
+[dev-dependencies]
+approx = "0.5.1"
