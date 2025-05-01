@@ -152,6 +152,7 @@ impl NewStateFromTemperature for IncompressibleLiquid {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     use approx::assert_relative_eq;
     use uom::si::{
         available_energy::kilojoule_per_kilogram,
