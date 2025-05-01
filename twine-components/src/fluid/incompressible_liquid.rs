@@ -154,7 +154,7 @@ mod tests {
     use super::*;
     use approx::assert_relative_eq;
     use uom::si::{
-        available_energy::joule_per_kilogram,
+        available_energy::kilojoule_per_kilogram,
         mass_density::kilogram_per_cubic_meter,
         thermodynamic_temperature::{degree_celsius, kelvin},
     };
@@ -164,26 +164,22 @@ mod tests {
         let water = IncompressibleLiquid::water();
         let state = ThermodynamicTemperature::new::<degree_celsius>(20.0);
 
+        assert_relative_eq!(water.temperature(&state).get::<kelvin>(), 293.15);
+
         assert_relative_eq!(
             water.density(&state).get::<kilogram_per_cubic_meter>(),
             998.2
         );
 
-        let ref_temp_in_k = water.reference_temperature.get::<kelvin>();
-        let temp_in_k = water.temperature(&state).get::<kelvin>();
-        let cp = water.cp(&state).unwrap().get::<joule_per_kilogram_kelvin>();
-
-        assert_relative_eq!(temp_in_k, 293.15);
         assert_relative_eq!(
-            water.enthalpy(&state).get::<joule_per_kilogram>(),
-            // h(T) = cp * (T - T_ref)
-            cp * (temp_in_k - ref_temp_in_k)
+            water.enthalpy(&state).get::<kilojoule_per_kilogram>(),
+            83.640,
         );
 
         assert_relative_eq!(
             water.entropy(&state).get::<joule_per_kilogram_kelvin>(),
-            // s(T) = cp * ln(T / T_ref)
-            cp * (temp_in_k / ref_temp_in_k).ln()
+            295.514,
+            epsilon = 1e-4
         );
     }
 }
