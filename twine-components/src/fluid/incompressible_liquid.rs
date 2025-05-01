@@ -8,15 +8,29 @@ use twine_core::thermo::{
 };
 use uom::si::{
     f64::{MassDensity, SpecificHeatCapacity, ThermodynamicTemperature},
+    mass_density::kilogram_per_cubic_meter,
     specific_heat_capacity::joule_per_kilogram_kelvin,
     thermodynamic_temperature::degree_celsius,
 };
 
-/// A fluid property model for incompressible liquids with constant cp and density.
+/// A fluid property model for incompressible liquids.
 ///
-/// Enthalpy and entropy are computed relative to a reference temperature, assuming:
-/// - `h(T) = cp * (T - T_ref)`
-/// - `s(T) = cp * ln(T / T_ref)`
+/// This model is suitable for fluids that can be accurately approximated using:
+/// - Constant density with no compressibility effects.
+/// - Constant specific heat capacity, used for both `cp` and `cv`.
+/// - No pressure dependence in property evaluations.
+/// - Single-phase, non-reactive behavior.
+///
+/// Thermodynamic properties are computed relative to a reference temperature
+/// `T_ref`, at which both enthalpy and entropy are defined to be zero:
+///
+/// ```text
+/// h(T) = cp · (T - T_ref)
+/// s(T) = cp · ln(T / T_ref)
+/// ```
+///
+/// This model is well-suited for scenarios where computational efficiency is
+/// prioritized over detailed real-fluid accuracy.
 #[derive(Debug, Clone)]
 pub struct IncompressibleLiquid {
     pub density: MassDensity,
@@ -25,13 +39,60 @@ pub struct IncompressibleLiquid {
 }
 
 impl IncompressibleLiquid {
-    /// Returns a preconfigured water model based on saturated liquid at 0 °C.
+    /// Returns a model for liquid water based on IAPWS reference conditions.
+    ///
+    /// - Density: 998.2 kg/m³
+    /// - Specific heat capacity: 4,182 J/kg·K
+    /// - Reference temperature: 0°C
+    ///
+    /// Suitable for liquid water near atmospheric pressure in the temperature
+    /// range of approximately 1°C to 100°C.
+    ///
+    /// Not appropriate for two-phase, freezing, or high-pressure conditions.
     #[must_use]
     pub fn water() -> Self {
         Self {
-            density: MassDensity::new::<uom::si::mass_density::kilogram_per_cubic_meter>(998.2),
+            density: MassDensity::new::<kilogram_per_cubic_meter>(998.2),
             cp: SpecificHeatCapacity::new::<joule_per_kilogram_kelvin>(4182.0),
             reference_temperature: ThermodynamicTemperature::new::<degree_celsius>(0.0),
+        }
+    }
+
+    /// Returns a model for pure ethylene glycol at 25°C.
+    ///
+    /// - Density: 1,113 kg/m³
+    /// - Specific heat capacity: 2,380 J/kg·K
+    /// - Reference temperature: 25°C
+    ///
+    /// Suitable for single-phase ethylene glycol near atmospheric pressure in
+    /// the temperature range of approximately 10°C to 80°C.
+    ///
+    /// Not appropriate for two-phase, freezing, or high-pressure conditions.
+    #[must_use]
+    pub fn ethylene_glycol() -> Self {
+        Self {
+            density: MassDensity::new::<kilogram_per_cubic_meter>(1113.0),
+            cp: SpecificHeatCapacity::new::<joule_per_kilogram_kelvin>(2380.0),
+            reference_temperature: ThermodynamicTemperature::new::<degree_celsius>(25.0),
+        }
+    }
+
+    /// Returns a model for pure propylene glycol at 25°C.
+    ///
+    /// - Density: 1,036 kg/m³
+    /// - Specific heat capacity: 2,400 J/kg·K
+    /// - Reference temperature: 25°C
+    ///
+    /// Suitable for single-phase propylene glycol near atmospheric pressure
+    /// in the temperature range of approximately 10°C to 80°C.
+    ///
+    /// Not appropriate for two-phase, freezing, or high-pressure conditions.
+    #[must_use]
+    pub fn propylene_glycol() -> Self {
+        Self {
+            density: MassDensity::new::<kilogram_per_cubic_meter>(1036.0),
+            cp: SpecificHeatCapacity::new::<joule_per_kilogram_kelvin>(2400.0),
+            reference_temperature: ThermodynamicTemperature::new::<degree_celsius>(25.0),
         }
     }
 }
@@ -60,7 +121,7 @@ impl CpProvider for IncompressibleLiquid {
 
 impl CvProvider for IncompressibleLiquid {
     fn cv(&self, _state: &Self::State) -> Result<SpecificHeatCapacity, FluidPropertyError> {
-        Ok(self.cp) // cp = cv for incompressible fluids
+        Ok(self.cp)
     }
 }
 
