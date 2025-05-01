@@ -10,7 +10,7 @@ use uom::si::{
     f64::{MassDensity, SpecificHeatCapacity, ThermodynamicTemperature},
     mass_density::kilogram_per_cubic_meter,
     specific_heat_capacity::joule_per_kilogram_kelvin,
-    thermodynamic_temperature::degree_celsius,
+    thermodynamic_temperature::{degree_celsius, kelvin},
 };
 
 /// A fluid property model for incompressible liquids.
@@ -133,8 +133,8 @@ impl EnthalpyProvider for IncompressibleLiquid {
 
 impl EntropyProvider for IncompressibleLiquid {
     fn entropy(&self, state: &Self::State) -> SpecificEntropy {
-        let t = state.value;
-        let t_ref = self.reference_temperature.value;
+        let t = state.get::<kelvin>();
+        let t_ref = self.reference_temperature.get::<kelvin>();
         self.cp * (t / t_ref).ln()
     }
 }
