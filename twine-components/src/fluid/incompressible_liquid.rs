@@ -15,14 +15,14 @@ use uom::si::{
 
 /// A fluid property model for incompressible liquids.
 ///
-/// This model is suitable for fluids that can be accurately approximated using:
-/// - Constant density with no compressibility effects.
-/// - Constant specific heat capacity, used for both `cp` and `cv`.
-/// - No pressure dependence in property evaluations.
-/// - Single-phase, non-reactive behavior.
+/// This model makes the following assumptions:
+/// - Constant density (no compressibility effects)
+/// - Constant specific heat capacity, used for both `cp` and `cv`
+/// - No pressure dependence in property evaluations
+/// - Single-phase, non-reactive behavior
 ///
 /// Thermodynamic properties are computed relative to a reference temperature
-/// `T_ref`, at which both enthalpy and entropy are defined to be zero:
+/// `T_ref`, at which both specific enthalpy and entropy are defined to be zero:
 ///
 /// ```text
 /// h(T) = cp · (T - T_ref)
@@ -30,7 +30,7 @@ use uom::si::{
 /// ```
 ///
 /// This model is well-suited for scenarios where computational efficiency is
-/// prioritized over detailed real-fluid accuracy.
+/// prioritized over real-fluid fidelity.
 #[derive(Debug, Clone)]
 pub struct IncompressibleLiquid {
     pub density: MassDensity,
@@ -45,8 +45,8 @@ impl IncompressibleLiquid {
     /// - Specific heat capacity: 4,182 J/kg·K
     /// - Reference temperature: 0°C
     ///
-    /// Suitable for liquid water near atmospheric pressure in the temperature
-    /// range of approximately 1°C to 100°C.
+    /// Suitable for water near atmospheric pressure in the temperature range of
+    /// approximately 1°C to 100°C.
     ///
     /// Not appropriate for two-phase, freezing, or high-pressure conditions.
     #[must_use]
@@ -58,7 +58,7 @@ impl IncompressibleLiquid {
         }
     }
 
-    /// Returns a model for pure ethylene glycol at 25°C.
+    /// Returns a model for ethylene glycol using typical liquid properties.
     ///
     /// - Density: 1,113 kg/m³
     /// - Specific heat capacity: 2,380 J/kg·K
@@ -77,7 +77,7 @@ impl IncompressibleLiquid {
         }
     }
 
-    /// Returns a model for pure propylene glycol at 25°C.
+    /// Returns a model for propylene glycol using typical liquid properties.
     ///
     /// - Density: 1,036 kg/m³
     /// - Specific heat capacity: 2,400 J/kg·K
