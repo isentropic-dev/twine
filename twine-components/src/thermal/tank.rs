@@ -5,7 +5,7 @@ use twine_core::{
             CvProvider, DensityProvider, EnthalpyProvider, FluidPropertyError, FluidPropertyModel,
             TemperatureProvider,
         },
-        units::{PositiveMassRate, TemperatureOps, TemperatureRate},
+        units::{PositiveMassRate, TemperatureDifference, TemperatureRate},
     },
     Component,
 };

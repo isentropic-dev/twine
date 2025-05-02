@@ -4,7 +4,7 @@ use uom::si::{
 };
 
 /// Extension method for `ThermodynamicTemperature` to compute a temperature difference.
-pub trait TemperatureOps {
+pub trait TemperatureDifference {
     /// Computes the difference between two temperature values.
     ///
     /// A `TemperatureInterval` (a temperature change) is distinct from a
@@ -31,7 +31,7 @@ pub trait TemperatureOps {
     fn minus(self, other: Self) -> TemperatureInterval;
 }
 
-impl TemperatureOps for ThermodynamicTemperature {
+impl TemperatureDifference for ThermodynamicTemperature {
     fn minus(self, other: Self) -> TemperatureInterval {
         TemperatureInterval::new::<delta_kelvin>(
             self.get::<abs_kelvin>() - other.get::<abs_kelvin>(),

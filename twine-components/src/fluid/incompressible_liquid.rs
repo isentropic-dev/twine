@@ -4,7 +4,7 @@ use twine_core::thermo::{
         FluidPropertyError, FluidPropertyModel, FluidStateError, NewStateFromTemperature,
         TemperatureProvider,
     },
-    units::{SpecificEnthalpy, SpecificEntropy, TemperatureOps},
+    units::{SpecificEnthalpy, SpecificEntropy, TemperatureDifference},
 };
 use uom::si::{
     f64::{MassDensity, SpecificHeatCapacity, ThermodynamicTemperature},
