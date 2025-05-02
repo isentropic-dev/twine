@@ -38,7 +38,7 @@ use uom::si::f64::{Area, HeatTransfer, Power, ThermodynamicTemperature, Volume};
 ///
 /// The energy balance accounts for three contributions:
 /// - Enthalpy change due to mass flow through the tank.
-// - External heating applied directly to the fluid.
+/// - External heating applied directly to the fluid.
 /// - Heat losses to the ambient environment through the tank walls.
 ///
 /// The tank volume and heat transfer area are treated as constant.
