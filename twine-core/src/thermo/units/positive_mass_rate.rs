@@ -52,11 +52,6 @@ impl PositiveMassRate {
         U: mass_rate::Unit + Conversion<f64, T = f64>,
     {
         let rate = MassRate::new::<U>(value);
-        if value < 0.0 {
-            return Err(PositiveMassRateError::NegativeRate(
-                rate.get::<mass_rate::kilogram_per_second>(),
-            ));
-        }
         Self::from_mass_rate(rate)
     }
 
