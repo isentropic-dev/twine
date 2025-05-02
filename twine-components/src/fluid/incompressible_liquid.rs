@@ -4,7 +4,7 @@ use twine_core::thermo::{
         FluidPropertyError, FluidPropertyModel, FluidStateError, NewStateFromTemperature,
         TemperatureProvider,
     },
-    units::{temperature_difference, SpecificEnthalpy, SpecificEntropy},
+    units::{SpecificEnthalpy, SpecificEntropy, TemperatureDifference},
 };
 use uom::si::{
     f64::{MassDensity, SpecificHeatCapacity, ThermodynamicTemperature},
@@ -31,7 +31,7 @@ use uom::si::{
 ///
 /// This model is well-suited for scenarios where computational efficiency is
 /// prioritized over real-fluid fidelity.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct IncompressibleLiquid {
     pub density: MassDensity,
     pub cp: SpecificHeatCapacity,
@@ -127,7 +127,8 @@ impl CvProvider for IncompressibleLiquid {
 
 impl EnthalpyProvider for IncompressibleLiquid {
     fn enthalpy(&self, state: &Self::State) -> SpecificEnthalpy {
-        self.cp * temperature_difference(self.reference_temperature, *state)
+        let delta_t = state.minus(self.reference_temperature);
+        self.cp * delta_t
     }
 }
 
