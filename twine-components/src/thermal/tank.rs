@@ -5,8 +5,9 @@ use twine_core::{
             CvProvider, DensityProvider, EnthalpyProvider, FluidPropertyError, FluidPropertyModel,
             TemperatureProvider,
         },
-        units::{PositiveMassRate, TemperatureDifference, TemperatureRate},
+        units::{PositiveMassRate, TemperatureDifference},
     },
+    transient::TimeDerivativeOf,
     Component,
 };
 use uom::si::f64::{Area, HeatTransfer, Power, ThermodynamicTemperature, Volume};
@@ -105,7 +106,7 @@ pub struct TankOutput {
     /// Rate of change of the tank fluid temperature.
     ///
     /// Positive for heating, negative for cooling.
-    pub tank_temperature_derivative: TemperatureRate,
+    pub tank_temperature_derivative: TimeDerivativeOf<ThermodynamicTemperature>,
 }
 
 /// Errors that can occur while evaluating the tank's energy balance.
