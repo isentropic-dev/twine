@@ -4,14 +4,15 @@ use uom::si::f64::Time;
 
 use super::{HasTime, StateIntegrator, StatefulComponent, TimeStep};
 
-/// A `Simulation` evolves a [`StatefulComponent`] over time using a [`StateIntegrator`].
+/// A `TransientSimulation` models the time evolution of a [`StatefulComponent`]
+/// using a [`StateIntegrator`].
 ///
 /// It holds a component, an integrator, and a timeline of [`TimeStep`]s
 /// representing the system’s evolution.
 /// Each call to [`step()`] advances the simulation by integrating the
 /// component’s state over a time increment, then appending the resulting
 /// [`TimeStep`] to the simulation history.
-pub struct Simulation<C, I>
+pub struct TransientSimulation<C, I>
 where
     C: StatefulComponent,
     C::Input: Clone + Debug + HasTime,
@@ -23,7 +24,7 @@ where
     history: Vec<TimeStep<C>>,
 }
 
-impl<C, I> Simulation<C, I>
+impl<C, I> TransientSimulation<C, I>
 where
     C: StatefulComponent,
     C::Input: Clone + Debug + HasTime,
@@ -61,8 +62,8 @@ where
     ///
     /// # Panics
     ///
-    /// Panics if the simulation history is unexpectedly empty, which should be
-    /// impossible after successful initialization via [`Simulation::new`].
+    /// Panics if the simulation history is empty, which is impossible after
+    /// successful initialization via [`TransientSimulation::new`].
     pub fn step(&mut self, dt: Time) -> Result<(), C::Error> {
         let last = self.history.last().unwrap();
         let next = self.integrator.step(&self.component, last, dt)?;
@@ -92,7 +93,7 @@ mod tests {
 
     #[test]
     fn moving_point_moves_as_expected() {
-        let mut sim = Simulation::new(
+        let mut sim = TransientSimulation::new(
             // A component with constant velocity: 3 m/s.
             MovingPoint::new(Velocity::new::<meter_per_second>(3.0)),
             // Use the forward Euler integration method.

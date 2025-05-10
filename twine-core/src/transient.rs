@@ -1,16 +1,16 @@
 pub mod integrators;
-mod simulation;
 mod time_derivative;
 mod traits;
+mod transient_simulation;
 
 #[cfg(test)]
 mod test_utils;
 
 use std::fmt::Debug;
 
-pub use simulation::Simulation;
 pub use time_derivative::{HasTimeDerivative, TimeDerivativeOf};
 pub use traits::{HasTime, StateIntegrator, StatefulComponent};
+pub use transient_simulation::TransientSimulation;
 
 /// A snapshot of a [`StatefulComponent`]’s result at a single simulation step.
 ///
