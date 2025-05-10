@@ -1,31 +1,8 @@
-pub mod integrators;
-mod traits;
-
-#[cfg(test)]
-mod test_utils;
-
 use std::fmt::Debug;
 
 use uom::si::f64::Time;
 
-pub use traits::{HasTime, StateIntegrator, StatefulComponent};
-
-/// A snapshot of a [`StatefulComponent`]’s result at a single simulation step.
-///
-/// A `TimeStep` records the `input` and corresponding `output` of a component
-/// at a specific point in simulated time.
-/// It represents an atomic step in the simulation’s progression and acts as a
-/// fundamental unit for history tracking, stepping, and integration.
-#[derive(Clone, Debug)]
-pub struct TimeStep<C>
-where
-    C: StatefulComponent,
-    C::Input: Clone + Debug,
-    C::Output: Clone + Debug,
-{
-    pub input: C::Input,
-    pub output: C::Output,
-}
+use super::{HasTime, StateIntegrator, StatefulComponent, TimeStep};
 
 /// A `Simulation` evolves a [`StatefulComponent`] over time using a [`StateIntegrator`].
 ///
@@ -110,8 +87,8 @@ mod tests {
         velocity::meter_per_second,
     };
 
-    use integrators::ForwardEuler;
-    use test_utils::{MovingPoint, PointInput};
+    use crate::transient::integrators::ForwardEuler;
+    use crate::transient::test_utils::{MovingPoint, PointInput};
 
     #[test]
     fn moving_point_moves_as_expected() {

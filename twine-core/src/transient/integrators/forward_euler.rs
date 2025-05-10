@@ -5,10 +5,7 @@ use std::{
 
 use uom::si::f64::Time;
 
-use crate::{
-    simulation::{HasTime, StateIntegrator, StatefulComponent, TimeStep},
-    thermo::units::HasTimeDerivative,
-};
+use crate::transient::{HasTime, HasTimeDerivative, StateIntegrator, StatefulComponent, TimeStep};
 
 /// An explicit, first-order forward Euler time integrator.
 ///
@@ -77,7 +74,7 @@ mod tests {
     };
 
     use crate::{
-        simulation::test_utils::{MovingPoint, PointInput},
+        transient::test_utils::{MovingPoint, PointInput},
         Component,
     };
 

@@ -3,7 +3,7 @@ use std::convert::Infallible;
 use uom::si::f64::{Length, Time, Velocity};
 
 use crate::{
-    simulation::{HasTime, StatefulComponent},
+    transient::{HasTime, StatefulComponent},
     Component,
 };
 

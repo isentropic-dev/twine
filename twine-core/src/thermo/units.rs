@@ -1,6 +1,5 @@
 mod positive_mass_rate;
 mod temperature_difference;
-mod time_derivative;
 
 use uom::{
     si::{Quantity, ISQ, SI},
@@ -9,7 +8,6 @@ use uom::{
 
 pub use positive_mass_rate::{PositiveMassRate, PositiveMassRateError};
 pub use temperature_difference::TemperatureDifference;
-pub use time_derivative::{HasTimeDerivative, TimeDerivativeOf};
 
 /// Specific gas constant, J/kg·K in SI.
 pub type SpecificGasConstant = Quantity<ISQ<P2, Z0, N2, Z0, N1, Z0, Z0>, SI<f64>, f64>;

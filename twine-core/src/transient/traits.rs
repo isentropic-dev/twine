@@ -2,9 +2,9 @@ use std::fmt::Debug;
 
 use uom::si::f64::Time;
 
-use crate::{thermo::units::HasTimeDerivative, Component};
+use crate::Component;
 
-use super::TimeStep;
+use super::{HasTimeDerivative, TimeStep};
 
 /// Trait for extracting and updating simulation time within a type.
 ///
