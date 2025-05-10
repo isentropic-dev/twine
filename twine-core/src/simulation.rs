@@ -1,4 +1,8 @@
+pub mod integrators;
 mod traits;
+
+#[cfg(test)]
+mod test_utils;
 
 use std::fmt::Debug;
 
@@ -92,5 +96,68 @@ where
     /// Returns the full history of [`TimeStep`]s in the simulation.
     pub fn history(&self) -> &[TimeStep<C>] {
         &self.history
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use uom::si::{
+        f64::{Length, Time, Velocity},
+        length::meter,
+        time::second,
+        velocity::meter_per_second,
+    };
+
+    use integrators::ForwardEuler;
+    use test_utils::{MovingPoint, PointInput};
+
+    #[test]
+    fn moving_point_moves_as_expected() {
+        let mut sim = Simulation::new(
+            // A component with constant velocity: 3 m/s.
+            MovingPoint::new(Velocity::new::<meter_per_second>(3.0)),
+            // Use the forward Euler integration method.
+            ForwardEuler,
+            // Initial state: position = 0 m, time = 0 s.
+            PointInput::default(),
+        )
+        .unwrap();
+
+        // Step forward by 1 second.
+        sim.step(Time::new::<second>(1.0)).unwrap();
+
+        // Then step forward by 4 more seconds.
+        sim.step(Time::new::<second>(4.0)).unwrap();
+
+        // Expect 3 recorded time steps: initial + 2 steps.
+        assert_eq!(sim.history().len(), 3);
+
+        // Collect simulation timestamps and positions.
+        let times: Vec<_> = sim.history().iter().map(|step| step.input.time).collect();
+        let positions: Vec<_> = sim
+            .history()
+            .iter()
+            .map(|step| step.input.position)
+            .collect();
+
+        assert_eq!(
+            times,
+            vec![
+                Time::new::<second>(0.0),
+                Time::new::<second>(1.0),
+                Time::new::<second>(5.0),
+            ]
+        );
+
+        assert_eq!(
+            positions,
+            vec![
+                Length::new::<meter>(0.0),
+                Length::new::<meter>(3.0),
+                Length::new::<meter>(15.0),
+            ]
+        );
     }
 }
