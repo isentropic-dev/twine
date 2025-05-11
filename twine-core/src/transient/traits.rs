@@ -46,7 +46,7 @@ pub trait StatefulComponent: Component {
     fn apply_state(input: &Self::Input, state: Self::State) -> Self::Input;
 }
 
-/// An integrator for integrating a [`StatefulComponent`] forward in time.
+/// An integrator for stepping a [`StatefulComponent`] forward in time.
 ///
 /// A `StateIntegrator` evolves a component’s internal state by integrating its
 /// time derivative over a discrete interval. Given a current [`TimeStep`] and a
