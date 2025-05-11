@@ -66,8 +66,16 @@ where
     /// successful initialization via [`TransientSimulation::new`].
     pub fn step(&mut self, dt: Time) -> Result<(), C::Error> {
         let last = self.history.last().unwrap();
-        let next = self.integrator.step(&self.component, last, dt)?;
-        self.history.push(next);
+        let next_input = self.integrator.integrate_state(&self.component, last, dt)?;
+
+        // Apply controls logic? See: <https://github.com/isentropic-dev/twine/issues/101>
+
+        let next_output = self.component.call(next_input.clone())?;
+
+        self.history.push(TimeStep {
+            input: next_input,
+            output: next_output,
+        });
         Ok(())
     }
 

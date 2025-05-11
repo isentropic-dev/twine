@@ -39,12 +39,12 @@ where
     <C::State as HasTimeDerivative>::TimeDerivative: Mul<Time, Output = C::State>,
 {
     /// Advances the component state by one step using the forward Euler method.
-    fn step(
+    fn integrate_state(
         &self,
-        component: &C,
+        _component: &C,
         current: &TimeStep<C>,
         dt: Time,
-    ) -> Result<TimeStep<C>, C::Error> {
+    ) -> Result<C::Input, C::Error> {
         let current_time = current.input.get_time();
         let current_state = C::extract_state(&current.input);
         let current_deriv = C::extract_derivative(&current.output);
@@ -53,12 +53,8 @@ where
         let new_state = current_state + current_deriv * dt;
 
         let next_input = C::apply_state(&current.input, new_state).with_time(new_time);
-        let next_output = component.call(next_input.clone())?;
 
-        Ok(TimeStep {
-            input: next_input,
-            output: next_output,
-        })
+        Ok(next_input)
     }
 }
 
@@ -79,7 +75,7 @@ mod tests {
     };
 
     #[test]
-    fn take_two_forward_euler_steps() {
+    fn take_a_forward_euler_step() {
         let integrator = ForwardEuler;
         let component = MovingPoint::new(Velocity::new::<meter_per_second>(2.0));
 
@@ -91,29 +87,16 @@ mod tests {
         let output = component.call(input).unwrap();
         let current_step = TimeStep { input, output };
 
-        // Step forward by one second (2 m/s * 1 s = 2 m).
-        let first_step = integrator
-            .step(&component, &current_step, Time::new::<second>(1.0))
+        // Step forward by one minute.
+        let first_step_input = integrator
+            .integrate_state(&component, &current_step, Time::new::<minute>(1.0))
             .unwrap();
 
         assert_eq!(
-            first_step.input,
+            first_step_input,
             PointInput {
-                position: Length::new::<meter>(7.0),
-                time: Time::new::<second>(11.0),
-            },
-        );
-
-        // Step forward by one minute (2 m/s * 60 s = 120 m).
-        let second_step = integrator
-            .step(&component, &first_step, Time::new::<minute>(1.0))
-            .unwrap();
-
-        assert_eq!(
-            second_step.input,
-            PointInput {
-                position: Length::new::<meter>(127.0),
-                time: Time::new::<second>(71.0),
+                position: Length::new::<meter>(125.0),
+                time: Time::new::<second>(70.0),
             },
         );
     }

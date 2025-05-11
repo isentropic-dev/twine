@@ -46,11 +46,11 @@ pub trait StatefulComponent: Component {
     fn apply_state(input: &Self::Input, state: Self::State) -> Self::Input;
 }
 
-/// An integrator for stepping a [`StatefulComponent`] forward in time.
+/// An integrator for integrating a [`StatefulComponent`] forward in time.
 ///
 /// A `StateIntegrator` evolves a component’s internal state by integrating its
 /// time derivative over a discrete interval. Given a current [`TimeStep`] and a
-/// time increment, it produces the next [`TimeStep`].
+/// time increment, it produces the next [`Component::Input`].
 ///
 /// This trait provides a reusable interface for implementing different
 /// integration schemes such as Euler or Runge-Kutta.
@@ -60,11 +60,15 @@ where
     C::Input: Clone + Debug + HasTime,
     C::Output: Clone + Debug,
 {
-    /// Advances the component one step forward in time.
+    /// Integrates the component's state one step forward in time.
     ///
     /// # Errors
     ///
     /// Returns `Err(C::Error)` if the component fails during evaluation.
-    fn step(&self, component: &C, current: &TimeStep<C>, dt: Time)
-        -> Result<TimeStep<C>, C::Error>;
+    fn integrate_state(
+        &self,
+        component: &C,
+        current: &TimeStep<C>,
+        dt: Time,
+    ) -> Result<C::Input, C::Error>;
 }
