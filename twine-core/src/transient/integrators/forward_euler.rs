@@ -88,12 +88,12 @@ mod tests {
         let current_step = TimeStep { input, output };
 
         // Step forward by one minute.
-        let first_step_input = integrator
+        let next_step_input = integrator
             .integrate_state(&component, &current_step, Time::new::<minute>(1.0))
             .unwrap();
 
         assert_eq!(
-            first_step_input,
+            next_step_input,
             PointInput {
                 position: Length::new::<meter>(125.0),
                 time: Time::new::<second>(70.0),
