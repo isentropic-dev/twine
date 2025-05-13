@@ -192,12 +192,12 @@ where
         I: Integrator<C>,
         K: Controller<C>,
     {
-        let trial_input = integrator
+        let proposed_input = integrator
             .propose_input(&self.component, &self.history, dt)
             .map_err(StepWithControllerError::Integrator)?;
 
         let input = controller
-            .adjust_input(&self.component, &self.history, trial_input)
+            .adjust_input(&self.component, &self.history, proposed_input)
             .map_err(StepWithControllerError::Controller)?;
 
         let output = self
