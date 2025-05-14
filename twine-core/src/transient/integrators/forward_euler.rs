@@ -6,19 +6,22 @@ use std::{
 
 use uom::si::f64::Time;
 
-use crate::transient::{HasTimeDerivative, Integrator, StatefulComponent, Temporal, TimeStep};
+use crate::transient::{HasTimeDerivative, Integrator, Simulation, StatefulComponent, Temporal};
 
 /// A first-order explicit integrator using the forward Euler method.
 ///
-/// Advances a [`StatefulComponent`] by applying a time-scaled derivative
-/// increment to its state.
+/// `ForwardEuler` implements the [`Integrator`] trait for [`StatefulComponent`]s
+/// by updating state using a time-scaled derivative increment.
+///
+/// This method is suitable for simple dynamic systems where performance and
+/// simplicity are prioritized over numerical accuracy.
 #[derive(Debug)]
 pub struct ForwardEuler;
 
 impl<C> Integrator<C> for ForwardEuler
 where
     C: StatefulComponent,
-    C::Input: Temporal,
+    C::Input: Clone + Temporal,
     C::State: Add<Output = C::State>,
     <C::State as HasTimeDerivative>::TimeDerivative: Mul<Time, Output = C::State>,
 {
@@ -27,37 +30,25 @@ where
     /// Computes the next input using forward Euler integration.
     ///
     /// Applies the update rule:
-    ///
     /// ```text
     ///   state_{n+1} = state_n + derivative_n * dt
     ///   time_{n+1}  = time_n  + dt
     /// ```
     ///
     /// Requires:
-    /// - `State: Add<Output = State>`
-    /// - `<State as HasTimeDerivative>::TimeDerivative: Mul<Time, Output = State>`
-    ///
-    /// # Panics
-    ///
-    /// Panics if `history` is empty, which indicates incorrect integrator use.
-    fn propose_input(
-        &self,
-        _component: &C,
-        history: &[TimeStep<C>],
-        dt: Time,
-    ) -> Result<C::Input, Self::Error> {
-        let current = history
-            .last()
-            .expect("Simulation history must be non-empty");
+    /// - The component’s state supports addition.
+    /// - The time derivative, when scaled by `dt`, can be added to the state.
+    fn propose_input(&self, simulation: &Simulation<C>, dt: Time) -> Result<C::Input, Self::Error> {
+        let current_step = simulation.current_step();
+        let current_time = simulation.current_time();
 
-        let current_time = current.input.get_time();
-        let current_state = C::extract_state(&current.input);
-        let current_deriv = C::extract_derivative(&current.output);
+        let current_state = C::extract_state(&current_step.input);
+        let current_deriv = C::extract_derivative(&current_step.output);
 
         let new_time = current_time + dt;
         let new_state = current_state + current_deriv * dt;
 
-        let next_input = C::apply_state(&current.input, new_state).with_time(new_time);
+        let next_input = C::apply_state(&current_step.input, new_state).with_time(new_time);
 
         Ok(next_input)
     }
@@ -66,7 +57,6 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-
     use uom::si::{
         f64::{Length, Time, Velocity},
         length::meter,
@@ -74,24 +64,28 @@ mod tests {
         velocity::meter_per_second,
     };
 
-    use crate::transient::test_utils::MovingPoint;
+    use crate::transient::test_utils::{MovingPoint, PointInput};
+    use crate::transient::Simulation;
 
     #[test]
     fn forward_euler_advances_state_correctly() {
-        let component = MovingPoint::new(Velocity::new::<meter_per_second>(2.0));
-
         // Start with position at 5 meters and time at 10 seconds.
-        let position = Length::new::<meter>(5.0);
-        let time = Time::new::<second>(10.0);
-        let history = component.initial_history_at(position, time);
+        let sim = Simulation::new(
+            MovingPoint::new(Velocity::new::<meter_per_second>(2.0)),
+            PointInput {
+                position: Length::new::<meter>(5.0),
+                time: Time::new::<second>(10.0),
+            },
+        )
+        .unwrap();
 
         // Step forward by one minute.
-        let next_step_input = ForwardEuler
-            .propose_input(&component, &history, Time::new::<minute>(1.0))
-            .unwrap();
+        let dt = Time::new::<minute>(1.0);
+        let next_input = ForwardEuler.propose_input(&sim, dt).unwrap();
 
-        // Expect position and time to be updated accordingly.
-        assert_eq!(next_step_input.position, Length::new::<meter>(125.0));
-        assert_eq!(next_step_input.time, Time::new::<second>(70.0));
+        // Expect: position = 5.0 + 2.0 * 60 = 125.0 meters
+        //         time = 10 + 60 = 70 seconds
+        assert_eq!(next_input.position, Length::new::<meter>(125.0));
+        assert_eq!(next_input.time, Time::new::<second>(70.0));
     }
 }
