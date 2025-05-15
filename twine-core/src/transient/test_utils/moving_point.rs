@@ -3,48 +3,41 @@ use std::convert::Infallible;
 use uom::si::f64::{Length, Time, Velocity};
 
 use crate::{
-    transient::{StatefulComponent, Temporal, TimeStep},
+    transient::{StatefulComponent, Temporal},
     Component,
 };
 
-/// A test component representing a point moving at constant velocity.
+/// A test component modeling a point moving at constant velocity.
 ///
-/// Simulates a first-order system with a known analytic solution:
+/// This first-order system evolves linearly over time according to:
 ///
 /// ```text
 ///   position_{n+1} = position_n + velocity * dt
 /// ```
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+///
+/// Useful for validating integrators with a predictable linear trajectory.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub(crate) struct MovingPoint {
     pub(crate) velocity: Velocity,
 }
 
 /// Input to the `MovingPoint` component, including position and time.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub(crate) struct PointInput {
     pub(crate) position: Length,
     pub(crate) time: Time,
 }
 
-/// Output from the `MovingPoint` component, representing its constant velocity.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+/// Output from the `MovingPoint` component, exposing its constant velocity.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub(crate) struct PointOutput {
     pub(crate) velocity: Velocity,
 }
 
 impl MovingPoint {
-    /// Creates a new `MovingPoint` from a `Velocity` value.
+    /// Constructs a new `MovingPoint` with the specified velocity.
     pub(crate) fn new(velocity: Velocity) -> Self {
         Self { velocity }
-    }
-
-    /// Returns a single-step simulation history at the given position and time.
-    ///
-    /// Useful for initializing a simulation with known conditions.
-    pub(crate) fn initial_history_at(self, position: Length, time: Time) -> Vec<TimeStep<Self>> {
-        let input = PointInput { position, time };
-        let output = self.call(input).unwrap();
-        vec![TimeStep { input, output }]
     }
 }
 
