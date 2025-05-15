@@ -23,13 +23,13 @@ where
 {
     type Error = Infallible;
 
-    /// Computes the next input by advancing the simulation time.
+    /// Computes the next input by incrementing the simulation time.
     ///
     /// This integrator increments the input’s timestamp by `dt`.
     /// All other fields are left unchanged.
     fn propose_input(&self, simulation: &Simulation<C>, dt: Time) -> Result<C::Input, Self::Error> {
         let current_step = simulation.current_step();
-        let current_time = simulation.current_time();
+        let current_time = current_step.input.get_time();
 
         let new_time = current_time + dt;
         let next_input = current_step.input.clone().with_time(new_time);

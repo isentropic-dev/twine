@@ -3,14 +3,14 @@ use std::convert::Infallible;
 use uom::si::f64::Time;
 
 use crate::{
-    transient::{Integrator, Simulation, StepError, Temporal, TimeStep},
+    transient::{Integrator, Simulation, StepError, Temporal},
     Component,
 };
 
 /// A trait for controlling the advancement of a simulation step.
 ///
 /// A `Controller` manages each iteration of a simulation loop by adjusting the
-/// input proposed by an [`Integrator`] before evaluating the component.
+/// input proposed by an [`Integrator`] before calling the component.
 /// This approach enables custom behaviors such as feedback control, constraint
 /// enforcement, input validation, or domain-specific preprocessing.
 ///
@@ -21,12 +21,13 @@ use crate::{
 ///
 /// 1. Request a proposed input from the [`Integrator`].
 /// 2. Optionally adjust that input using [`adjust_input`].
-/// 3. Evaluate the component with the adjusted input.
+/// 3. Call the component with the adjusted input.
 /// 4. Record the resulting input/output pair as a new [`TimeStep`].
 ///
-/// This design separates numerical stepping (via the integrator) from
-/// policy-driven control logic (via the controller), enabling modular and
-/// reusable simulation strategies.
+///
+/// By separating numerical stepping (via the integrator) from policy-driven
+/// control logic (via the controller), this design enables modular and reusable
+/// simulation strategies.
 ///
 /// # Typical Usage
 ///
@@ -56,7 +57,7 @@ where
     ///
     /// Given a candidate input and the simulation’s current state, this method
     /// applies control logic such as feedback, constraint enforcement, or other
-    /// context-specific transformation.
+    /// context-specific transformations.
     ///
     /// # Errors
     ///
@@ -67,22 +68,19 @@ where
         input: C::Input,
     ) -> Result<C::Input, Self::Error>;
 
-    /// Advances the simulation by one fixed-size time step.
+    /// Advances the simulation by one time step.
     ///
-    /// This method drives the simulation loop and is typically called
-    /// externally to progress the system.
-    ///
-    /// See the trait-level documentation for a detailed description of the control flow.
+    /// Refer to the trait documentation for a detailed explanation of the control flow.
     ///
     /// # Errors
     ///
     /// Returns a [`StepError`] if the integrator, controller, or component fails.
-    fn step<'a, I>(
+    fn step<I>(
         &self,
-        simulation: &'a mut Simulation<C>,
+        simulation: &mut Simulation<C>,
         integrator: &I,
         dt: Time,
-    ) -> Result<&'a TimeStep<C>, StepError<C, I, Self>>
+    ) -> Result<(), StepError<C, I, Self>>
     where
         I: Integrator<C>,
         Self: Sized,
@@ -101,7 +99,7 @@ where
 
         simulation.push_step(input, output);
 
-        Ok(simulation.current_step())
+        Ok(())
     }
 }
 
@@ -113,7 +111,7 @@ where
 /// ().step(&mut simulation, &integrator, dt)?;
 /// ```
 ///
-/// It always returns the proposed input unchanged, and never fails.
+/// It always returns the proposed input unchanged and never fails.
 impl<C> Controller<C> for ()
 where
     C: Component,
@@ -142,7 +140,7 @@ mod tests {
     use crate::transient::{integrators::AdvanceTime, test_utils::EchoTime};
 
     #[test]
-    fn simulation_steps_with_unit_controller() {
+    fn unit_controller_steps_simulation() {
         let input = Time::new::<minute>(0.0);
         let mut sim = Simulation::new(EchoTime, input).unwrap();
 
@@ -154,8 +152,10 @@ mod tests {
 
         let history = sim.history();
         assert_eq!(history.len(), 2);
+
         assert_eq!(history[0].input, Time::new::<second>(0.0));
         assert_eq!(history[0].output, Time::new::<second>(0.0));
+
         assert_eq!(history[1].input, Time::new::<second>(60.0));
         assert_eq!(history[1].output, Time::new::<second>(60.0));
     }

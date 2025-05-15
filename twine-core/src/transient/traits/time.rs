@@ -10,7 +10,7 @@ use uom::si::f64::Time;
 /// This trait is typically implemented by component input types so they can
 /// participate in time-based integration and control.
 ///
-/// # Examples
+/// # Example
 ///
 /// ```
 /// use twine_core::transient::Temporal;

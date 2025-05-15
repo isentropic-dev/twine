@@ -45,11 +45,9 @@ where
 
     /// Evaluates the component at a given input without modifying simulation state.
     ///
-    /// This method provides a safe, read-only way to query the component’s
-    /// output at a specific input.
-    /// It is used by [`Controller`]s to evaluate adjusted inputs, and can also
-    /// be used by [`Integrator`]s that require mid-step evaluations, such as
-    /// when computing intermediate derivatives.
+    /// This method is used by [`Controller`]s to evaluate adjusted inputs, and
+    /// can also be used by [`Integrator`]s that require mid-step evaluations,
+    /// such as when computing intermediate derivatives.
     ///
     /// Internally delegates to `self.component.call(input)`, but exists to
     /// establish a consistent, simulation-aware evaluation boundary.

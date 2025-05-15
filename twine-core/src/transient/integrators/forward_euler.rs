@@ -40,7 +40,7 @@ where
     /// - The time derivative, when scaled by `dt`, can be added to the state.
     fn propose_input(&self, simulation: &Simulation<C>, dt: Time) -> Result<C::Input, Self::Error> {
         let current_step = simulation.current_step();
-        let current_time = simulation.current_time();
+        let current_time = current_step.input.get_time();
 
         let current_state = C::extract_state(&current_step.input);
         let current_deriv = C::extract_derivative(&current_step.output);
@@ -57,6 +57,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
     use uom::si::{
         f64::{Length, Time, Velocity},
         length::meter,
@@ -64,8 +65,10 @@ mod tests {
         velocity::meter_per_second,
     };
 
-    use crate::transient::test_utils::{MovingPoint, PointInput};
-    use crate::transient::Simulation;
+    use crate::transient::{
+        test_utils::{MovingPoint, PointInput},
+        Simulation,
+    };
 
     #[test]
     fn forward_euler_advances_state_correctly() {
@@ -83,8 +86,8 @@ mod tests {
         let dt = Time::new::<minute>(1.0);
         let next_input = ForwardEuler.propose_input(&sim, dt).unwrap();
 
-        // Expect: position = 5.0 + 2.0 * 60 = 125.0 meters
-        //         time = 10 + 60 = 70 seconds
+        // Expect: position = 5 m + 2 m/s * 60 s = 125 m
+        //         time = 10 s + 60 s = 70 s
         assert_eq!(next_input.position, Length::new::<meter>(125.0));
         assert_eq!(next_input.time, Time::new::<second>(70.0));
     }
