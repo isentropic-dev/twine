@@ -1,7 +1,5 @@
-use uom::si::f64::Time;
-
 use crate::{
-    transient::{Simulation, Temporal},
+    transient::{Simulation, Temporal, TimeIncrement},
     Component,
 };
 
@@ -52,5 +50,9 @@ where
     /// # Errors
     ///
     /// Returns `Err(Self::Error)` if integration fails.
-    fn propose_input(&self, simulation: &Simulation<C>, dt: Time) -> Result<C::Input, Self::Error>;
+    fn propose_input(
+        &self,
+        simulation: &Simulation<C>,
+        dt: TimeIncrement,
+    ) -> Result<C::Input, Self::Error>;
 }

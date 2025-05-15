@@ -1,3 +1,5 @@
+mod time_increment;
+
 use std::{fmt::Debug, ops::Div};
 
 use thiserror::Error;
@@ -6,6 +8,8 @@ use uom::si::f64::Time;
 use crate::Component;
 
 use super::{Controller, Integrator, Temporal};
+
+pub use time_increment::{TimeIncrement, TimeIncrementError};
 
 /// A snapshot of a component’s behavior at a single point in simulation time.
 ///
