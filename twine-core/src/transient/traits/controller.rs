@@ -1,7 +1,7 @@
 use std::convert::Infallible;
 
 use crate::{
-    transient::{types::TimeIncrement, Integrator, Simulation, StepError, Temporal},
+    transient::{Integrator, Simulation, StepError, Temporal, TimeIncrement},
     Component,
 };
 

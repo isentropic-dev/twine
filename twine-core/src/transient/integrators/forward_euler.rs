@@ -7,7 +7,7 @@ use std::{
 use uom::si::f64::Time;
 
 use crate::transient::{
-    types::TimeIncrement, HasTimeDerivative, Integrator, Simulation, StatefulComponent, Temporal,
+    HasTimeDerivative, Integrator, Simulation, StatefulComponent, Temporal, TimeIncrement,
 };
 
 /// A first-order explicit integrator using the forward Euler method.
@@ -73,8 +73,7 @@ mod tests {
 
     use crate::transient::{
         test_utils::{MovingPoint, PointInput},
-        types::TimeIncrement,
-        Simulation,
+        Simulation, TimeIncrement,
     };
 
     #[test]

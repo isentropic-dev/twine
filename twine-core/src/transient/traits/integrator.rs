@@ -1,5 +1,5 @@
 use crate::{
-    transient::{types::TimeIncrement, Simulation, Temporal},
+    transient::{Simulation, Temporal, TimeIncrement},
     Component,
 };
 
