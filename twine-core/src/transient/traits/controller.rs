@@ -1,9 +1,7 @@
 use std::convert::Infallible;
 
-use uom::si::f64::Time;
-
 use crate::{
-    transient::{Integrator, Simulation, StepError, Temporal},
+    transient::{types::TimeIncrement, Integrator, Simulation, StepError, Temporal},
     Component,
 };
 
@@ -79,7 +77,7 @@ where
         &self,
         simulation: &mut Simulation<C>,
         integrator: &I,
-        dt: Time,
+        dt: TimeIncrement,
     ) -> Result<(), StepError<C, I, Self>>
     where
         I: Integrator<C>,
@@ -147,7 +145,7 @@ mod tests {
         let integrator = AdvanceTime;
         let controller = ();
 
-        let dt = Time::new::<minute>(1.0);
+        let dt = TimeIncrement::new::<minute>(1.0).unwrap();
         controller.step(&mut sim, &integrator, dt).unwrap();
 
         let history = sim.history();

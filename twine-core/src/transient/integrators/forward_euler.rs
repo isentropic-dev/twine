@@ -6,7 +6,9 @@ use std::{
 
 use uom::si::f64::Time;
 
-use crate::transient::{HasTimeDerivative, Integrator, Simulation, StatefulComponent, Temporal};
+use crate::transient::{
+    types::TimeIncrement, HasTimeDerivative, Integrator, Simulation, StatefulComponent, Temporal,
+};
 
 /// A first-order explicit integrator using the forward Euler method.
 ///
@@ -38,7 +40,11 @@ where
     /// Requires:
     /// - The component’s state supports addition.
     /// - The time derivative, when scaled by `dt`, can be added to the state.
-    fn propose_input(&self, simulation: &Simulation<C>, dt: Time) -> Result<C::Input, Self::Error> {
+    fn propose_input(
+        &self,
+        simulation: &Simulation<C>,
+        dt: TimeIncrement,
+    ) -> Result<C::Input, Self::Error> {
         let current_step = simulation.current_step();
         let current_time = current_step.input.get_time();
 
@@ -46,7 +52,7 @@ where
         let current_deriv = C::extract_derivative(&current_step.output);
 
         let new_time = current_time + dt;
-        let new_state = current_state + current_deriv * dt;
+        let new_state = current_state + current_deriv * (*dt);
 
         let next_input = C::apply_state(&current_step.input, new_state).with_time(new_time);
 
@@ -67,6 +73,7 @@ mod tests {
 
     use crate::transient::{
         test_utils::{MovingPoint, PointInput},
+        types::TimeIncrement,
         Simulation,
     };
 
@@ -83,7 +90,7 @@ mod tests {
         .unwrap();
 
         // Step forward by one minute.
-        let dt = Time::new::<minute>(1.0);
+        let dt = TimeIncrement::new::<minute>(1.0).unwrap();
         let next_input = ForwardEuler.propose_input(&sim, dt).unwrap();
 
         // Expect: position = 5 m + 2 m/s * 60 s = 125 m

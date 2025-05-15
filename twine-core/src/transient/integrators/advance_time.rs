@@ -1,16 +1,14 @@
 use std::{convert::Infallible, fmt::Debug};
 
-use uom::si::f64::Time;
-
 use crate::{
-    transient::{Integrator, Simulation, Temporal},
+    transient::{types::TimeIncrement, Integrator, Simulation, Temporal},
     Component,
 };
 
 /// An integrator that advances simulation time without modifying state.
 ///
 /// `AdvanceTime` implements the [`Integrator`] trait by incrementing the
-/// input’s timestamp by a fixed time step `dt`, leaving other fields unchanged.
+/// input’s timestamp by a time increment `dt`, leaving other fields unchanged.
 /// It is useful for time-driven systems that do not depend on internal state or
 /// feedback for evolution.
 #[derive(Debug)]
@@ -27,7 +25,11 @@ where
     ///
     /// This integrator increments the input’s timestamp by `dt`.
     /// All other fields are left unchanged.
-    fn propose_input(&self, simulation: &Simulation<C>, dt: Time) -> Result<C::Input, Self::Error> {
+    fn propose_input(
+        &self,
+        simulation: &Simulation<C>,
+        dt: TimeIncrement,
+    ) -> Result<C::Input, Self::Error> {
         let current_step = simulation.current_step();
         let current_time = current_step.input.get_time();
 
@@ -55,7 +57,7 @@ mod tests {
         let sim = Simulation::new(EchoTime, start_time).unwrap();
 
         let integrator = AdvanceTime;
-        let dt = Time::new::<minute>(5.0);
+        let dt = TimeIncrement::new::<minute>(5.0).unwrap();
         let next_input = integrator.propose_input(&sim, dt).unwrap();
 
         assert_eq!(next_input, Time::new::<minute>(65.0));
