@@ -27,7 +27,7 @@ impl InterpND {
     /// # Arguments
     ///
     /// * `grid` - A vector of 1D arrays, one per axis, containing sorted coordinate values.
-    /// * `values` - An N-dimensional array of values corresponding to each coordinate combination.  
+    /// * `values` - An N-dimensional array of values corresponding to each coordinate combination.
     ///   The shape must match the lengths of the arrays in `grid`.
     /// * `strategy` - Interpolation strategy to use (e.g., linear or nearest).
     /// * `extrapolate` - Behavior to use when the input lies outside the bounds of the grid.
@@ -112,10 +112,7 @@ mod tests {
             let actual = interp.call(vec![1.5, 1.5, 1.5]).unwrap();
             assert!(
                 approx::relative_eq!(actual, expected),
-                "strategy {:?} produced wrong result: got {}, expected {}",
-                strategy,
-                actual,
-                expected
+                "strategy {strategy:?} produced wrong result: got {actual}, expected {expected}"
             );
         }
     }

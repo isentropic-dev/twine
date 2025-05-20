@@ -1,19 +1,16 @@
+use thiserror::Error;
 use uom::si::f64::Time;
 
-use super::{Temporal, TimeStep};
 use crate::Component;
 
-/// Manages a timeline of simulation steps for a [`Component`].
+use super::{Controller, Integrator, Temporal, TimeIncrement, TimeStep};
+
+/// Manages the simulation of a dynamic [`Component`] over time.
 ///
-/// A [`Simulation`] records the evolution of a system over time by maintaining
-/// a sequence of [`TimeStep`]s, each representing the input and corresponding
-/// output of the component at a specific point in simulated time.
-///
-/// This type supports simulation stepping via a [`Controller`] and [`Integrator`],
-/// and exposes utilities to inspect or extend the simulation history.
-///
-/// [`Controller`]: crate::transient::Controller
-/// [`Integrator`]: crate::transient::Integrator
+/// A [`Simulation`] owns a [`Component`] and a history of [`TimeStep`]s that
+/// record its evolution across discrete time steps.
+/// At each step, it uses an [`Integrator`] to propose the next input and a
+/// [`Controller`] to optionally adjust it before evaluation.
 pub struct Simulation<C>
 where
     C: Component,
@@ -23,18 +20,44 @@ where
     history: Vec<TimeStep<C>>,
 }
 
+/// Error type for failures that can occur during a simulation step.
+///
+/// This error groups failures from any stage of the step process:
+///
+/// - [`Integrator`]: Failed to generate a proposed input
+/// - [`Controller`]: Failed to adjust the proposed input
+/// - [`Component`]: Failed during evaluation
+///
+/// Returned by [`Simulation::step`].
+#[derive(Debug, Error)]
+pub enum StepError<C, I, K>
+where
+    C: Component,
+    C::Input: Clone + Temporal,
+    I: Integrator<C>,
+    K: Controller<C>,
+{
+    #[error("Component failed: {0}")]
+    Component(C::Error),
+    #[error("Controller failed: {0}")]
+    Controller(K::Error),
+    #[error("Integrator failed: {0}")]
+    Integrator(I::Error),
+}
+
 impl<C> Simulation<C>
 where
     C: Component,
     C::Input: Clone + Temporal,
 {
-    /// Creates a new simulation from the given component and initial input.
+    /// Creates a new simulation from a component and an initial input.
     ///
-    /// Evaluates the component once and stores the result as the first step.
+    /// Evaluates the component once with the initial input, storing the result
+    /// as the first [`TimeStep`] in the simulation history.
     ///
     /// # Errors
     ///
-    /// Returns `Err(C::Error)` if the component fails on the initial input.
+    /// Returns `Err(C::Error)` if the component fails to evaluate the initial input.
     pub fn new(component: C, initial_input: C::Input) -> Result<Self, C::Error> {
         let output = component.call(initial_input.clone())?;
         Ok(Self {
@@ -43,44 +66,59 @@ where
         })
     }
 
-    /// Evaluates the component at a given input without modifying simulation state.
+    /// Advances the simulation by a single time increment.
     ///
-    /// This method is used by [`Controller`]s to evaluate adjusted inputs, and
-    /// can also be used by [`Integrator`]s that require mid-step evaluations,
-    /// such as when computing intermediate derivatives.
+    /// Performs a full simulation step:
     ///
-    /// Internally delegates to `self.component.call(input)`, but exists to
-    /// establish a consistent, simulation-aware evaluation boundary.
+    /// 1. Uses the [`Integrator`] to propose the next input.
+    /// 2. Adjusts the input with the [`Controller`].
+    /// 3. Evaluates the component using the adjusted input.
+    /// 4. Records the result as a new [`TimeStep`] in the history.
     ///
     /// # Errors
     ///
-    /// Returns an error if the component fails when called with the provided input.
+    /// Returns a [`StepError`] if any part of the step process fails.
+    pub fn step<I, K>(
+        &mut self,
+        dt: TimeIncrement,
+        integrator: &I,
+        controller: &K,
+    ) -> Result<(), StepError<C, I, K>>
+    where
+        I: Integrator<C>,
+        K: Controller<C>,
+        Self: Sized,
+    {
+        let proposed = integrator
+            .propose_input(self, dt)
+            .map_err(StepError::Integrator)?;
+
+        let input = controller
+            .adjust_input(self, proposed)
+            .map_err(StepError::Controller)?;
+
+        let output = self
+            .component
+            .call(input.clone())
+            .map_err(StepError::Component)?;
+
+        self.history.push(TimeStep::new(input, output));
+
+        Ok(())
+    }
+
+    /// Evaluates the component at a given input without modifying the simulation history.
     ///
-    /// [`Controller`]: crate::transient::Controller
-    /// [`Integrator`]: crate::transient::Integrator
+    /// Useful for previewing system behavior or computing hypothetical outputs.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err(C::Error)` if the component fails to evaluate the input.
     pub fn call_component(&self, input: C::Input) -> Result<C::Output, C::Error> {
         self.component.call(input)
     }
 
-    /// Appends a new input/output pair to the simulation history.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `input.get_time()` is less than or equal to the last recorded
-    /// time, ensuring that simulation time always moves forward.
-    pub fn push_step(&mut self, input: C::Input, output: C::Output) {
-        let t_new = input.get_time();
-        let t_prev = self.current_time();
-
-        assert!(
-            t_new > t_prev,
-            "Step time {t_new:?} must be greater than previous {t_prev:?}"
-        );
-
-        self.history.push(TimeStep::new(input, output));
-    }
-
-    /// Returns a reference to the most recent step in the simulation.
+    /// Returns the most recent step in the simulation.
     #[allow(clippy::missing_panics_doc)]
     pub fn current_step(&self) -> &TimeStep<C> {
         self.history
@@ -93,19 +131,17 @@ where
         self.current_step().input.get_time()
     }
 
-    /// Returns a reference to the component used in the simulation.
-    ///
-    /// Useful for inspecting configuration or accessing internal fields.
+    /// Returns a reference to the simulation’s component.
     pub fn component(&self) -> &C {
         &self.component
     }
 
-    /// Returns a reference to the complete simulation history.
+    /// Returns a slice of all recorded simulation steps.
     pub fn history(&self) -> &[TimeStep<C>] {
         &self.history
     }
 
-    /// Returns an iterator over all time steps recorded so far.
+    /// Returns an iterator over all recorded simulation steps.
     pub fn iter_history(&self) -> impl Iterator<Item = &TimeStep<C>> {
         self.history.iter()
     }
@@ -115,9 +151,14 @@ where
 mod tests {
     use super::*;
 
-    use uom::si::{f64::Time, time::second};
+    use uom::si::{
+        f64::Time,
+        time::{minute, second},
+    };
 
-    use crate::transient::test_utils::EchoTime;
+    use crate::transient::{
+        controllers::PassThrough, integrators::AdvanceTime, test_utils::EchoTime,
+    };
 
     #[test]
     fn starts_with_single_step() {
@@ -130,29 +171,25 @@ mod tests {
     }
 
     #[test]
-    fn can_add_step_with_later_time() {
-        // Start with time = 0 s.
-        let input_0 = Time::new::<second>(0.0);
-        let mut sim = Simulation::new(EchoTime, input_0).unwrap();
+    fn take_a_single_step() {
+        let component = EchoTime;
+        let input = Time::new::<minute>(0.0);
+        let mut sim = Simulation::new(component, input).unwrap();
 
-        // Add step at time = 1 s.
-        let input_1 = Time::new::<second>(1.0);
-        let output_1 = sim.call_component(input_1).unwrap();
-        sim.push_step(input_1, output_1);
+        sim.step(
+            TimeIncrement::new::<minute>(1.0).unwrap(),
+            &AdvanceTime,
+            &PassThrough,
+        )
+        .unwrap();
 
-        assert_eq!(sim.history().len(), 2);
-        assert_eq!(sim.current_time(), input_1);
-        assert_eq!(sim.current_step().output, input_1);
-    }
+        let history = sim.history();
+        assert_eq!(history.len(), 2);
 
-    #[test]
-    #[should_panic(expected = "Step time")]
-    fn panics_on_non_monotonic_time() {
-        let input_0 = Time::new::<second>(2.0);
-        let mut sim = Simulation::new(EchoTime, input_0).unwrap();
+        assert_eq!(history[0].input, Time::new::<second>(0.0));
+        assert_eq!(history[0].output, Time::new::<second>(0.0));
 
-        let input_bad = Time::new::<second>(1.5);
-        let output_bad = sim.call_component(input_bad).unwrap();
-        sim.push_step(input_bad, output_bad);
+        assert_eq!(history[1].input, Time::new::<second>(60.0));
+        assert_eq!(history[1].output, Time::new::<second>(60.0));
     }
 }

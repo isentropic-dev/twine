@@ -16,6 +16,6 @@ jobs:
       - name: Set up cache
         uses: Swatinem/rust-cache@v2
       - name: Run Clippy
-        run: cargo clippy -- -W clippy::pedantic -D warnings
+        run: cargo clippy --all-targets --all-features -- -W clippy::pedantic -D warnings
       - name: Run tests
         run: cargo test

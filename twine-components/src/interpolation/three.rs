@@ -29,7 +29,7 @@ impl Interp3D {
     /// * `x` - 1D array of grid coordinates along the x-axis.
     /// * `y` - 1D array of grid coordinates along the y-axis.
     /// * `z` - 1D array of grid coordinates along the z-axis.
-    /// * `f_xyz` - 3D array of values corresponding to each `(x, y, z)` combination.  
+    /// * `f_xyz` - 3D array of values corresponding to each `(x, y, z)` combination.
     ///   Must have shape `(x.len(), y.len(), z.len())`.
     /// * `strategy` - Interpolation strategy to use (e.g., linear or nearest).
     /// * `extrapolate` - Behavior to use when the input is outside the bounds of the grid.
@@ -124,10 +124,7 @@ mod tests {
             let actual = interp.call([1.5, 1.5, 1.5]).unwrap();
             assert!(
                 approx::relative_eq!(actual, expected),
-                "strategy {:?} produced wrong result: got {}, expected {}",
-                strategy,
-                actual,
-                expected
+                "strategy {strategy:?} produced wrong result: got {actual}, expected {expected}"
             );
         }
     }
