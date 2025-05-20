@@ -1,58 +1,56 @@
 //! A framework for simulating dynamic systems over discrete time steps.
 //!
 //! The `transient` module provides composable tools for evolving time-based systems.
-//! It separates numerical integration, control policy, and system dynamics into
-//! well-defined roles, enabling reusable simulation strategies.
+//! It separates system dynamics, numerical integration, and control policy into
+//! distinct roles, enabling flexible and reusable simulation strategies.
 //!
-//! # Core Roles
+//! # Core Concepts
 //!
-//! - [`Simulation`]: Maintains a timeline of [`TimeStep`]s and exposes the component.
-//!   It is passive and used by other tools to evolve the system.
-//! - [`Integrator`]: Proposes a new input, typically using simulation history
-//!   and a time step.
-//! - [`Controller`]: Adjusts the integrator-proposed input, evaluates the
-//!   component, and records the result on the [`Simulation`].
-//!   This is the active driver of the simulation loop.
-//! - [`StatefulComponent`]: A [`Component`] whose input encodes system state and
-//!   whose output provides time derivatives.
+//! - [`Simulation`]: Owns a [`Component`] and its history of [`TimeStep`]s,
+//!   and drives the simulation forward by stepping the system through time.
+//! - [`Integrator`]: Proposes the next input value based on a time increment
+//!   and the current simulation history.
+//! - [`Controller`]: Adjusts the integrator’s proposed input, enabling the
+//!   application of constraints, feedback mechanisms, or custom control logic.
+//! - [`StatefulComponent`]: A [`Component`] whose input encodes the system state,
+//!   and whose output yields time derivatives.
 //!
-//! # Stepping the System
+//! # Advancing the Simulation
 //!
-//! A simulation advances by calling [`Controller::step`], which:
+//! Simulations advance by calling [`Simulation::step`], which:
 //!
 //! 1. Delegates to an [`Integrator`] to propose the next input.
-//! 2. Optionally adjusts the input.
-//! 3. Evaluates the component.
-//! 4. Records the result as a new [`TimeStep`].
+//! 2. Adjusts the proposed input via a [`Controller`].
+//! 3. Evaluates the component with the adjusted input.
+//! 4. Records the result as the latest [`TimeStep`].
 //!
-//! Here’s how to advance a simulation by one step:
+//! Example of stepping a simulation forward:
 //!
 //! ```ignore
+//! let mut sim = Simulation::new(component, initial_input)?;
 //! let controller = SomeController;
 //! let integrator = ForwardEuler;
-//! let mut sim = Simulation::new(component, initial_input)?;
-//! controller.step(&mut sim, &integrator, dt)?;
+//! sim.step(dt, &integrator, &controller)?;
 //! ```
 //!
-//! The unit type `()` implements [`Controller`] as a no-op, making it a
-//! convenient default when no control logic is needed:
-//!
-//! ```ignore
-//! ().step(&mut sim, &integrator, dt)?;
-//! ```
+//! For simulations where no state integration is required, use [`AdvanceTime`]
+//! as the integrator.
+//! If no control logic is needed, [`NoController`] passes inputs through unchanged.
+//! Together, they provide the simplest possible time advancement for a simulation.
 //!
 //! # Extensibility
 //!
-//! The framework supports custom integration schemes, reusable control logic,
-//! and unit-aware state modeling via the [`uom`] crate.
+//! Designed for extensibility, the framework supports:
 //!
-//! You can:
-//! - Implement new [`Integrator`] strategies (e.g., RK4, implicit).
-//! - Apply domain-specific control (e.g., feedback, constraint enforcement).
-//! - Switch between controllers or integrators during a [`Simulation`] to
-//!   reflect changes in system behavior.
+//! - Custom integration strategies (e.g., RK4, implicit methods).
+//! - Modular, reusable control logic tailored to domain-specific needs.
+//! - Swapping integrators and controllers at each simulation step to reflect
+//!   changes in system behavior or requirements.
+//! - Unit-aware modeling using the [`uom`] crate.
 //!
-//! See trait docs for implementation details and extension patterns.
+//! See individual trait and type documentation for more examples and
+//! implementation details.
+pub mod controllers;
 pub mod integrators;
 mod simulation;
 mod traits;
@@ -63,4 +61,4 @@ mod test_utils;
 
 pub use simulation::Simulation;
 pub use traits::{Controller, HasTimeDerivative, Integrator, StatefulComponent, Temporal};
-pub use types::{StepError, TimeDerivativeOf, TimeIncrement, TimeIncrementError, TimeStep};
+pub use types::{TimeDerivativeOf, TimeIncrement, TimeIncrementError, TimeStep};
