@@ -28,7 +28,7 @@ impl Interp2D {
     ///
     /// * `x` - 1D array of grid coordinates along the x-axis.
     /// * `y` - 1D array of grid coordinates along the y-axis.
-    /// * `f_xy` - 2D array of values corresponding to each `(x, y)` pair.  
+    /// * `f_xy` - 2D array of values corresponding to each `(x, y)` pair.
     ///   Must have shape `(x.len(), y.len())`.
     /// * `strategy` - Interpolation strategy to use (e.g., linear or nearest).
     /// * `extrapolate` - Behavior to use when the input is outside the bounds of the grid.
@@ -119,10 +119,7 @@ mod tests {
             let actual = interp.call([1.5, 1.5]).unwrap();
             assert!(
                 approx::relative_eq!(actual, expected),
-                "strategy {:?} produced wrong result: got {}, expected {}",
-                strategy,
-                actual,
-                expected
+                "strategy {strategy:?} produced wrong result: got {actual}, expected {expected}"
             );
         }
     }

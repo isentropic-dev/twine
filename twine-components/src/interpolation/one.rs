@@ -131,10 +131,7 @@ mod tests {
             let actual = interp.call(1.4).unwrap();
             assert!(
                 approx::relative_eq!(actual, expected),
-                "strategy {:?} produced wrong result: got {}, expected {}",
-                strategy,
-                actual,
-                expected
+                "strategy {strategy:?} produced wrong result: got {actual}, expected {expected}"
             );
         }
     }
