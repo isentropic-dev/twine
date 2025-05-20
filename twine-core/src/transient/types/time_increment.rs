@@ -1,6 +1,6 @@
 use std::{
     fmt,
-    ops::{Add, AddAssign, Deref},
+    ops::{Add, AddAssign, Deref, Div},
 };
 
 use thiserror::Error;
@@ -107,6 +107,32 @@ impl TimeIncrement {
     pub fn into_inner(self) -> Time {
         self.0
     }
+
+    /// Returns the number of steps of size `dt` required to cover this increment.
+    ///
+    /// The step count is always rounded up to ensure the total interval is
+    /// covered, even if `dt` does not evenly divide it.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the required number of steps would exceed `usize::MAX`.
+    #[must_use]
+    pub fn steps_required(self, dt: TimeIncrement) -> usize {
+        let duration = self.into_inner();
+        let steps_f64 = (duration / *dt).value.ceil();
+
+        #[allow(clippy::cast_precision_loss)]
+        let max_steps_f64 = usize::MAX as f64;
+        assert!(
+            steps_f64 <= max_steps_f64,
+            "Too many steps requested: {steps_f64} exceeds usize::MAX"
+        );
+
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+        let steps = steps_f64 as usize;
+
+        steps
+    }
 }
 
 /// Attempts to convert a [`Time`] value into a [`TimeIncrement`].
@@ -158,6 +184,27 @@ impl Add<TimeIncrement> for Time {
     }
 }
 
+/// Divides a [`TimeIncrement`] by a positive integer.
+///
+/// This operation is useful when subdividing an existing time increment into
+/// equal, smaller intervals.
+///
+/// # Panics
+///
+/// Panics if `rhs` is zero.
+impl Div<usize> for TimeIncrement {
+    type Output = TimeIncrement;
+
+    fn div(self, rhs: usize) -> Self::Output {
+        assert!(rhs > 0, "Cannot divide a TimeIncrement by zero steps");
+
+        #[allow(clippy::cast_precision_loss)]
+        let dt = self.into_inner() / rhs as f64;
+
+        TimeIncrement(dt)
+    }
+}
+
 impl fmt::Display for TimeIncrement {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = self.0.get::<time::second>();
@@ -169,7 +216,6 @@ impl fmt::Display for TimeIncrement {
 mod tests {
     use super::*;
 
-    use approx::assert_relative_eq;
     use uom::si::time::{minute, second};
 
     #[test]
@@ -177,7 +223,7 @@ mod tests {
         let a = TimeIncrement::new::<second>(1.0).unwrap();
         let b = TimeIncrement::new::<minute>(2.5).unwrap();
         let sum = a + b;
-        assert_relative_eq!(sum.into_inner().get::<second>(), 151.0);
+        assert_eq!(sum, TimeIncrement::new::<second>(151.0).unwrap());
     }
 
     #[test]
@@ -185,7 +231,7 @@ mod tests {
         let t = Time::new::<second>(5.0);
         let dt = TimeIncrement::new::<second>(2.0).unwrap();
         let new_time = t + dt;
-        assert_relative_eq!(new_time.get::<second>(), 7.0);
+        assert_eq!(new_time, Time::new::<second>(7.0));
     }
 
     #[test]
@@ -196,5 +242,52 @@ mod tests {
     #[test]
     fn negative_time_increment_fails() {
         assert!(TimeIncrement::new::<minute>(-1.0).is_err());
+    }
+
+    #[test]
+    fn divide_time_increment_by_integer() {
+        let total = TimeIncrement::new::<second>(10.0).unwrap();
+        let dt = total / 5;
+        assert_eq!(dt, TimeIncrement::new::<second>(2.0).unwrap());
+
+        let total = TimeIncrement::new::<second>(9.0).unwrap();
+        let dt = total / 4;
+        assert_eq!(dt, TimeIncrement::new::<second>(2.25).unwrap());
+
+        let total = TimeIncrement::new::<second>(5.0).unwrap();
+        let dt = total / 1;
+        assert_eq!(dt, total);
+    }
+
+    #[test]
+    #[should_panic(expected = "Cannot divide a TimeIncrement by zero steps")]
+    fn divide_time_increment_by_zero_fails() {
+        let dt = TimeIncrement::new::<second>(10.0).unwrap();
+        let _ = dt / 0;
+    }
+
+    #[test]
+    fn steps_required_works() {
+        let total = TimeIncrement::new::<second>(10.0).unwrap();
+
+        // 10 seconds divided by 2.5 yields 4 steps (4 × 2.5 = 10.0).
+        let dt = TimeIncrement::new::<second>(2.5).unwrap();
+        assert_eq!(total.steps_required(dt), 4);
+
+        // 10 seconds divided by 3 yields 4 steps (4 × 3 = 12.0, which covers the interval).
+        let dt = TimeIncrement::new::<second>(3.0).unwrap();
+        assert_eq!(total.steps_required(dt), 4);
+
+        // 10 seconds divided by 1 yields 10 steps (exact division).
+        let dt = TimeIncrement::new::<second>(1.0).unwrap();
+        assert_eq!(total.steps_required(dt), 10);
+
+        // If dt is almost but not quite an even divisor, the step count is rounded up.
+        let dt = TimeIncrement::new::<second>(3.3).unwrap();
+        assert_eq!(total.steps_required(dt), 4);
+
+        // If dt is greater than the total duration, only 1 step is required.
+        let dt = TimeIncrement::new::<second>(20.0).unwrap();
+        assert_eq!(total.steps_required(dt), 1);
     }
 }
