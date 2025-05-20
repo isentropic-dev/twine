@@ -35,7 +35,8 @@
 //!
 //! For simulations where no state integration is required, use [`AdvanceTime`]
 //! as the integrator.
-//! If no control logic is needed, [`NoController`] passes inputs through unchanged.
+//! If no control logic is needed, the [`PassThrough`] controller passes inputs
+//! through unchanged.
 //! Together, they provide the simplest possible time advancement for a simulation.
 //!
 //! # Extensibility

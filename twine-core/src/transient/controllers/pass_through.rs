@@ -7,13 +7,13 @@ use crate::{
 
 /// A no-op [`Controller`] that passes inputs through unchanged.
 ///
-/// Use `NoController` when control logic is unnecessary.
+/// Use `PassThrough` when control logic is unnecessary.
 /// It returns the input unchanged, making it ideal for open-loop simulations or
 /// for systems driven entirely by the integrator.
 #[derive(Debug)]
-pub struct NoController;
+pub struct PassThrough;
 
-impl<C> Controller<C> for NoController
+impl<C> Controller<C> for PassThrough
 where
     C: Component,
     C::Input: Clone + Temporal,

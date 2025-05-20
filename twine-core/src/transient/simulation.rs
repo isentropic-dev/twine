@@ -157,7 +157,7 @@ mod tests {
     };
 
     use crate::transient::{
-        controllers::NoController, integrators::AdvanceTime, test_utils::EchoTime,
+        controllers::PassThrough, integrators::AdvanceTime, test_utils::EchoTime,
     };
 
     #[test]
@@ -179,7 +179,7 @@ mod tests {
         sim.step(
             TimeIncrement::new::<minute>(1.0).unwrap(),
             &AdvanceTime,
-            &NoController,
+            &PassThrough,
         )
         .unwrap();
 

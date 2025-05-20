@@ -13,9 +13,9 @@ use crate::{
 ///
 /// - Closed-loop feedback control  
 /// - Enforcing physical or logical constraints  
-/// - Open-loop simulation using [`NoController`]
+/// - Open-loop simulation using [`PassThrough`]
 ///
-/// [`NoController`]: crate::transient::controllers::NoController
+/// [`PassThrough`]: crate::transient::controllers::PassThrough
 pub trait Controller<C>
 where
     C: Component,
