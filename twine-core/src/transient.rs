@@ -60,6 +60,6 @@ mod types;
 #[cfg(test)]
 mod test_utils;
 
-pub use simulation::Simulation;
+pub use simulation::{Simulation, StepError, Stepping};
 pub use traits::{Controller, HasTimeDerivative, Integrator, StatefulComponent, Temporal};
 pub use types::{TimeDerivativeOf, TimeIncrement, TimeIncrementError, TimeStep};
