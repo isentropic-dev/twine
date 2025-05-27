@@ -43,7 +43,7 @@ where
 {
     /// The type representing the component's time-evolving internal state.
     ///
-    /// This type may be a scalar, vector, tuple, or custom struct, depending on
+    /// This type may be a scalar, array, tuple, or custom struct, depending on
     /// the system being modeled.
     type State;
 
