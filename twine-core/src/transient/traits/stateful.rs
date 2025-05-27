@@ -8,7 +8,7 @@ use crate::{transient::TimeDerivativeOf, Component};
 ///
 /// A `StatefulComponent` is a specialized [`Component`] whose input encodes
 /// dynamic system state, and whose output provides the corresponding time
-/// derivatives.
+/// derivative of that state.
 /// This design enables integration over time by clearly separating state
 /// extraction, derivative evaluation, and state reapplication.
 ///
@@ -17,7 +17,7 @@ use crate::{transient::TimeDerivativeOf, Component};
 /// This trait defines three core operations:
 ///
 /// 1. [`extract_state`] retrieves the current state from the component's input.
-/// 2. [`extract_derivative`] computes the time derivative of that state from the output.
+/// 2. [`extract_derivative`] retrieves the time derivative of that state from the output.
 /// 3. [`apply_state`] injects a new state into a previous input to produce the next input.
 ///
 /// Together, these operations provide the minimal interface required for
@@ -29,7 +29,7 @@ use crate::{transient::TimeDerivativeOf, Component};
 ///
 /// - Division by [`Time`] to yield a time derivative.
 /// - Multiplication of that derivative by [`Time`] to compute a delta.
-/// - Addition of the delta to the original state to produce a new state.
+/// - Addition of that delta to the original state to produce a new state.
 ///
 /// These constraints are automatically satisfied by most physical quantity
 /// types from the [`uom`] crate.
@@ -45,7 +45,6 @@ where
     ///
     /// This type may be a scalar, vector, tuple, or custom struct, depending on
     /// the system being modeled.
-    /// These values are subject to integration and updated as the simulation progresses.
     type State;
 
     /// Extracts the current state from the component's input.
@@ -71,7 +70,5 @@ where
 
 /// Internal alias representing a finite change in state over time.
 ///
-/// This type is computed by multiplying a time derivative by a duration.
-/// It simplifies trait bounds within [`StatefulComponent`] and is not intended
-/// for public use.
+/// This type simplifies trait bounds within [`StatefulComponent`].
 type StateDelta<T> = <TimeDerivativeOf<T> as Mul<Time>>::Output;
