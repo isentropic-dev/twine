@@ -1,9 +1,9 @@
 mod controller;
 mod integrator;
 mod stateful;
-mod time;
+mod temporal;
 
 pub use controller::Controller;
 pub use integrator::Integrator;
 pub use stateful::StatefulComponent;
-pub use time::{HasTimeDerivative, Temporal};
+pub use temporal::Temporal;

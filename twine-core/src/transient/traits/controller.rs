@@ -19,7 +19,7 @@ use crate::{
 pub trait Controller<C>
 where
     C: Component,
-    C::Input: Clone + Temporal,
+    C::Input: Temporal,
 {
     /// The error type returned if control logic fails.
     type Error: std::error::Error + Send + Sync + 'static;

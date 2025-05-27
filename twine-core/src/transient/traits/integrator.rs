@@ -26,7 +26,7 @@ use crate::{
 pub trait Integrator<C>
 where
     C: Component,
-    C::Input: Clone + Temporal,
+    C::Input: Temporal,
 {
     /// The error type returned if integration fails.
     type Error: std::error::Error + Send + Sync + 'static;

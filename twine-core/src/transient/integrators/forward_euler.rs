@@ -1,14 +1,6 @@
-use std::{
-    convert::Infallible,
-    fmt::Debug,
-    ops::{Add, Mul},
-};
+use std::convert::Infallible;
 
-use uom::si::f64::Time;
-
-use crate::transient::{
-    HasTimeDerivative, Integrator, Simulation, StatefulComponent, Temporal, TimeIncrement,
-};
+use crate::transient::{Integrator, Simulation, StatefulComponent, Temporal, TimeIncrement};
 
 /// A first-order explicit integrator using the forward Euler method.
 ///
@@ -23,9 +15,7 @@ pub struct ForwardEuler;
 impl<C> Integrator<C> for ForwardEuler
 where
     C: StatefulComponent,
-    C::Input: Clone + Temporal,
-    C::State: Add<Output = C::State>,
-    <C::State as HasTimeDerivative>::TimeDerivative: Mul<Time, Output = C::State>,
+    C::Input: Temporal,
 {
     type Error = Infallible;
 
@@ -36,10 +26,6 @@ where
     ///   state_{n+1} = state_n + derivative_n * dt
     ///   time_{n+1}  = time_n  + dt
     /// ```
-    ///
-    /// Requires:
-    /// - The component’s state supports addition.
-    /// - The time derivative, when scaled by `dt`, can be added to the state.
     fn propose_input(
         &self,
         simulation: &Simulation<C>,

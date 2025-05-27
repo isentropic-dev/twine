@@ -61,5 +61,5 @@ mod types;
 mod test_utils;
 
 pub use simulation::{Simulation, StepError, Stepping};
-pub use traits::{Controller, HasTimeDerivative, Integrator, StatefulComponent, Temporal};
+pub use traits::{Controller, Integrator, StatefulComponent, Temporal};
 pub use types::{TimeDerivativeOf, TimeIncrement, TimeIncrementError, TimeStep};

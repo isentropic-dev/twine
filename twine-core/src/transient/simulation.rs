@@ -14,7 +14,7 @@ use super::{Controller, Integrator, Temporal, TimeIncrement, TimeIncrementError,
 pub struct Simulation<C>
 where
     C: Component,
-    C::Input: Clone + Temporal,
+    C::Input: Temporal,
 {
     component: C,
     history: Vec<TimeStep<C>>,
@@ -33,7 +33,7 @@ where
 pub enum StepError<C, I, K>
 where
     C: Component,
-    C::Input: Clone + Temporal,
+    C::Input: Temporal,
     I: Integrator<C>,
     K: Controller<C>,
 {
@@ -67,7 +67,7 @@ pub enum Stepping {
 impl<C> Simulation<C>
 where
     C: Component,
-    C::Input: Clone + Temporal,
+    C::Input: Temporal,
 {
     /// Creates a new simulation from a component and an initial input.
     ///
@@ -77,7 +77,10 @@ where
     /// # Errors
     ///
     /// Returns `Err(C::Error)` if the component fails to evaluate the initial input.
-    pub fn new(component: C, initial_input: C::Input) -> Result<Self, C::Error> {
+    pub fn new(component: C, initial_input: C::Input) -> Result<Self, C::Error>
+    where
+        C::Input: Clone,
+    {
         let output = component.call(initial_input.clone())?;
         Ok(Self {
             component,
@@ -110,9 +113,9 @@ where
         controller: &K,
     ) -> Result<(), StepError<C, I, K>>
     where
+        C::Input: Clone,
         I: Integrator<C>,
         K: Controller<C>,
-        Self: Sized,
     {
         let proposed = integrator
             .propose_input(self, dt)
@@ -216,9 +219,9 @@ where
         controller: &K,
     ) -> Result<Self, StepError<C, I, K>>
     where
+        C::Input: Clone,
         I: Integrator<C>,
         K: Controller<C>,
-        Self: Sized,
     {
         let (dt, num_steps) = match stepping {
             Stepping::FixedSteps { dt, num_steps } => {
