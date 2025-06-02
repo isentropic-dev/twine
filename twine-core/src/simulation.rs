@@ -15,8 +15,8 @@ use crate::{Component, Integrator};
 ///
 /// - [`Model`]: A [`Component`] that maps independent variables (`Input`) to
 ///   dependent variables (`Output`).
-/// - [`Integrator`]: Advances selected input variables over time using a
-///   numerical scheme such as Forward Euler or Runge-Kutta.
+/// - [`Integrator`]: Advances selected input variables over time, typically
+///   using a numerical scheme such as Forward Euler or Runge-Kutta.
 ///
 /// # State Representation
 ///
@@ -81,18 +81,28 @@ pub trait Simulation: Sized {
         state: &State<Self::Model>,
     ) -> <Self::Integrator as Integrator>::Input;
 
-    /// Prepares the model input from the prior input and integrator output.
+    /// Prepares the model input for the next simulation step.
     ///
-    /// Extracts and transforms data from the previous input, the integrator’s
-    /// output, and the actual time step into a new [`Component::Input`] for
-    /// the model.
+    /// Extracts and transforms data from the previous [`State`],
+    /// the integrator's output, and the actual time step into a new
+    /// [`Component::Input`] for the model.
     ///
-    /// The resulting model input may update time, advance state variables, or
+    /// The resulting input may update time, advance state variables, or
     /// incorporate simulation-specific behavior such as constraint enforcement,
-    /// history usage, or response to external input.
+    /// historical context, or responses to external input.
+    ///
+    /// # Parameters
+    ///
+    /// - `prev_state`: The previous [`State`], including both input and output.
+    /// - `integrator_output`: The output produced by the integrator.
+    /// - `actual_dt`: The time step that was actually taken.
+    ///
+    /// # Returns
+    ///
+    /// The next [`Component::Input`] to be passed to the model.
     fn prepare_model_input(
         &self,
-        prev_input: &<Self::Model as Component>::Input,
+        prev_state: &State<Self::Model>,
         integrator_output: <Self::Integrator as Integrator>::Output,
         actual_dt: Duration,
     ) -> <Self::Model as Component>::Input;
@@ -162,7 +172,7 @@ pub trait Simulation: Sized {
             .integrate(integrator_input, dt)
             .map_err(StepError::Integrator)?;
 
-        let next_input = self.prepare_model_input(&state.input, integrator_output, actual_dt);
+        let next_input = self.prepare_model_input(state, integrator_output, actual_dt);
 
         let next_output = self
             .model()
@@ -438,14 +448,14 @@ mod tests {
 
         fn prepare_model_input(
             &self,
-            input: &Input,
+            prev_state: &State<Spring>,
             integrator_output: FwdEulerOutput,
             actual_dt: Duration,
         ) -> Input {
             let FwdEulerOutput { position, velocity } = integrator_output;
 
             let minutes = actual_dt.as_secs_f64() / 60.0;
-            let time_in_minutes = input.time_in_minutes + minutes;
+            let time_in_minutes = prev_state.input.time_in_minutes + minutes;
 
             Input {
                 time_in_minutes,
