@@ -37,8 +37,8 @@ use crate::{Component, Integrator};
 ///
 /// - [`prepare_integrator_input`]: Builds the integrator input from the current
 ///   state, selecting and transforming values needed for integration.
-/// - [`prepare_model_input`]: Constructs the next model input from the prior
-///   input, the integrator's output, and the effective time step.
+/// - [`prepare_model_input`]: Constructs the next model input using the
+///   previous state, the integrator's output, and the effective time step.
 ///
 /// These functions define the boundary between domain-specific modeling and
 /// integrator-specific stepping, enabling composable and flexible simulations.
