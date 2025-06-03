@@ -51,20 +51,29 @@ use uom::si::f64::{Area, HeatTransfer, Power, ThermodynamicTemperature, Volume};
 /// converted as necessary by the `uom` type system.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Tank<F: FluidPropertyModel> {
-    /// Surface area available for heat exchange with the environment.
-    pub area: Area,
+    /// Physical and thermal configuration of the tank.
+    ///
+    /// Includes the internal volume, external surface area,
+    /// and heat transfer characteristics (e.g., insulation).
+    pub config: TankConfig,
 
     /// Fluid property model used to evaluate thermodynamic properties.
     pub fluid: F,
+}
 
-    /// Overall heat transfer coefficient (U-value) of the tank.
-    ///
-    /// Used to model heat loss to the environment through the tank's surface
-    /// based on the difference between the fluid and ambient temperatures.
+/// Describes the tank's size and thermal loss characteristics.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TankConfig {
+    pub area: Area,
     pub u_value: HeatTransfer,
-
-    /// Total internal volume of the tank.
     pub volume: Volume,
+}
+
+impl<F: FluidPropertyModel> Tank<F> {
+    /// Creates a new tank from the given fluid and configuration.
+    pub fn new(fluid: F, config: TankConfig) -> Self {
+        Self { config, fluid }
+    }
 }
 
 /// Inputs required to evaluate the tank's energy balance.
@@ -139,10 +148,16 @@ where
     /// Returns a [`TankError`] if evaluation of the specific heat capacity fails at
     /// the current tank state.
     fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
+        let TankConfig {
+            area,
+            u_value,
+            volume,
+        } = self.config;
+
         // Rate of heat transfer from the tank fluid to the environment.
         let t_tank = self.fluid.temperature(&input.tank_state);
         let delta_t = t_tank.minus(input.ambient_temperature);
-        let heat_loss = self.u_value * self.area * delta_t;
+        let heat_loss = u_value * area * delta_t;
 
         // Net rate of heat transfer into the tank fluid.
         let m_dot = input.mass_flow_rate.into_inner();
@@ -150,8 +165,8 @@ where
         let h_out = self.fluid.enthalpy(&input.tank_state);
         let q_dot_net = m_dot * (h_in - h_out) + input.heat_input - heat_loss;
 
-        // Fluid temperature derivative based on the energy balance.
-        let m = self.volume * self.fluid.density(&input.tank_state);
+        // Rate of temperature change, derived from the net energy balance.
+        let m = volume * self.fluid.density(&input.tank_state);
         let cv = self.fluid.cv(&input.tank_state)?;
         let tank_temperature_derivative = q_dot_net / (m * cv);
 
@@ -183,12 +198,14 @@ mod tests {
     /// Configured with a fixed volume, surface area, and U-value typical of a
     /// residential water heater.
     fn water_tank() -> Tank<IncompressibleLiquid> {
-        Tank {
-            fluid: IncompressibleLiquid::water(),
-            volume: Volume::new::<gallon>(80.0),
-            area: Area::new::<square_foot>(9.0),
-            u_value: HeatTransfer::new::<watt_per_square_meter_kelvin>(0.1),
-        }
+        Tank::new(
+            IncompressibleLiquid::water(),
+            TankConfig {
+                volume: Volume::new::<gallon>(80.0),
+                area: Area::new::<square_foot>(9.0),
+                u_value: HeatTransfer::new::<watt_per_square_meter_kelvin>(0.1),
+            },
+        )
     }
 
     /// Returns a baseline [`TankInput`] at equilibrium conditions.
