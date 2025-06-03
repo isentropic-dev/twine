@@ -77,7 +77,7 @@ impl TanksInRoom {
             fluid,
             first_tank: Tank::new(fluid, first_tank_config),
             second_tank: Tank::new(fluid, second_tank_config),
-            draw_schedule: [VolumeRate::default(); 24],
+            draw_schedule: [VolumeRate::ZERO; 24],
         }
     }
 
@@ -96,7 +96,7 @@ impl TanksInRoom {
     fn prepare_second_tank_input(&self, input: &Input) -> TankInput<IncompressibleLiquid> {
         TankInput {
             ambient_temperature: input.t_room,
-            heat_input: Power::default(),
+            heat_input: Power::ZERO,
             inlet_state: input.t_first_tank,
             mass_flow_rate: self.draw_at_time(input.time),
             tank_state: input.t_second_tank,
