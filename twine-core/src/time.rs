@@ -54,7 +54,7 @@ where
     TimeDerivativeOf<T>: Mul<Time>,
     T: Add<<TimeDerivativeOf<T> as Mul<Time>>::Output, Output = T>,
 {
-    fn step_by_time(self, deriv: TimeDerivativeOf<Self>, dt: Time) -> Self {
-        self + deriv * dt
+    fn step_by_time(self, derivative: TimeDerivativeOf<Self>, dt: Time) -> Self {
+        self + derivative * dt
     }
 }
