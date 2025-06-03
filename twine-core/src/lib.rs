@@ -9,6 +9,6 @@ mod twine;
 
 pub use component::Component;
 pub use integrator::Integrator;
-pub use simulation::{Simulation, StepError};
+pub use simulation::{Simulation, State, StepError};
 pub use time::{TimeDerivativeOf, TimeIntegrable};
 pub use twine::{Twine, TwineError};
