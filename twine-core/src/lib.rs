@@ -5,7 +5,6 @@ mod simulation;
 pub mod solve;
 pub mod thermo;
 mod time;
-pub mod transient;
 mod twine;
 
 pub use component::Component;
