@@ -226,14 +226,13 @@ impl Simulation for TanksInRoomSim {
 }
 
 /// State variables for the simulation.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 struct StateVariables {
     t_first_tank: ThermodynamicTemperature,
     t_second_tank: ThermodynamicTemperature,
 }
 
 /// Time derivatives of the state variables.
-#[derive(Clone, Debug)]
 struct StateVariableDerivatives {
     t_first_tank_dt: TimeDerivativeOf<ThermodynamicTemperature>,
     t_second_tank_dt: TimeDerivativeOf<ThermodynamicTemperature>,
@@ -322,8 +321,8 @@ fn main() {
         time: Time::new::<second>(0.0),
         t_ground: ThermodynamicTemperature::new::<degree_celsius>(10.0),
         t_room: ThermodynamicTemperature::new::<degree_celsius>(20.0),
-        t_second_tank: ThermodynamicTemperature::new::<degree_celsius>(50.0),
         t_first_tank: ThermodynamicTemperature::new::<degree_celsius>(70.0),
+        t_second_tank: ThermodynamicTemperature::new::<degree_celsius>(50.0),
         q_dot_first_tank: Power::new::<watt>(10.0),
     };
 
