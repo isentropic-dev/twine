@@ -8,3 +8,16 @@ members = [
   "twine-macros",
   "twine-plot",
 ]
+
+[workspace.package]
+version = "0.2.0"
+edition = "2021"
+license = "MIT"
+authors = ["Isentropic Development <info@isentropic.dev>"]
+repository = "https://github.com/isentropic-dev/twine"
+readme = "README.md"
+
+[workspace.dependencies]
+approx = "0.5.1"
+thiserror = "2.0.12"
+uom = "0.37.0"

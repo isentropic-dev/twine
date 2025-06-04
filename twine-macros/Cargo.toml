@@ -1,16 +1,16 @@
 [package]
 name = "twine-macros"
-version = "0.1.1"
-edition = "2021"
-license = "MIT"
-authors = ["Isentropic Development <info@isentropic.dev>"]
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
 description = "Macros for Twine, a Rust framework for functional and composable system modeling."
-repository = "https://github.com/isentropic-dev/twine"
-readme = "../README.md"
 keywords = ["twine", "framework", "functional", "composable", "modeling", "macros", "proc-macro"]
 
 [dependencies]
-twine-core = { version = "0.1", path = "../twine-core" }
+twine-core = { version = "0.2.0", path = "../twine-core" }
 proc-macro2 = "1.0"
 quote = "1.0"
 syn = { version = "2.0", features = [

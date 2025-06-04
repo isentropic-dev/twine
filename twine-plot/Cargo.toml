@@ -1,12 +1,12 @@
 [package]
 name = "twine-plot"
-version = "0.1.1"
-edition = "2021"
-license = "MIT"
-authors = ["Isentropic Development <info@isentropic.dev>"]
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+readme.workspace = true
 description = "Plotting utilities for Twine, a Rust framework for functional and composable system modeling."
-repository = "https://github.com/isentropic-dev/twine"
-readme = "../README.md"
 keywords = [
   "twine",
   "framework",
