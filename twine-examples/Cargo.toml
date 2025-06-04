@@ -7,15 +7,7 @@ authors.workspace = true
 repository.workspace = true
 readme.workspace = true
 description = "Example applications for Twine, a Rust framework for functional and composable system modeling."
-keywords = [
-  "twine",
-  "framework",
-  "functional",
-  "composable",
-  "modeling",
-  "examples",
-  "demo",
-]
+keywords = ["twine", "framework", "examples", "demo"]
 
 [dependencies]
 twine-core = { path = "../twine-core" }
