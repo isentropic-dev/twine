@@ -19,17 +19,15 @@
 //! cargo run --example tanks_in_room
 //! ```
 
-use std::{convert::Infallible, ops::Div, time::Duration};
+use std::{convert::Infallible, time::Duration};
 
 use twine_components::{
     fluid::IncompressibleLiquid,
     integrators::ForwardEuler,
     thermal::tank::{Tank, TankConfig, TankInput, TankOutput},
 };
-use twine_core::{
-    thermo::units::PositiveMassRate, Component, Integrator, Simulation, State, TimeDerivativeOf,
-    TimeIntegrable,
-};
+use twine_core::{thermo::units::PositiveMassRate, Component, Integrator, Simulation, State};
+use twine_macros::TimeIntegrable;
 use twine_plot::PlotApp;
 use uom::{
     si::{
@@ -201,7 +199,7 @@ impl Simulation for TanksInRoomSim {
             t_first_tank: state.input.t_first_tank,
         };
 
-        let state_derivs = StateVariableDerivatives {
+        let state_derivs = StateVariablesDerivatives {
             t_second_tank_dt: state.output.second_tank.tank_temperature_derivative,
             t_first_tank_dt: state.output.first_tank.tank_temperature_derivative,
         };
@@ -226,36 +224,10 @@ impl Simulation for TanksInRoomSim {
 }
 
 /// State variables for the simulation.
-#[derive(Debug)]
+#[derive(Debug, TimeIntegrable)]
 struct StateVariables {
     t_first_tank: ThermodynamicTemperature,
     t_second_tank: ThermodynamicTemperature,
-}
-
-/// Time derivatives of the state variables.
-struct StateVariableDerivatives {
-    t_first_tank_dt: TimeDerivativeOf<ThermodynamicTemperature>,
-    t_second_tank_dt: TimeDerivativeOf<ThermodynamicTemperature>,
-}
-
-impl Div<Time> for StateVariables {
-    type Output = StateVariableDerivatives;
-
-    fn div(self, rhs: Time) -> Self::Output {
-        Self::Output {
-            t_first_tank_dt: self.t_first_tank / rhs,
-            t_second_tank_dt: self.t_second_tank / rhs,
-        }
-    }
-}
-
-impl TimeIntegrable for StateVariables {
-    fn step_by_time(self, derivative: StateVariableDerivatives, dt: Time) -> Self {
-        Self {
-            t_first_tank: self.t_first_tank + derivative.t_first_tank_dt * dt,
-            t_second_tank: self.t_second_tank + derivative.t_second_tank_dt * dt,
-        }
-    }
 }
 
 /// A convenience struct for collecting time series temperature data.

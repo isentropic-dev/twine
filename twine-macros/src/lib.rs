@@ -1,5 +1,6 @@
 mod composable;
 mod compose;
+mod time_integrable;
 mod utils;
 
 use proc_macro::TokenStream;
@@ -172,4 +173,87 @@ pub fn compose(attr: TokenStream, item: TokenStream) -> TokenStream {
         parse_macro_input!(item as compose::ParsedItem),
     );
     parsed.try_expand().unwrap_or_else(|err| err).into()
+}
+
+/// Derives the `TimeIntegrable` trait for structs containing state variables.
+///
+/// This macro automates the implementation of time integration for simulation
+/// state structs by generating the necessary boilerplate code for numerical
+/// integration. It creates a derivatives struct and implements the required
+/// traits for time-stepping operations.
+///
+/// When applied to a struct, this macro:
+///
+/// - Generates a private derivatives struct (`{StructName}Derivatives`) with
+///   `TimeDerivativeOf<T>` fields corresponding to each original field.
+/// - Implements `Div<Time>` to convert state variables to their time derivatives.
+/// - Implements `TimeIntegrable` to perform time-stepping integration.
+///
+/// ## Naming Conventions
+///
+/// - `{StructName}Derivatives`: A private struct containing time derivatives
+///   of each field, with field names suffixed with `_dt`.
+///
+/// ## Restrictions
+///
+/// - Structs must use named fields.
+/// - Generic parameters are not supported.
+/// - All field types must support division by `Time` and addition operations
+///   required for integration (the compiler will enforce these constraints).
+///
+/// ## Integration Pattern
+///
+/// The generated code follows this mathematical pattern for each field:
+///
+/// ```text
+/// new_value = old_value + derivative * dt
+/// ```
+///
+/// Where `derivative` comes from dividing the field by time, and `dt` is the
+/// integration time step.
+///
+/// ## Example
+///
+/// ### Input
+///
+/// ```ignore
+/// #[derive(TimeIntegrable)]
+/// struct StateVariables {
+///     temperature: ThermodynamicTemperature,
+///     pressure: Pressure,
+/// }
+/// ```
+///
+/// ### Expanded
+///
+/// ```ignore
+/// struct StateVariablesDerivatives {
+///     temperature_dt: TimeDerivativeOf<ThermodynamicTemperature>,
+///     pressure_dt: TimeDerivativeOf<Pressure>,
+/// }
+///
+/// impl Div<Time> for StateVariables {
+///     type Output = StateVariablesDerivatives;
+///
+///     fn div(self, rhs: Time) -> Self::Output {
+///         Self::Output {
+///             temperature_dt: self.temperature / rhs,
+///             pressure_dt: self.pressure / rhs,
+///         }
+///     }
+/// }
+///
+/// impl TimeIntegrable for StateVariables {
+///     fn step_by_time(self, derivative: StateVariablesDerivatives, dt: Time) -> Self {
+///         Self {
+///             temperature: self.temperature + derivative.temperature_dt * dt,
+///             pressure: self.pressure + derivative.pressure_dt * dt,
+///         }
+///     }
+/// }
+/// ```
+#[proc_macro_derive(TimeIntegrable)]
+pub fn derive_time_integrable(input: TokenStream) -> TokenStream {
+    let parsed = parse_macro_input!(input as time_integrable::Parsed);
+    parsed.expand().into()
 }
