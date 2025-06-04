@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use super::Component;
 
-/// A wrapper that transforms a component’s input and output.
+/// A wrapper that transforms a component's input and output.
 ///
 /// Internally used by `.map()` to modify how a component interacts with its
 /// surrounding context.

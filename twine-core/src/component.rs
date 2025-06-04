@@ -20,7 +20,7 @@ mod mapped_output;
 ///
 /// Components can be combined sequentially using [`Component::chain()`],
 /// applying them in sequence. To ensure type safety:
-/// - The first component’s output type must match the second’s input type.
+/// - The first component's output type must match the second's input type.
 /// - Both components must use the same error type.
 ///
 /// ## Adapting Components
@@ -102,19 +102,19 @@ pub trait Component {
         }
     }
 
-    /// Transforms this component’s input and output types.
+    /// Transforms this component's input and output types.
     ///
     /// This method adapts the component to work in contexts where the input and
     /// output types differ.
     ///
     /// Unlike [`map_input`] and [`map_output`], this method provides access to
-    /// the new input value when transforming the component’s output, making it
+    /// the new input value when transforming the component's output, making it
     /// ideal for carrying input context forward into the output.
     ///
     /// # Parameters
     ///
-    /// - `input_map`: Extracts the component’s input from a reference to the new input.
-    /// - `output_map`: Produces the new output from the new input and the component’s output.
+    /// - `input_map`: Extracts the component's input from a reference to the new input.
+    /// - `output_map`: Produces the new output from the new input and the component's output.
     ///
     /// # Returns
     ///
@@ -192,14 +192,14 @@ pub trait Component {
         mapped::Mapped::new(self, input_map, output_map)
     }
 
-    /// Transforms this component’s input type.
+    /// Transforms this component's input type.
     ///
     /// This method adapts the component to accept a different input type by
     /// converting it into the type expected by the component.
     ///
     /// # Parameters
     ///
-    /// - `input_map`: Converts the new input into the component’s input type.
+    /// - `input_map`: Converts the new input into the component's input type.
     ///
     /// # Returns
     ///
@@ -216,14 +216,14 @@ pub trait Component {
         mapped_input::MappedInput::new(self, input_map)
     }
 
-    /// Transforms this component’s output type.
+    /// Transforms this component's output type.
     ///
     /// This method adapts the component to produce a different output type by
     /// converting the result after execution.
     ///
     /// # Parameters
     ///
-    /// - `output_map`: Converts the component’s output into the new output type.
+    /// - `output_map`: Converts the component's output into the new output type.
     ///
     /// # Returns
     ///
@@ -240,13 +240,13 @@ pub trait Component {
         mapped_output::MappedOutput::new(self, output_map)
     }
 
-    /// Transforms this component’s error type.
+    /// Transforms this component's error type.
     ///
     /// This method adapts the component by converting its error into a different type.
     ///
     /// # Parameters
     ///
-    /// - `error_map`: Converts the component’s error into the new error type.
+    /// - `error_map`: Converts the component's error into the new error type.
     ///
     /// # Returns
     ///

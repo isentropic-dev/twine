@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use super::Component;
 
-/// A wrapper that transforms a component’s output type.
+/// A wrapper that transforms a component's output type.
 ///
 /// Internally used by `.map_output()` to adapt a component so it produces a
 /// different output type.
