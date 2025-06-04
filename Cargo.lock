@@ -3044,7 +3044,7 @@ checksum = "d2df906b07856748fa3f6e0ad0cbaa047052d4a7dd609e231c4f72cee8c36f31"
 
 [[package]]
 name = "twine-components"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "approx",
  "ndarray",
@@ -3058,7 +3058,7 @@ dependencies = [
 
 [[package]]
 name = "twine-core"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "approx",
  "petgraph",
@@ -3068,7 +3068,7 @@ dependencies = [
 
 [[package]]
 name = "twine-examples"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "twine-components",
  "twine-core",
@@ -3079,7 +3079,7 @@ dependencies = [
 
 [[package]]
 name = "twine-macros"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "heck",
  "itertools 0.14.0",
@@ -3091,7 +3091,7 @@ dependencies = [
 
 [[package]]
 name = "twine-plot"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "eframe",
  "egui_plot",
@@ -3149,9 +3149,9 @@ checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 
 [[package]]
 name = "uom"
-version = "0.36.0"
+version = "0.37.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ffd36e5350a65d112584053ee91843955826bf9e56ec0d1351214e01f6d7cd9c"
+checksum = "cd5cfe7d84f6774726717f358a37f5bca8fca273bed4de40604ad129d1107b49"
 dependencies = [
  "num-bigint",
  "num-complex",

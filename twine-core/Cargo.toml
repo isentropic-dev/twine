@@ -1,18 +1,18 @@
 [package]
 name = "twine-core"
-version = "0.1.1"
-edition = "2021"
-license = "MIT"
-authors = ["Isentropic Development <info@isentropic.dev>"]
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
 description = "A Rust framework for functional and composable system modeling."
-repository = "https://github.com/isentropic-dev/twine"
-readme = "../README.md"
 keywords = ["twine", "framework", "functional", "composable", "modeling"]
 
 [dependencies]
 petgraph = "0.7.1"
-thiserror = "2.0.12"
-uom = "0.36.0"
+thiserror = { workspace = true }
+uom = { workspace = true }
 
 [dev-dependencies]
-approx = "0.5.1"
+approx = { workspace = true }

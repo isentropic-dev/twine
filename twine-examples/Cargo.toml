@@ -1,12 +1,12 @@
 [package]
 name = "twine-examples"
-version = "0.1.1"
-edition = "2021"
-license = "MIT"
-authors = ["Isentropic Development <info@isentropic.dev>"]
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
 description = "Example applications for Twine, a Rust framework for functional and composable system modeling."
-repository = "https://github.com/isentropic-dev/twine"
-readme = "../README.md"
+repository.workspace = true
+readme.workspace = true
 keywords = [
   "twine",
   "framework",
@@ -22,4 +22,4 @@ twine-core = { path = "../twine-core" }
 twine-components = { path = "../twine-components" }
 twine-macros = { path = "../twine-macros" }
 twine-plot = { path = "../twine-plot" }
-uom = "0.36.0"
+uom = { workspace = true }
