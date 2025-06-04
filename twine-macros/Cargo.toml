@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 readme.workspace = true
 description = "Macros for Twine, a Rust framework for functional and composable system modeling."
-keywords = ["twine", "framework", "functional", "composable", "modeling", "macros", "proc-macro"]
+keywords = ["twine", "framework", "macros", "proc-macro"]
 
 [dependencies]
 twine-core = { version = "0.2.0", path = "../twine-core" }

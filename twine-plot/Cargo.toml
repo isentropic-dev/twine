@@ -7,15 +7,7 @@ authors.workspace = true
 repository.workspace = true
 readme.workspace = true
 description = "Plotting utilities for Twine, a Rust framework for functional and composable system modeling."
-keywords = [
-  "twine",
-  "framework",
-  "functional",
-  "composable",
-  "modeling",
-  "plotting",
-  "visualization",
-]
+keywords = ["twine", "framework", "plotting", "visualization"]
 
 [dependencies]
 eframe = "0.31.1"
