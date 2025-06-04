@@ -57,7 +57,7 @@ impl Parsed {
 
     /// Generates a derivatives struct with `TimeDerivativeOf<T>` for each field.
     fn generate_derivatives_struct(&self) -> TokenStream {
-        let deriv_struct_name = self.ident.with_suffix("Derivatives");
+        let deriv_struct_name = self.ident.with_suffix("Dt");
 
         let derivative_fields: Vec<_> = self
             .fields
@@ -82,7 +82,7 @@ impl Parsed {
     /// Generates the `Div<Time>` implementation for the original struct.
     fn generate_div_impl(&self) -> TokenStream {
         let struct_name = &self.ident;
-        let deriv_struct_name = self.ident.with_suffix("Derivatives");
+        let deriv_struct_name = self.ident.with_suffix("Dt");
 
         let derivative_assignments: Vec<_> = self
             .fields
@@ -113,7 +113,7 @@ impl Parsed {
     /// Generates the `TimeIntegrable` implementation for the original struct.
     fn generate_time_integrable_impl(&self) -> TokenStream {
         let struct_name = &self.ident;
-        let deriv_struct_name = self.ident.with_suffix("Derivatives");
+        let deriv_struct_name = self.ident.with_suffix("Dt");
 
         let step_assignments: Vec<_> = self
             .fields
@@ -158,13 +158,13 @@ mod tests {
         let generated_code = parsed.expand();
 
         let expected_code = quote! {
-            struct StateVariablesDerivatives {
+            struct StateVariablesDt {
                 t_first_tank_dt: twine_core::TimeDerivativeOf<ThermodynamicTemperature>,
                 t_second_tank_dt: twine_core::TimeDerivativeOf<ThermodynamicTemperature>
             }
 
             impl std::ops::Div<uom::si::f64::Time> for StateVariables {
-                type Output = StateVariablesDerivatives;
+                type Output = StateVariablesDt;
 
                 fn div(self, rhs: uom::si::f64::Time) -> Self::Output {
                     Self::Output {
@@ -175,7 +175,7 @@ mod tests {
             }
 
             impl twine_core::TimeIntegrable for StateVariables {
-                fn step_by_time(self, derivative: StateVariablesDerivatives, dt: uom::si::f64::Time) -> Self {
+                fn step_by_time(self, derivative: StateVariablesDt, dt: uom::si::f64::Time) -> Self {
                     Self {
                         t_first_tank: self.t_first_tank + derivative.t_first_tank_dt * dt,
                         t_second_tank: self.t_second_tank + derivative.t_second_tank_dt * dt

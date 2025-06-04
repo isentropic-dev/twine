@@ -184,15 +184,15 @@ pub fn compose(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// When applied to a struct, this macro:
 ///
-/// - Generates a private derivatives struct (`{StructName}Derivatives`) with
-///   `TimeDerivativeOf<T>` fields corresponding to each original field.
+/// - Generates a derivatives struct (`{StructName}Dt`) with `TimeDerivativeOf<T>`
+///   fields corresponding to each original field.
 /// - Implements `Div<Time>` to convert state variables to their time derivatives.
 /// - Implements `TimeIntegrable` to perform time-stepping integration.
 ///
 /// ## Naming Conventions
 ///
-/// - `{StructName}Derivatives`: A private struct containing time derivatives
-///   of each field, with field names suffixed with `_dt`.
+/// - `{StructName}Dt`: A struct containing time derivatives of each field,
+///   with field names suffixed with `_dt`.
 ///
 /// ## Restrictions
 ///
@@ -227,13 +227,13 @@ pub fn compose(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// ### Expanded
 ///
 /// ```ignore
-/// struct StateVariablesDerivatives {
+/// struct StateVariablesDt {
 ///     temperature_dt: TimeDerivativeOf<ThermodynamicTemperature>,
 ///     pressure_dt: TimeDerivativeOf<Pressure>,
 /// }
 ///
 /// impl Div<Time> for StateVariables {
-///     type Output = StateVariablesDerivatives;
+///     type Output = StateVariablesDt;
 ///
 ///     fn div(self, rhs: Time) -> Self::Output {
 ///         Self::Output {
@@ -244,7 +244,7 @@ pub fn compose(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// }
 ///
 /// impl TimeIntegrable for StateVariables {
-///     fn step_by_time(self, derivative: StateVariablesDerivatives, dt: Time) -> Self {
+///     fn step_by_time(self, derivative: StateVariablesDt, dt: Time) -> Self {
 ///         Self {
 ///             temperature: self.temperature + derivative.temperature_dt * dt,
 ///             pressure: self.pressure + derivative.pressure_dt * dt,

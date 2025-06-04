@@ -199,7 +199,7 @@ impl Simulation for TanksInRoomSim {
             t_first_tank: state.input.t_first_tank,
         };
 
-        let state_derivs = StateVariablesDerivatives {
+        let state_derivs = StateVariablesDt {
             t_second_tank_dt: state.output.second_tank.tank_temperature_derivative,
             t_first_tank_dt: state.output.first_tank.tank_temperature_derivative,
         };
