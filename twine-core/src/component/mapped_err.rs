@@ -2,7 +2,7 @@ use std::{error::Error as StdError, marker::PhantomData};
 
 use super::Component;
 
-/// A wrapper that transforms a component’s error type.
+/// A wrapper that transforms a component's error type.
 ///
 /// Internally used by `.map_err()` to map one error type to another.
 pub(crate) struct MappedErr<C, ErrorMap, NewError>

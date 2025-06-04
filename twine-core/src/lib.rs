@@ -2,7 +2,6 @@ mod component;
 pub mod graph;
 mod integrator;
 mod simulation;
-pub mod solve;
 pub mod thermo;
 mod time;
 mod twine;

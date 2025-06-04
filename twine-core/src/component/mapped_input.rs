@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use super::Component;
 
-/// A wrapper that transforms a component’s input type.
+/// A wrapper that transforms a component's input type.
 ///
 /// Internally used by `.map_input()` to adapt a component so it can accept a
 /// different input type.

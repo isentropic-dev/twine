@@ -4,8 +4,8 @@ use crate::Component;
 ///
 /// Internally used by `.chain()` to combine two compatible components.
 ///
-/// For components to be compatible, the first component’s output type must
-/// match the second’s input and both components must share the same error type.
+/// For components to be compatible, the first component's output type must
+/// match the second's input and both components must share the same error type.
 pub(crate) struct Chain<A, B>
 where
     A: Component,
