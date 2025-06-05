@@ -2,8 +2,8 @@ use std::ops::Deref;
 
 use thiserror::Error;
 use uom::{
-    si::{f64::MassRate, mass_rate},
     Conversion,
+    si::{f64::MassRate, mass_rate},
 };
 
 /// A mass flow rate guaranteed to be non-negative.

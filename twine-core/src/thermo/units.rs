@@ -2,7 +2,7 @@ mod positive_mass_rate;
 mod temperature_difference;
 
 use uom::{
-    si::{Quantity, ISQ, SI},
+    si::{ISQ, Quantity, SI},
     typenum::{N1, N2, P2, Z0},
 };
 

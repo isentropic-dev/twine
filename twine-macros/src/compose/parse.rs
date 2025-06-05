@@ -1,7 +1,7 @@
 use proc_macro2::Span;
 use syn::{
-    parse::{Parse, ParseStream},
     Attribute, Error, Ident, ItemFn, Result, ReturnType, Stmt, Visibility,
+    parse::{Parse, ParseStream},
 };
 
 /// Represents the fully parsed macro input.

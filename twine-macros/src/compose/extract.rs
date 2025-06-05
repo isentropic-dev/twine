@@ -1,6 +1,6 @@
 use proc_macro2::TokenStream;
 use quote::{quote, quote_spanned};
-use syn::{parse_quote, spanned::Spanned, Expr, ExprStruct, Item, ItemType, Stmt, Type, TypePath};
+use syn::{Expr, ExprStruct, Item, ItemType, Stmt, Type, TypePath, parse_quote, spanned::Spanned};
 
 use crate::utils::IdentExt;
 
@@ -129,10 +129,7 @@ fn extract_type_path(stmt: Option<&Stmt>, type_name: &str) -> Result<TypePath, T
         });
     };
 
-    let Stmt::Item(Item::Type(ItemType {
-        ident, ty, ..
-    })) = stmt
-    else {
+    let Stmt::Item(Item::Type(ItemType { ident, ty, .. })) = stmt else {
         return Err(quote_spanned!(stmt.span() =>
             compile_error!(#err_message);
         ));
