@@ -1,8 +1,8 @@
 use twine_core::thermo::{
     fluid::{
-        DensityProvider, FluidPropertyModel, FluidStateError, NewStateFromPressure,
-        NewStateFromPressureDensity, NewStateFromTemperature, NewStateFromTemperatureDensity,
-        NewStateFromTemperaturePressure, PressureProvider, TemperatureProvider,
+        FluidPropertyModel, FluidStateError, ProvidesDensity, ProvidesPressure,
+        ProvidesTemperature, WithPressure, WithPressureDensity, WithTemperature,
+        WithTemperatureDensity, WithTemperaturePressure,
     },
     units::SpecificGasConstant,
 };
@@ -33,7 +33,7 @@ use uom::si::{
 /// Specifically:
 /// - Modifying temperature preserves the reference density, adjusting pressure accordingly.
 /// - Modifying pressure preserves the reference density, adjusting temperature accordingly.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct IdealGasModel {
     specific_gas_constant: SpecificGasConstant,
 }
@@ -104,26 +104,26 @@ impl FluidPropertyModel for IdealGasModel {
     type State = IdealGasState;
 }
 
-impl TemperatureProvider for IdealGasModel {
+impl ProvidesTemperature for IdealGasModel {
     fn temperature(&self, state: &Self::State) -> ThermodynamicTemperature {
         state.temperature
     }
 }
 
-impl DensityProvider for IdealGasModel {
+impl ProvidesDensity for IdealGasModel {
     fn density(&self, state: &Self::State) -> MassDensity {
         state.density
     }
 }
 
-impl PressureProvider for IdealGasModel {
+impl ProvidesPressure for IdealGasModel {
     fn pressure(&self, state: &Self::State) -> Pressure {
         self.calculate_pressure(state)
     }
 }
 
-impl NewStateFromTemperatureDensity for IdealGasModel {
-    fn new_state_from_temperature_density(
+impl WithTemperatureDensity for IdealGasModel {
+    fn with_temperature_density(
         &self,
         _reference: &Self::State,
         temperature: ThermodynamicTemperature,
@@ -136,8 +136,8 @@ impl NewStateFromTemperatureDensity for IdealGasModel {
     }
 }
 
-impl NewStateFromTemperaturePressure for IdealGasModel {
-    fn new_state_from_temperature_pressure(
+impl WithTemperaturePressure for IdealGasModel {
+    fn with_temperature_pressure(
         &self,
         _reference: &Self::State,
         temperature: ThermodynamicTemperature,
@@ -151,8 +151,8 @@ impl NewStateFromTemperaturePressure for IdealGasModel {
     }
 }
 
-impl NewStateFromPressureDensity for IdealGasModel {
-    fn new_state_from_pressure_density(
+impl WithPressureDensity for IdealGasModel {
+    fn with_pressure_density(
         &self,
         _reference: &Self::State,
         pressure: Pressure,
@@ -166,8 +166,8 @@ impl NewStateFromPressureDensity for IdealGasModel {
     }
 }
 
-impl NewStateFromTemperature for IdealGasModel {
-    fn new_state_from_temperature(
+impl WithTemperature for IdealGasModel {
+    fn with_temperature(
         &self,
         reference: &Self::State,
         temperature: ThermodynamicTemperature,
@@ -181,8 +181,8 @@ impl NewStateFromTemperature for IdealGasModel {
     }
 }
 
-impl NewStateFromPressure for IdealGasModel {
-    fn new_state_from_pressure(
+impl WithPressure for IdealGasModel {
+    fn with_pressure(
         &self,
         reference: &Self::State,
         pressure: Pressure,
@@ -237,7 +237,7 @@ mod tests {
         // Increase the temperature at constant density (i.e., volume).
         let new_temperature = ThermodynamicTemperature::new::<kelvin>(350.0);
         let higher_temp_state = ideal_gas_air
-            .new_state_from_temperature(&initial_state, new_temperature)
+            .with_temperature(&initial_state, new_temperature)
             .unwrap();
 
         // Verify the temperature changed while the density remained constant.
@@ -261,7 +261,7 @@ mod tests {
         // Next we double the pressure of the higher temperature state.
         let doubled_pressure = 2.0 * ideal_gas_air.pressure(&higher_temp_state);
         let doubled_pressure_state = ideal_gas_air
-            .new_state_from_pressure(&higher_temp_state, doubled_pressure)
+            .with_pressure(&higher_temp_state, doubled_pressure)
             .unwrap();
 
         // Verify the temperature also doubled.

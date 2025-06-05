@@ -2,8 +2,8 @@ use thiserror::Error;
 use twine_core::{
     thermo::{
         fluid::{
-            CvProvider, DensityProvider, EnthalpyProvider, FluidPropertyError, FluidPropertyModel,
-            TemperatureProvider,
+            FluidPropertyError, FluidPropertyModel, ProvidesCv, ProvidesDensity, ProvidesEnthalpy,
+            ProvidesTemperature,
         },
         units::{PositiveMassRate, TemperatureDifference},
     },
@@ -127,7 +127,7 @@ pub enum TankError {
 
 impl<F> Component for Tank<F>
 where
-    F: FluidPropertyModel + TemperatureProvider + DensityProvider + EnthalpyProvider + CvProvider,
+    F: FluidPropertyModel + ProvidesTemperature + ProvidesDensity + ProvidesEnthalpy + ProvidesCv,
 {
     type Input = TankInput<F>;
     type Output = TankOutput;

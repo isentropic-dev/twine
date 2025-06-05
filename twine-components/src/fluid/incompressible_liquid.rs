@@ -1,8 +1,7 @@
 use twine_core::thermo::{
     fluid::{
-        CpProvider, CvProvider, DensityProvider, EnthalpyProvider, EntropyProvider,
-        FluidPropertyError, FluidPropertyModel, FluidStateError, NewStateFromTemperature,
-        TemperatureProvider,
+        FluidPropertyError, FluidPropertyModel, FluidStateError, ProvidesCp, ProvidesCv,
+        ProvidesDensity, ProvidesEnthalpy, ProvidesEntropy, ProvidesTemperature, WithTemperature,
     },
     units::{SpecificEnthalpy, SpecificEntropy, TemperatureDifference},
 };
@@ -31,7 +30,7 @@ use uom::si::{
 ///
 /// This model is well-suited for scenarios where computational efficiency is
 /// prioritized over real-fluid fidelity.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct IncompressibleLiquid {
     pub density: MassDensity,
     pub cp: SpecificHeatCapacity,
@@ -101,38 +100,38 @@ impl FluidPropertyModel for IncompressibleLiquid {
     type State = ThermodynamicTemperature;
 }
 
-impl TemperatureProvider for IncompressibleLiquid {
+impl ProvidesTemperature for IncompressibleLiquid {
     fn temperature(&self, state: &Self::State) -> ThermodynamicTemperature {
         *state
     }
 }
 
-impl DensityProvider for IncompressibleLiquid {
+impl ProvidesDensity for IncompressibleLiquid {
     fn density(&self, _state: &Self::State) -> MassDensity {
         self.density
     }
 }
 
-impl CpProvider for IncompressibleLiquid {
+impl ProvidesCp for IncompressibleLiquid {
     fn cp(&self, _state: &Self::State) -> Result<SpecificHeatCapacity, FluidPropertyError> {
         Ok(self.cp)
     }
 }
 
-impl CvProvider for IncompressibleLiquid {
+impl ProvidesCv for IncompressibleLiquid {
     fn cv(&self, _state: &Self::State) -> Result<SpecificHeatCapacity, FluidPropertyError> {
         Ok(self.cp)
     }
 }
 
-impl EnthalpyProvider for IncompressibleLiquid {
+impl ProvidesEnthalpy for IncompressibleLiquid {
     fn enthalpy(&self, state: &Self::State) -> SpecificEnthalpy {
         let delta_t = state.minus(self.reference_temperature);
         self.cp * delta_t
     }
 }
 
-impl EntropyProvider for IncompressibleLiquid {
+impl ProvidesEntropy for IncompressibleLiquid {
     fn entropy(&self, state: &Self::State) -> SpecificEntropy {
         let t = state.get::<kelvin>();
         let t_ref = self.reference_temperature.get::<kelvin>();
@@ -140,8 +139,8 @@ impl EntropyProvider for IncompressibleLiquid {
     }
 }
 
-impl NewStateFromTemperature for IncompressibleLiquid {
-    fn new_state_from_temperature(
+impl WithTemperature for IncompressibleLiquid {
+    fn with_temperature(
         &self,
         _reference: &Self::State,
         temperature: ThermodynamicTemperature,
