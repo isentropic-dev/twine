@@ -1,9 +1,9 @@
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{
+    Attribute, Error, Fields, FieldsNamed, Ident, ItemStruct, Result, Type, Visibility,
     parse::{Parse, ParseStream},
-    parse_quote, Attribute, Error, Fields, FieldsNamed, Ident, ItemStruct, Result, Type,
-    Visibility,
+    parse_quote,
 };
 
 use crate::utils::IdentExt;
@@ -149,7 +149,7 @@ impl Parsed {
     }
 
     /// Iterates over struct fields and generates generic type names.
-    fn iter_fields_as_generics(&self) -> impl Iterator<Item = Ident> + '_ {
+    fn iter_fields_as_generics(&self) -> impl Iterator<Item = Ident> {
         self.fields.named.iter().map(|field| {
             field
                 .ident
@@ -160,7 +160,7 @@ impl Parsed {
     }
 
     /// Iterates over struct fields and returns their original types.
-    fn iter_fields_as_types(&self) -> impl Iterator<Item = Type> + '_ {
+    fn iter_fields_as_types(&self) -> impl Iterator<Item = Type> {
         self.fields.named.iter().map(|field| field.ty.clone())
     }
 }

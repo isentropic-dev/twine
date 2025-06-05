@@ -130,7 +130,7 @@ fn extract_type_path(stmt: Option<&Stmt>, type_name: &str) -> Result<TypePath, T
     };
 
     let Stmt::Item(Item::Type(ItemType {
-        ref ident, ref ty, ..
+        ident, ty, ..
     })) = stmt
     else {
         return Err(quote_spanned!(stmt.span() =>
