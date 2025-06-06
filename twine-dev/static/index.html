@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Circle Area Calculator</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .container { max-width: 600px; }
+        textarea { width: 100%; height: 100px; font-family: monospace; }
+        button { padding: 10px 20px; margin: 10px 0; }
+        .section { margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 id="title">Calculator</h1>
+        
+        <div class="section">
+            <h3>Input JSON:</h3>
+            <textarea id="input"></textarea>
+        </div>
+        
+        <button onclick="calculate()">Calculate</button>
+        
+        <div class="section">
+            <h3>Output JSON:</h3>
+            <textarea id="output" readonly></textarea>
+        </div>
+    </div>
+
+    <script>
+        async function loadSchema() {
+            try {
+                const response = await fetch('/schema');
+                const schema = await response.json();
+                document.getElementById('input').value = JSON.stringify(schema, null, 2);
+            } catch (error) {
+                document.getElementById('input').value = 'Error: ' + error.message;
+            }
+        }
+
+        async function loadComponentName() {
+            try {
+                const response = await fetch('/name');
+                const name = await response.json();
+                document.getElementById('title').textContent = name + ' Calculator';
+                document.title = name + ' Calculator';
+            } catch (error) {
+                console.error('Could not load component name:', error);
+            }
+        }
+
+        async function calculate() {
+            const inputText = document.getElementById('input').value;
+            const outputElement = document.getElementById('output');
+            
+            try {
+                const inputData = JSON.parse(inputText);
+                
+                const response = await fetch('/calculate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(inputData)
+                });
+                
+                const result = await response.json();
+                outputElement.value = JSON.stringify(result, null, 2);
+            } catch (error) {
+                outputElement.value = 'Error: ' + error.message;
+            }
+        }
+
+        loadSchema();
+        loadComponentName();
+    </script>
+</body>
+</html>
