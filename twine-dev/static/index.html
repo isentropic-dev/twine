@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Circle Area Calculator</title>
+    <title></title>
     <style>
         body { font-family: Arial, sans-serif; margin: 40px; }
         .container { max-width: 600px; }
@@ -12,7 +12,7 @@
 </head>
 <body>
     <div class="container">
-        <h1 id="title">Calculator</h1>
+        <h1 id="title"></h1>
         
         <div class="section">
             <h3>Input JSON:</h3>
@@ -42,8 +42,8 @@
             try {
                 const response = await fetch('/name');
                 const name = await response.json();
-                document.getElementById('title').textContent = name + ' Calculator';
-                document.title = name + ' Calculator';
+                document.getElementById('title').textContent = name;
+                document.title = name;
             } catch (error) {
                 console.error('Could not load component name:', error);
             }
