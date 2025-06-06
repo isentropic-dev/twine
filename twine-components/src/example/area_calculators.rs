@@ -95,6 +95,7 @@ impl Component for RectangleArea {
     }
 }
 
+#[allow(clippy::trivially_copy_pass_by_ref)]
 fn serialize_length<S>(length: &Length, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
@@ -111,9 +112,10 @@ where
 {
     let s = String::deserialize(deserializer)?;
     s.parse::<Length>()
-        .map_err(|e| serde::de::Error::custom(format!("Failed to parse length: {}", e)))
+        .map_err(|e| serde::de::Error::custom(format!("Failed to parse length: {e}")))
 }
 
+#[allow(clippy::trivially_copy_pass_by_ref)]
 fn serialize_area<S>(area: &Area, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
@@ -153,12 +155,11 @@ mod tests {
         };
 
         let json = serde_json::to_string(&input).unwrap();
-        println!("Serialized: {}", json);
+        println!("Serialized: {json}");
 
         let deserialized: CircleInput = serde_json::from_str(&json).unwrap();
-        assert_eq!(
-            input.radius.get::<meter>(),
-            deserialized.radius.get::<meter>()
+        assert!(
+            (input.radius.get::<meter>() - deserialized.radius.get::<meter>()).abs() < f64::EPSILON
         );
     }
 
