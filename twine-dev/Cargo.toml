@@ -7,11 +7,10 @@ authors.workspace = true
 repository.workspace = true
 readme.workspace = true
 
+[lib]
+name = "twine_dev"
+
 [dependencies]
 twine-core = { version = "0.2.0", path = "../twine-core" }
-twine-components = { version = "0.2.0", path = "../twine-components" }
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
 warp = "0.3"
-tokio = { version = "1", features = ["full"] }
-uom.workspace = true

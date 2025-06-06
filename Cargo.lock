@@ -3367,6 +3367,7 @@ dependencies = [
  "ndarray",
  "ninterp",
  "serde",
+ "serde_json",
  "thiserror 2.0.12",
  "twine-core",
  "uom",
@@ -3387,11 +3388,7 @@ name = "twine-dev"
 version = "0.2.0"
 dependencies = [
  "serde",
- "serde_json",
- "tokio",
- "twine-components",
  "twine-core",
- "uom",
  "warp",
 ]
 
@@ -3399,8 +3396,10 @@ dependencies = [
 name = "twine-examples"
 version = "0.2.0"
 dependencies = [
+ "tokio",
  "twine-components",
  "twine-core",
+ "twine-dev",
  "twine-macros",
  "twine-plot",
  "uom",
