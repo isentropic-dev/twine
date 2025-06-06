@@ -12,6 +12,11 @@ use warp::Filter;
 /// - `/name` endpoint for GET requests returning the component type name
 /// - Static file serving from the `static/` directory
 /// 
+/// # Panics
+/// 
+/// Panics if the component's `call` method returns an error. This is currently
+/// handled with `unwrap()` for simplicity.
+/// 
 /// # Example
 /// ```no_run
 /// use twine_dev::run_component_server;
@@ -47,7 +52,7 @@ where
         .map(move || warp::reply::json(&component_name));
 
     let static_dir = std::env::var("CARGO_MANIFEST_DIR")
-        .map(|dir| {
+        .map_or_else(|_| PathBuf::from("static"), |dir| {
             let manifest_path = PathBuf::from(dir);
             // Try current package's static directory first
             let local_static = manifest_path.join("static");
@@ -59,8 +64,7 @@ where
                     .and_then(|workspace| workspace.join("twine-dev/static").canonicalize().ok())
                     .unwrap_or_else(|| PathBuf::from("static"))
             }
-        })
-        .unwrap_or_else(|_| PathBuf::from("static"));
+        });
 
     let static_files = warp::fs::dir(static_dir);
 
