@@ -3,13 +3,13 @@ use std::convert::Infallible;
 use twine_core::Component;
 use uom::{
     si::{
+        ISQ, Quantity, SI,
         acceleration::meter_per_second_squared,
         f64::{Acceleration, Force, Length, Mass, Velocity},
         force::newton,
         length::meter,
         mass::kilogram,
         velocity::meter_per_second,
-        Quantity, ISQ, SI,
     },
     typenum::{N2, P1, Z0},
 };

@@ -11,7 +11,7 @@ members = [
 
 [workspace.package]
 version = "0.2.0"
-edition = "2021"
+edition = "2024"
 license = "MIT"
 authors = ["Isentropic Development <info@isentropic.dev>"]
 repository = "https://github.com/isentropic-dev/twine"

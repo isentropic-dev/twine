@@ -1,8 +1,8 @@
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{
-    parse::{Parse, ParseStream},
     Error, Fields, FieldsNamed, Ident, ItemStruct, Result,
+    parse::{Parse, ParseStream},
 };
 
 use crate::utils::IdentExt;

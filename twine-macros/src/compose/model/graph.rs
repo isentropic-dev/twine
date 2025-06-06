@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use quote::ToTokens;
-use syn::{visit::Visit, Expr, ExprField, Ident, Member};
+use syn::{Expr, ExprField, Ident, Member, visit::Visit};
 use twine_core::graph::{ComponentGraph, Target};
 
 /// Constructs a `ComponentGraph` by analyzing component input expressions.

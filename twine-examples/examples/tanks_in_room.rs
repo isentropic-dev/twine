@@ -26,10 +26,11 @@ use twine_components::{
     integrators::ForwardEuler,
     thermal::tank::{Tank, TankConfig, TankInput, TankOutput},
 };
-use twine_core::{thermo::units::PositiveMassRate, Component, Integrator, Simulation, State};
+use twine_core::{Component, Integrator, Simulation, State, thermo::units::PositiveMassRate};
 use twine_macros::TimeIntegrable;
 use twine_plot::PlotApp;
 use uom::{
+    ConstZero,
     si::{
         area::square_foot,
         f64::{Area, HeatTransfer, Power, ThermodynamicTemperature, Time, Volume, VolumeRate},
@@ -40,7 +41,6 @@ use uom::{
         volume::gallon,
         volume_rate::gallon_per_minute,
     },
-    ConstZero,
 };
 
 /// A pair of tanks connected in series, modeled as a single thermal component.

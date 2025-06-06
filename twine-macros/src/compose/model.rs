@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
-use syn::{visit_mut::VisitMut, Expr, Ident, Member, TypePath};
+use syn::{Expr, Ident, Member, TypePath, visit_mut::VisitMut};
 use twine_core::graph::ComponentGraph;
 
 use crate::utils::IdentExt;

@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use petgraph::{
+    Direction,
     algo::toposort,
     graph::{DiGraph, NodeIndex},
-    Direction,
 };
 
 /// A directed graph representing connections between components.
@@ -119,7 +119,7 @@ impl ComponentGraph {
     /// # Returns
     ///
     /// An iterator over `Source` objects representing incoming connections.
-    pub fn incoming_connections(&self, component: &str) -> impl Iterator<Item = Source> + '_ {
+    pub fn incoming_connections(&self, component: &str) -> impl Iterator<Item = Source> {
         self.node_map
             .get(component)
             .into_iter()
@@ -136,7 +136,7 @@ impl ComponentGraph {
     /// # Returns
     ///
     /// An iterator over `Target` objects representing outgoing connections.
-    pub fn outgoing_connections(&self, component: &str) -> impl Iterator<Item = Target> + '_ {
+    pub fn outgoing_connections(&self, component: &str) -> impl Iterator<Item = Target> {
         self.node_map
             .get(component)
             .into_iter()
