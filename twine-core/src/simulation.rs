@@ -214,10 +214,9 @@ pub trait Simulation: Sized {
         <Self::Model as Component>::Output: Clone,
     {
         StepIter {
-            sim: self,
-            input: Some(initial_input),
-            output: None,
             dt,
+            known: Some(Known::Input(initial_input)),
+            sim: self,
         }
     }
 
@@ -264,6 +263,13 @@ pub struct State<C: Component> {
     pub output: C::Output,
 }
 
+impl<C: Component> State<C> {
+    /// Creates a [`State`] from the provided input and output.
+    pub fn new(input: C::Input, output: C::Output) -> Self {
+        Self { input, output }
+    }
+}
+
 /// Represents an error that may occur during a simulation step.
 ///
 /// A [`StepError`] wraps failures from either the model or the integrator.
@@ -275,16 +281,25 @@ pub enum StepError<S: Simulation> {
     Integrator(<S::Integrator as Integrator>::Error),
 }
 
-/// An iterator that advances a simulation one step at a time.
-struct StepIter<'a, S: Simulation>
-where
-    <S::Model as Component>::Input: Clone,
-    <S::Model as Component>::Output: Clone,
-{
-    sim: &'a S,
-    input: Option<<S::Model as Component>::Input>,
-    output: Option<<S::Model as Component>::Output>,
+/// Iterator that advances a simulation with a fixed `dt`.
+///
+/// Starts from an initial input and produces a stream of simulation states.
+/// Internally tracks either an initial input (not yet stepped),
+/// or the last yielded simulation state.
+///
+/// On any error, iteration halts.
+struct StepIter<'a, S: Simulation> {
     dt: Duration,
+    known: Option<Known<S>>,
+    sim: &'a S,
+}
+
+/// Internal state held by the [`StepIter`] iterator.
+enum Known<S: Simulation> {
+    /// The simulation has only been initialized with an input.
+    Input(<S::Model as Component>::Input),
+    /// A fully evaluated simulation state is available.
+    State(State<S::Model>),
 }
 
 impl<S> Iterator for StepIter<'_, S>
@@ -295,35 +310,43 @@ where
 {
     type Item = Result<State<S::Model>, StepError<S>>;
 
+    /// Advances the simulation by one step.
+    ///
+    /// - If starting from an input, evaluates the model to produce the first output.
+    /// - If continuing from a full state, steps the simulation forward.
+    /// - On success, yields a new [`State`].
+    /// - On error, yields a [`StepError`] and ends the iteration.
     fn next(&mut self) -> Option<Self::Item> {
-        let current_input = self.input.take()?;
+        let known = self.known.take()?;
 
-        let current_output = match self.output.take() {
-            Some(output) => output,
-            None => match self.sim.model().call(current_input.clone()) {
-                Ok(output) => output,
+        match known {
+            // A full state exists - step forward from it.
+            Known::State(state) => match self.sim.step_from_state(&state, self.dt) {
+                Ok(state) => {
+                    self.known = Some(Known::State(State::new(
+                        state.input.clone(),
+                        state.output.clone(),
+                    )));
+                    Some(Ok(state))
+                }
                 Err(error) => {
-                    self.input = None;
-                    return Some(Err(StepError::Model(error)));
+                    self.known = None;
+                    Some(Err(error))
                 }
             },
-        };
 
-        let current_state = State {
-            input: current_input,
-            output: current_output,
-        };
-
-        match self.sim.step_from_state(&current_state, self.dt) {
-            Ok(State { input, output }) => {
-                self.input = Some(input);
-                self.output = Some(output);
-                Some(Ok(current_state))
-            }
-            Err(error) => {
-                self.input = None;
-                Some(Err(error))
-            }
+            // Only the input is known - call the component and yield the first state.
+            Known::Input(input) => match self.sim.model().call(input.clone()) {
+                Ok(output) => {
+                    self.known = Some(Known::State(State::new(input.clone(), output.clone())));
+                    let state = State::new(input, output);
+                    Some(Ok(state))
+                }
+                Err(error) => {
+                    self.known = None;
+                    Some(Err(StepError::Model(error)))
+                }
+            },
         }
     }
 }
@@ -567,5 +590,104 @@ mod tests {
         assert_abs_diff_eq!(final_output.acceleration, 0.0, epsilon = tolerance);
 
         assert_relative_eq!(final_input.time_in_minutes, 1.875, epsilon = tolerance);
+    }
+
+    /// A model that fails if the input exceeds a specified maximum.
+    #[derive(Debug)]
+    struct CheckInput {
+        max_value: usize,
+    }
+
+    impl Component for CheckInput {
+        type Input = usize;
+        type Output = ();
+        type Error = CheckInputError;
+
+        fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
+            if input <= self.max_value {
+                Ok(())
+            } else {
+                Err(CheckInputError(input, self.max_value))
+            }
+        }
+    }
+
+    #[derive(Debug, Error)]
+    #[error("{0} is bigger than max value of {1}")]
+    struct CheckInputError(usize, usize);
+
+    /// A test simulation using [`CheckInput`] with a no-op integrator.
+    ///
+    /// Each step increments the input by 1.
+    /// Yields an error when the input exceeds the maximum threshold `N`.
+    #[derive(Debug)]
+    struct CheckInputSim<const N: usize>;
+
+    impl<const N: usize> Simulation for CheckInputSim<N> {
+        type Model = CheckInput;
+        type Integrator = ();
+
+        fn model(&self) -> &Self::Model {
+            &CheckInput { max_value: N }
+        }
+
+        fn integrator(&self) -> &Self::Integrator {
+            &()
+        }
+
+        fn prepare_integrator_input(
+            &self,
+            _state: &State<Self::Model>,
+        ) -> <Self::Integrator as Integrator>::Input {
+        }
+
+        fn prepare_model_input(
+            &self,
+            prev_state: &State<Self::Model>,
+            _integrator_output: <Self::Integrator as Integrator>::Output,
+            _actual_dt: Duration,
+        ) -> <Self::Model as Component>::Input {
+            prev_state.input + 1
+        }
+    }
+
+    #[test]
+    fn step_iter_yields_error_correctly() {
+        let mut iter = CheckInputSim::<3>.step_iter(0, Duration::from_secs(1));
+
+        let state = iter
+            .next()
+            .expect("Initial call yields a result")
+            .expect("Initial call is a success");
+        assert_eq!(state.input, 0);
+
+        let state = iter
+            .next()
+            .expect("First step yields a result")
+            .expect("First step is a success");
+        assert_eq!(state.input, 1);
+
+        let state = iter
+            .next()
+            .expect("Second step yields a result")
+            .expect("Second step is a success");
+        assert_eq!(state.input, 2);
+
+        let state = iter
+            .next()
+            .expect("Third step yields a result")
+            .expect("Third step is a success");
+        assert_eq!(state.input, 3);
+
+        let error = iter
+            .next()
+            .expect("Fourth step yields a result")
+            .expect_err("Fourth step is an error");
+        assert_eq!(
+            format!("{error}"),
+            "Model failed: 4 is bigger than max value of 3"
+        );
+
+        assert!(iter.next().is_none());
     }
 }
