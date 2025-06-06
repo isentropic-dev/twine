@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{convert::Infallible, time::Duration};
 
 /// Defines a scheme for advancing state variables over time.
 ///
@@ -53,4 +53,22 @@ pub trait Integrator {
         input: Self::Input,
         dt: Duration,
     ) -> Result<(Self::Output, Duration), Self::Error>;
+}
+
+/// A no-op integrator that always succeeds.
+///
+/// The `()` integrator is useful for stateless or discrete-time simulations,
+/// or for testing when integration is unnecessary.
+impl Integrator for () {
+    type Input = ();
+    type Output = ();
+    type Error = Infallible;
+
+    fn integrate(
+        &self,
+        _input: Self::Input,
+        dt: Duration,
+    ) -> Result<(Self::Output, Duration), Self::Error> {
+        Ok(((), dt))
+    }
 }
