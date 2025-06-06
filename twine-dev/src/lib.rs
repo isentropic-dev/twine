@@ -18,8 +18,30 @@ use warp::Filter;
 /// handled with `unwrap()` for simplicity.
 /// 
 /// # Example
-/// ```no_run
+/// ```ignore
+/// use std::convert::Infallible;
+/// use serde::{Serialize, Deserialize};
+/// use twine_core::Component;
 /// use twine_dev::run_component_server;
+/// 
+/// #[derive(Clone)]
+/// struct MyComponent;
+/// 
+/// #[derive(Serialize, Deserialize, Clone, Default)]
+/// struct MyInput { value: f64 }
+/// 
+/// #[derive(Serialize)]
+/// struct MyOutput { result: f64 }
+/// 
+/// impl Component for MyComponent {
+///     type Input = MyInput;
+///     type Output = MyOutput;
+///     type Error = Infallible;
+/// 
+///     fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
+///         Ok(MyOutput { result: input.value * 2.0 })
+///     }
+/// }
 /// 
 /// #[tokio::main]
 /// async fn main() {
