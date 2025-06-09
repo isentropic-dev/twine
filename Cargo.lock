@@ -3367,7 +3367,6 @@ dependencies = [
  "ndarray",
  "ninterp",
  "serde",
- "serde_json",
  "thiserror 2.0.12",
  "twine-core",
  "uom",
