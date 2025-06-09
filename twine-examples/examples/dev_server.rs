@@ -17,7 +17,7 @@ use twine_dev::ComponentServer;
 use uom::{fmt::DisplayStyle, si::area::square_meter};
 
 /// DTO for rectangle area input that accepts dimensions as strings with units.
-/// 
+///
 /// This allows users to input values like "4 m" or "5 ft" in the web interface,
 /// which are then parsed into the appropriate units for the component.
 #[derive(Deserialize, Serialize)]
@@ -47,7 +47,7 @@ impl From<AreaInputDto> for RectangleInput {
 }
 
 /// DTO for rectangle area output that formats the result as a string.
-/// 
+///
 /// This converts the calculated area from the component's internal units
 /// into a user-friendly string representation (e.g., "20 m²").
 #[derive(Deserialize, Serialize)]
@@ -70,7 +70,7 @@ impl From<Output> for AreaOutputDto {
 }
 
 /// Runs a development server for the RectangleArea component.
-/// 
+///
 /// The server will be available at http://localhost:3030 and provides:
 /// - A web interface for inputting rectangle dimensions
 /// - JSON API endpoints for programmatic access
