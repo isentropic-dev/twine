@@ -3396,6 +3396,7 @@ dependencies = [
 name = "twine-examples"
 version = "0.2.0"
 dependencies = [
+ "serde",
  "tokio",
  "twine-components",
  "twine-core",
