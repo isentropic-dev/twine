@@ -75,7 +75,6 @@ impl From<Output> for AreaOutputDto {
 /// - A web interface for inputting rectangle dimensions
 /// - JSON API endpoints for programmatic access
 /// - Automatic conversion between user-friendly strings and component types
-#[tokio::main]
-async fn main() {
-    ComponentServer::<AreaInputDto, AreaOutputDto>::run(|| RectangleArea).await;
+fn main() {
+    ComponentServer::<AreaInputDto, AreaOutputDto>::run_blocking(|| RectangleArea);
 }

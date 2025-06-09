@@ -11,7 +11,6 @@ keywords = ["twine", "framework", "examples", "demo"]
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
-tokio = { version = "1", features = ["full"] }
 twine-core = { path = "../twine-core" }
 twine-components = { path = "../twine-components" }
 twine-dev = {path = "../twine-dev"}

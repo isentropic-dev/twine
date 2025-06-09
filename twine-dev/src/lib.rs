@@ -145,4 +145,27 @@ where
         println!("Server running on http://localhost:3030");
         warp::serve(routes).run(([127, 0, 0, 1], 3030)).await;
     }
+
+    /// Run a component server with the specified DTO types in a blocking manner.
+    ///
+    /// This creates its own tokio runtime internally, so you don't need tokio as a dependency.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the component's `call` method returns an error or if conversion fails.
+    ///
+    /// # Example
+    /// ```ignore
+    /// ComponentServer::<MyInputDto, MyOutputDto>::run_blocking(|| MyComponent);
+    /// ```
+    pub fn run_blocking<F, C, I, O>(component_fn: F)
+    where
+        F: Fn() -> C + Sync + Send + Clone + 'static,
+        C: Component<Input = I, Output = O>,
+        I: From<InputDto> + Send + 'static,
+        O: Into<OutputDto> + Send + 'static,
+    {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(Self::run(component_fn));
+    }
 }
