@@ -10,11 +10,9 @@ use uom::si::{
 };
 
 /// Component for calculating the area of a circle.
-#[derive(Clone)]
 pub struct CircleArea;
 
 /// Component for calculating the area of a rectangle.
-#[derive(Clone)]
 pub struct RectangleArea;
 
 /// Input structure for the `CircleArea` component.
