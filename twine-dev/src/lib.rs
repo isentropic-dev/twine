@@ -84,6 +84,10 @@ where
 {
     /// Run a component server with the specified DTO types.
     ///
+    /// # Panics
+    ///
+    /// Panics if the component's `call` method returns an error or if conversion fails.
+    ///
     /// # Example
     /// ```ignore
     /// ComponentServer::<MyInputDto, MyOutputDto>::run(|| MyComponent).await;
