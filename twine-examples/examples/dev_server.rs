@@ -1,4 +1,4 @@
-//! Development server example showing how to create a web interface for the RectangleArea component.
+//! Development server example showing how to create a web interface for the `RectangleArea` component.
 //!
 //! This example demonstrates:
 //! - Using string-based DTOs for user-friendly input (e.g., "4 m", "5 m")
@@ -9,7 +9,7 @@
 //! as strings with units and get the calculated area as a formatted string.
 //!
 //! Run with: `cargo run --example dev_server`
-//! Then visit: http://localhost:3030
+//! Then visit: <http://localhost:3030>
 
 use serde::{Deserialize, Serialize};
 use twine_components::example::area_calculators::{Output, RectangleArea, RectangleInput};
@@ -69,9 +69,9 @@ impl From<Output> for AreaOutputDto {
     }
 }
 
-/// Runs a development server for the RectangleArea component.
+/// Runs a development server for the `RectangleArea` component.
 ///
-/// The server will be available at http://localhost:3030 and provides:
+/// The server will be available at <http://localhost:3030> and provides:
 /// - A web interface for inputting rectangle dimensions
 /// - JSON API endpoints for programmatic access
 /// - Automatic conversion between user-friendly strings and component types
