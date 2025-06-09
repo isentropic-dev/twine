@@ -2,11 +2,13 @@ use std::{convert::Infallible, f64::consts::PI};
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use twine_core::Component;
-use uom::fmt::DisplayStyle;
-use uom::si::area::square_meter;
-use uom::si::{
-    f64::{Area, Length},
-    length::meter,
+use uom::{
+    fmt::DisplayStyle,
+    si::{
+        area::square_meter,
+        f64::{Area, Length},
+        length::meter,
+    },
 };
 
 /// Component for calculating the area of a circle.
