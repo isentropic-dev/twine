@@ -1,6 +1,5 @@
 use std::{convert::Infallible, f64::consts::PI};
 
-use serde::{Deserialize, Serialize};
 use twine_core::Component;
 use uom::si::f64::{Area, Length};
 
@@ -11,23 +10,24 @@ pub struct CircleArea;
 pub struct RectangleArea;
 
 /// Input structure for the `CircleArea` component.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct CircleInput {
     /// The radius of the circle.
     pub radius: Length,
 }
 
 /// Input structure for the `RectangleArea` component.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct RectangleInput {
     /// The length of the rectangle.
     pub length: Length,
+
     /// The width of the rectangle.
     pub width: Length,
 }
 
 /// Output structure for `CircleArea` and `RectangleArea`.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct Output {
     /// The calculated area of the shape.
     pub area: Area,
