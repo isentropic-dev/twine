@@ -1,20 +1,38 @@
-use std::{convert::Infallible, marker::PhantomData, time::Duration};
+//! A first-order explicit integrator using the forward Euler method.
+//!
+//! This integrator is best suited for simple dynamic systems where
+//! computational efficiency takes priority over numerical accuracy.
 
-use twine_core::{Integrator, TimeDerivativeOf, TimeIntegrable};
+use std::{
+    convert::Infallible,
+    marker::PhantomData,
+    ops::{Add, Div, Mul},
+    time::Duration,
+};
 
-/// A first-order explicit integrator using the forward Euler method.
+use twine_core::{Component, DurationExt, TimeDerivativeOf};
+use uom::si::f64::Time;
+
+/// Performs a forward Euler integration step: `value + derivative * dt`.
+#[must_use]
+pub fn step<T>(value: T, derivative: TimeDerivativeOf<T>, dt: Time) -> T
+where
+    T: Div<Time> + Add<<TimeDerivativeOf<T> as Mul<Time>>::Output, Output = T>,
+    TimeDerivativeOf<T>: Mul<Time>,
+{
+    value + derivative * dt
+}
+
+/// A [`Component`] that performs a single forward Euler integration step.
 ///
-/// This integrator is best suited for simple dynamic systems where
-/// computational efficiency is more important than numerical precision.
-#[derive(Debug, Default, Clone, Copy)]
-pub struct ForwardEuler<T: TimeIntegrable> {
+/// Takes a `(value, derivative, dt)` tuple and returns the integrated result.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ForwardEuler<T> {
     _marker: PhantomData<T>,
 }
 
-impl<T: TimeIntegrable> ForwardEuler<T> {
-    /// Creates a new `ForwardEuler` integrator.
-    ///
-    /// Returns a zero-sized integrator for types that implement [`TimeIntegrable`].
+impl<T> ForwardEuler<T> {
+    /// Creates a new [`ForwardEuler`] component.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -23,19 +41,18 @@ impl<T: TimeIntegrable> ForwardEuler<T> {
     }
 }
 
-impl<T: TimeIntegrable> Integrator for ForwardEuler<T> {
-    type Input = (T, TimeDerivativeOf<T>);
+impl<T> Component for ForwardEuler<T>
+where
+    T: Div<Time> + Add<<TimeDerivativeOf<T> as Mul<Time>>::Output, Output = T>,
+    TimeDerivativeOf<T>: Mul<Time>,
+{
+    type Input = (T, TimeDerivativeOf<T>, Duration);
     type Output = T;
     type Error = Infallible;
 
-    /// Performs a single forward Euler integration step.
-    fn integrate(
-        &self,
-        (value, derivative): Self::Input,
-        dt: Duration,
-    ) -> Result<(Self::Output, Duration), Self::Error> {
-        let output = value.step_by_duration(derivative, dt);
-        Ok((output, dt))
+    fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
+        let (value, derivative, dt) = input;
+        Ok(step(value, derivative, dt.as_time()))
     }
 }
 
@@ -49,35 +66,27 @@ mod tests {
         length::meter,
         temperature_interval::degree_celsius,
         thermodynamic_temperature::kelvin,
-        time::minute,
+        time::{minute, second},
         velocity::meter_per_second,
     };
 
     #[test]
     fn integrates_length() {
-        let integrator = ForwardEuler::<Length>::new();
-
         let position = Length::new::<meter>(5.0);
         let velocity = Velocity::new::<meter_per_second>(2.0);
-        let dt = Duration::from_secs_f64(1.5);
+        let dt = Time::new::<second>(1.5);
 
-        let (result, returned_dt) = integrator.integrate((position, velocity), dt).unwrap();
-
-        assert_eq!(returned_dt, dt);
-        assert_relative_eq!(result.get::<meter>(), 8.0);
+        let next_position = step(position, velocity, dt);
+        assert_relative_eq!(next_position.get::<meter>(), 8.0);
     }
 
     #[test]
     fn integrates_temperature() {
-        let integrator = ForwardEuler::<ThermodynamicTemperature>::new();
-
         let temperature = ThermodynamicTemperature::new::<kelvin>(300.0);
         let rate = TemperatureInterval::new::<degree_celsius>(10.0) / Time::new::<minute>(1.0);
-        let dt = Duration::from_secs(30);
+        let dt = Duration::from_secs(30).as_time();
 
-        let (result, returned_dt) = integrator.integrate((temperature, rate), dt).unwrap();
-
-        assert_eq!(returned_dt, dt);
-        assert_relative_eq!(result.get::<kelvin>(), 305.0);
+        let next_temperature = step(temperature, rate, dt);
+        assert_relative_eq!(next_temperature.get::<kelvin>(), 305.0);
     }
 }
