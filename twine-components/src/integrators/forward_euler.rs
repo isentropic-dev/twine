@@ -7,10 +7,9 @@ use std::{
     convert::Infallible,
     marker::PhantomData,
     ops::{Add, Div, Mul},
-    time::Duration,
 };
 
-use twine_core::{Component, DurationExt, TimeDerivativeOf};
+use twine_core::{Component, TimeDerivativeOf};
 use uom::si::f64::Time;
 
 /// Performs a forward Euler integration step: `value + derivative * dt`.
@@ -46,13 +45,13 @@ where
     T: Div<Time> + Add<<TimeDerivativeOf<T> as Mul<Time>>::Output, Output = T>,
     TimeDerivativeOf<T>: Mul<Time>,
 {
-    type Input = (T, TimeDerivativeOf<T>, Duration);
+    type Input = (T, TimeDerivativeOf<T>, Time);
     type Output = T;
     type Error = Infallible;
 
     fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
         let (value, derivative, dt) = input;
-        Ok(step(value, derivative, dt.as_time()))
+        Ok(step(value, derivative, dt))
     }
 }
 
@@ -84,7 +83,7 @@ mod tests {
     fn integrates_temperature() {
         let temperature = ThermodynamicTemperature::new::<kelvin>(300.0);
         let rate = TemperatureInterval::new::<degree_celsius>(10.0) / Time::new::<minute>(1.0);
-        let dt = Duration::from_secs(30).as_time();
+        let dt = Time::new::<second>(30.0);
 
         let next_temperature = step(temperature, rate, dt);
         assert_relative_eq!(next_temperature.get::<kelvin>(), 305.0);
