@@ -1,3 +1,1 @@
-mod forward_euler;
-
-pub use forward_euler::ForwardEuler;
+pub mod forward_euler;

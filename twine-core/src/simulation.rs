@@ -1,214 +1,149 @@
 use std::{iter::FusedIterator, time::Duration};
 
-use thiserror::Error;
+use crate::Component;
 
-use crate::{Component, Integrator};
-
-/// Combines a model and integrator to define a time-stepping simulation.
+/// Trait for simulating the time evolution of a [`Component`].
 ///
-/// A `Simulation` evolves a system's state by integrating changes in input
-/// variables and recomputing outputs through a model.
-/// It provides a generic and extensible interface for building time-based
-/// simulations across multiple domains.
-///
-/// # Associated Types
-///
-/// - [`Model`]: A [`Component`] that maps independent variables (`Input`) to
-///   dependent variables (`Output`).
-/// - [`Integrator`]: Advances selected input variables over time, typically
-///   using a numerical scheme such as Forward Euler or Runge-Kutta.
-///
-/// # State Representation
-///
-/// A [`State`] captures the complete state of the system at a specific point
-/// in time, represented as a consistent pair of `Model::Input` (independent)
-/// and `Model::Output` (dependent) values.
-///
-/// Simulations operate by transforming one state into the next, advancing time
-/// through integration and reevaluating outputs via the model.
-///
-/// # Mapping Methods
-///
-/// These methods define how a simulation constructs the inputs required by its
-/// integrator and model.
-/// Besides providing the necessary mapping between simulation state and input
-/// types, implementations can also inject context such as historical state,
-/// simulation parameters, or input from the outside world.
-///
-/// - [`prepare_integrator_input`]: Builds the integrator input from the current
-///   state, selecting and transforming values needed for integration.
-/// - [`prepare_model_input`]: Constructs the next model input using the
-///   previous state, the integrator's output, and the effective time step.
-///
-/// These functions define the boundary between domain-specific modeling and
-/// integrator-specific stepping, enabling composable and flexible simulations.
+/// A `Simulation` advances a component forward in time by computing its next
+/// input with [`advance_time`] and then calling the component to produce a new
+/// [`State`] representing the system at the corresponding future moment.
 ///
 /// # Stepping Methods
 ///
-/// The `Simulation` trait provides these methods for advancing the simulation:
+/// After implementing [`advance_time`], the following methods are available for
+/// advancing the simulation:
 ///
-/// - [`step`]: Advances the simulation by one step from an initial input.
-/// - [`step_from_state`]: Advances the simulation from a full known state.
-/// - [`step_iter`]: Returns an iterator over simulation steps.
-/// - [`step_many`]: Runs multiple steps and collects all resulting states.
+/// - [`Simulation::step`]: Takes a single step from an initial input.
+/// - [`Simulation::step_from_state`]: Takes a single step from a known state.
+/// - [`Simulation::step_many`]: Takes multiple steps and collects all resulting states.
+/// - [`Simulation::step_iter`]: Returns an iterator over simulation steps.
 pub trait Simulation: Sized {
+    /// The [`Component`] being simulated.
     type Model: Component;
-    type Integrator: Integrator;
 
-    /// Returns a reference to the underlying model component.
-    ///
-    /// The model maps input (independent) variables to output (dependent)
-    /// variables, defining system behavior at a specific point in time.
+    /// The error type returned if a simulation step fails.
+    type StepError: std::error::Error
+        + From<<Self::Model as Component>::Error>
+        + Send
+        + Sync
+        + 'static;
+
+    /// Provides a reference to the component being simulated.
     fn model(&self) -> &Self::Model;
 
-    /// Returns a reference to the underlying integrator.
+    /// Computes the next input for the component, advancing the simulation in time.
     ///
-    /// The integrator advances selected input variables across a time step,
-    /// typically using a numerical method such as Forward Euler or Runge-Kutta.
-    fn integrator(&self) -> &Self::Integrator;
-
-    /// Prepares the integrator input from the current simulation state.
+    /// Given the current [`State`] and a proposed time step `dt`, this method
+    /// generates the next [`Component::Input`] to drive the simulation forward.
     ///
-    /// Extracts and transforms values from the given [`State`], including both
-    /// input (independent) and output (dependent) variables, into the form
-    /// expected by the [`Integrator`].
+    /// This method is the primary customization point for incrementing time,
+    /// integrating state variables, enforcing constraints, applying control
+    /// logic, or incorporating external events.
     ///
-    /// The integrator input may also include derived quantities, closures
-    /// for deferred model evaluation, or simulation-specific context such as
-    /// history or configuration.
-    fn prepare_integrator_input(
-        &self,
-        state: &State<Self::Model>,
-    ) -> <Self::Integrator as Integrator>::Input;
-
-    /// Prepares the model input for the next simulation step.
-    ///
-    /// Extracts and transforms data from the previous [`State`],
-    /// the integrator's output, and the actual time step into a new
-    /// [`Component::Input`] for the model.
-    ///
-    /// The resulting input may update time, advance state variables, or
-    /// incorporate simulation-specific behavior such as constraint enforcement,
-    /// historical context, or responses to external input.
+    /// Implementations may interpret or adapt the proposed time step `dt` as
+    /// needed (e.g., for adaptive time stepping), and are free to update any
+    /// fields of the input required to continue the simulation.
     ///
     /// # Parameters
     ///
-    /// - `prev_state`: The previous [`State`], including both input and output.
-    /// - `integrator_output`: The output produced by the integrator.
-    /// - `actual_dt`: The time step that was actually taken.
+    /// - `state`: The current simulation state.
+    /// - `dt`: The proposed time step.
     ///
     /// # Returns
     ///
-    /// The next [`Component::Input`] to be passed to the model.
-    fn prepare_model_input(
-        &self,
-        prev_state: &State<Self::Model>,
-        integrator_output: <Self::Integrator as Integrator>::Output,
-        actual_dt: Duration,
-    ) -> <Self::Model as Component>::Input;
-
-    /// Advances the simulation by one time step from an initial input.
-    ///
-    /// This method first evaluates the model to compute the initial output,
-    /// forming a complete [`State`] before delegating to [`step_from_state`].
-    /// As a result, the model is called twice: once to initialize the state,
-    /// and once after stepping.
-    ///
-    /// # Parameters
-    ///
-    /// - `input`: The [`Model::Input`] at the beginning of the step.
-    /// - `dt`: The requested time step duration.
-    ///
-    /// # Returns
-    ///
-    /// The resulting [`State`] after the simulation step.
+    /// The next input, computed from the current [`State`] and proposed `dt`.
     ///
     /// # Errors
     ///
-    /// Returns a [`StepError`] if either the model or the integrator fails.
+    /// Returns a [`StepError`] if computing the next input fails.
+    fn advance_time(
+        &self,
+        state: &State<Self::Model>,
+        dt: Duration,
+    ) -> Result<<Self::Model as Component>::Input, Self::StepError>;
+
+    /// Advances the simulation by one step, starting from an initial input.
+    ///
+    /// This method first calls the component with the given input to compute
+    /// the initial output, forming a complete [`State`].
+    /// It then delegates to [`step_from_state`] to compute the next state.
+    /// As a result, the component is called twice: once to initialize the
+    /// state, and once after advancing.
+    ///
+    /// # Parameters
+    ///
+    /// - `input`: The component input at the start of the step.
+    /// - `dt`: The proposed time step.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`StepError`] if computing the next input or calling the
+    /// component fails.
     fn step(
         &self,
         input: <Self::Model as Component>::Input,
         dt: Duration,
-    ) -> Result<State<Self::Model>, StepError<Self>>
+    ) -> Result<State<Self::Model>, Self::StepError>
     where
         <Self::Model as Component>::Input: Clone,
     {
-        let output = self.model().call(input.clone()).map_err(StepError::Model)?;
-        let state = State { input, output };
+        let output = self.model().call(input.clone())?;
+        let state = State::new(input, output);
+
         self.step_from_state(&state, dt)
     }
 
-    /// Advances the simulation by one time step from a full system state.
+    /// Advances the simulation by one step from a known [`State`].
     ///
-    /// This method prepares the integrator input from the given [`State`],
-    /// applies integration to advance the input, and then evaluates the model
-    /// to produce the next output.
+    /// This method computes the next input using [`advance_time`],
+    /// then calls the component to produce the resulting [`State`].
     ///
     /// # Parameters
     ///
-    /// - `state`: The current [`State`], containing both input and output.
-    /// - `dt`: The requested time step duration.
-    ///
-    /// # Returns
-    ///
-    /// The resulting [`State`] after the simulation step.
+    /// - `state`: The current simulation state.
+    /// - `dt`: The proposed time step.
     ///
     /// # Errors
     ///
-    /// Returns a [`StepError`] if either the model or the integrator fails.
+    /// Returns a [`StepError`] if computing the next input or calling the
+    /// component fails.
     fn step_from_state(
         &self,
         state: &State<Self::Model>,
         dt: Duration,
-    ) -> Result<State<Self::Model>, StepError<Self>>
+    ) -> Result<State<Self::Model>, Self::StepError>
     where
         <Self::Model as Component>::Input: Clone,
     {
-        let integrator_input = self.prepare_integrator_input(state);
+        let input = self.advance_time(state, dt)?;
+        let output = self.model().call(input.clone())?;
 
-        let (integrator_output, actual_dt) = self
-            .integrator()
-            .integrate(integrator_input, dt)
-            .map_err(StepError::Integrator)?;
-
-        let next_input = self.prepare_model_input(state, integrator_output, actual_dt);
-
-        let next_output = self
-            .model()
-            .call(next_input.clone())
-            .map_err(StepError::Model)?;
-
-        Ok(State {
-            input: next_input,
-            output: next_output,
-        })
+        Ok(State::new(input, output))
     }
 
-    /// Creates an iterator that steps the simulation from an initial input.
+    /// Creates an iterator that advances the simulation repeatedly.
     ///
-    /// The iterator first yields the input paired with its computed output,
-    /// then produces a new [`State`] on each step by advancing time and
-    /// reevaluating the model.
+    /// The iterator calls [`step`] with a constant `dt`, yielding each
+    /// resulting [`State`] in sequence.
+    /// If a step fails, the error is returned and iteration stops.
     ///
-    /// This method is suitable for lazy or streaming evaluation.
-    /// It is memory-efficient and supports standard combinators such as
-    /// `.take(n)`, `.map(...)`, or `.find(...)`.
+    /// This method supports lazy or streaming evaluation and integrates cleanly
+    /// with iterator adapters such as `.take(n)`, `.map(...)`, or `.find(...)`.
+    /// It is memory-efficient and performs no intermediate allocations.
     ///
     /// # Parameters
     ///
-    /// - `initial_input`: The starting [`Model::Input`] for the simulation.
-    /// - `dt`: The requested time step used for each simulation step.
+    /// - `initial_input`: The component input at the start of the simulation.
+    /// - `dt`: The proposed time step for each iteration.
     ///
     /// # Returns
     ///
-    /// An iterator yielding `Result<State<Model>, StepError>` values.
-    /// On error, the iterator yields the error and terminates.
+    /// An iterator over `Result<State<Model>, StepError>`.
     fn step_iter(
         &self,
         initial_input: <Self::Model as Component>::Input,
         dt: Duration,
-    ) -> impl Iterator<Item = Result<State<Self::Model>, StepError<Self>>>
+    ) -> impl Iterator<Item = Result<State<Self::Model>, Self::StepError>>
     where
         <Self::Model as Component>::Input: Clone,
         <Self::Model as Component>::Output: Clone,
@@ -220,30 +155,32 @@ pub trait Simulation: Sized {
         }
     }
 
-    /// Runs the simulation for a fixed number of steps.
+    /// Runs the simulation for a fixed number of steps and collects the results.
     ///
-    /// This method returns `steps + 1` states: the initial input paired with its
-    /// computed output, followed by each successive step.
+    /// Starting from the given input, this method advances the simulation by
+    /// `steps` iterations using the proposed time step `dt`.
     ///
     /// # Parameters
     ///
-    /// - `initial_input`: The starting [`Model::Input`] for the simulation.
-    /// - `steps`: The number of steps to perform.
-    /// - `dt`: The requested time step used for each simulation step.
+    /// - `initial_input`: The component input at the start of the simulation.
+    /// - `steps`: The number of steps to run.
+    /// - `dt`: The proposed time step for each iteration.
     ///
     /// # Returns
     ///
-    /// A `Vec<State<Model>>` containing `steps + 1` elements.
+    /// A `Vec` of length `steps + 1` containing each [`State`] computed during
+    /// the run, including the initial one.
     ///
     /// # Errors
     ///
-    /// Returns a [`StepError`] if either the model or the integrator fails.
+    /// Returns a [`StepError`] if any step fails.
+    /// No further steps are taken after an error.
     fn step_many(
         &self,
         initial_input: <Self::Model as Component>::Input,
         steps: usize,
         dt: Duration,
-    ) -> Result<Vec<State<Self::Model>>, StepError<Self>>
+    ) -> Result<Vec<State<Self::Model>>, Self::StepError>
     where
         <Self::Model as Component>::Input: Clone,
         <Self::Model as Component>::Output: Clone,
@@ -252,11 +189,13 @@ pub trait Simulation: Sized {
     }
 }
 
-/// Represents the full state of a simulation at a specific point in time.
+/// Represents a snapshot of the simulation at a specific point in time.
 ///
-/// A [`State`] holds a pair of:
-/// - `input`: The independent (user-controlled or time-evolving) variables.
-/// - `output`: The dependent (model-computed) variables.
+/// A [`State`] pairs:
+/// - `input`: The independent variables, typically user-controlled or time-evolving.
+/// - `output`: The dependent variables, computed by the component.
+///
+/// Together, these describe the full state of the system at a given instant.
 #[derive(Debug, Clone, Copy, Default, PartialEq, PartialOrd)]
 pub struct State<C: Component> {
     pub input: C::Input,
@@ -270,24 +209,12 @@ impl<C: Component> State<C> {
     }
 }
 
-/// Represents an error that may occur during a simulation step.
+/// An iterator that repeatedly steps the simulation using a proposed time step.
 ///
-/// A [`StepError`] wraps failures from either the model or the integrator.
-#[derive(Debug, Error)]
-pub enum StepError<S: Simulation> {
-    #[error("Model failed: {0}")]
-    Model(<S::Model as Component>::Error),
-    #[error("Integrator failed: {0}")]
-    Integrator(<S::Integrator as Integrator>::Error),
-}
-
-/// Iterator that advances a simulation with a fixed `dt`.
+/// Starting from an initial input, this iterator repeatedly steps the
+/// simulation using `dt`, yielding each resulting [`State`] as a `Result`.
 ///
-/// Starts from an initial input and produces a stream of simulation states.
-/// Internally tracks either an initial input (not yet stepped),
-/// or the last yielded simulation state.
-///
-/// On any error, iteration halts.
+/// If any step fails, the error is yielded and iteration stops.
 struct StepIter<'a, S: Simulation> {
     dt: Duration,
     known: Option<Known<S>>,
@@ -298,7 +225,7 @@ struct StepIter<'a, S: Simulation> {
 enum Known<S: Simulation> {
     /// The simulation has only been initialized with an input.
     Input(<S::Model as Component>::Input),
-    /// A fully evaluated simulation state is available.
+    /// The full simulation state is available.
     State(State<S::Model>),
 }
 
@@ -308,11 +235,11 @@ where
     <S::Model as Component>::Input: Clone,
     <S::Model as Component>::Output: Clone,
 {
-    type Item = Result<State<S::Model>, StepError<S>>;
+    type Item = Result<State<S::Model>, S::StepError>;
 
     /// Advances the simulation by one step.
     ///
-    /// - If starting from an input, evaluates the model to produce the first output.
+    /// - If starting from an input, calls the component to produce the first state.
     /// - If continuing from a full state, steps the simulation forward.
     /// - On success, yields a new [`State`].
     /// - On error, yields a [`StepError`] and ends the iteration.
@@ -344,13 +271,14 @@ where
                 }
                 Err(error) => {
                     self.known = None;
-                    Some(Err(StepError::Model(error)))
+                    Some(Err(error.into()))
                 }
             },
         }
     }
 }
 
+/// Marks that iteration always ends after the first `None`.
 impl<S> FusedIterator for StepIter<'_, S>
 where
     S: Simulation,
@@ -366,8 +294,7 @@ mod tests {
     use std::convert::Infallible;
 
     use approx::{assert_abs_diff_eq, assert_relative_eq};
-
-    use crate::Integrator;
+    use thiserror::Error;
 
     /// A simple spring-damper model used for simulation tests.
     #[derive(Debug)]
@@ -376,7 +303,6 @@ mod tests {
         damping_coef: f64,
     }
 
-    /// Test input type representing simulation state variables.
     #[derive(Debug, Clone, Default, PartialEq)]
     struct Input {
         time_in_minutes: f64,
@@ -384,7 +310,6 @@ mod tests {
         velocity: f64,
     }
 
-    /// Test output type representing model-computed quantities.
     #[derive(Debug, Clone, PartialEq)]
     struct Output {
         acceleration: f64,
@@ -406,85 +331,35 @@ mod tests {
         }
     }
 
-    /// A basic forward Euler integrator for testing.
-    #[derive(Debug)]
-    struct FwdEuler;
-
-    struct FwdEulerInput {
-        position: f64,
-        velocity: f64,
-        acceleration: f64,
-    }
-
-    struct FwdEulerOutput {
-        position: f64,
-        velocity: f64,
-    }
-
-    impl Integrator for FwdEuler {
-        type Input = FwdEulerInput;
-        type Output = FwdEulerOutput;
-        type Error = Infallible;
-
-        fn integrate(
-            &self,
-            input: Self::Input,
-            dt: Duration,
-        ) -> Result<(Self::Output, Duration), Self::Error> {
-            let dt_secs = dt.as_secs_f64();
-
-            let output = FwdEulerOutput {
-                position: input.position + input.velocity * dt_secs,
-                velocity: input.velocity + input.acceleration * dt_secs,
-            };
-
-            Ok((output, dt))
-        }
-    }
-
-    /// A simulation that combines the `Spring` model with the `FwdEuler` integrator.
     #[derive(Debug)]
     struct SpringSimulation {
         model: Spring,
-        integrator: FwdEuler,
     }
 
     impl Simulation for SpringSimulation {
         type Model = Spring;
-        type Integrator = FwdEuler;
+        type StepError = Infallible;
 
         fn model(&self) -> &Self::Model {
             &self.model
         }
 
-        fn integrator(&self) -> &Self::Integrator {
-            &self.integrator
-        }
-
-        fn prepare_integrator_input(&self, state: &State<Spring>) -> FwdEulerInput {
-            FwdEulerInput {
-                position: state.input.position,
-                velocity: state.input.velocity,
-                acceleration: state.output.acceleration,
-            }
-        }
-
-        fn prepare_model_input(
+        fn advance_time(
             &self,
-            prev_state: &State<Spring>,
-            integrator_output: FwdEulerOutput,
-            actual_dt: Duration,
-        ) -> Input {
-            let FwdEulerOutput { position, velocity } = integrator_output;
+            state: &State<Self::Model>,
+            dt: Duration,
+        ) -> Result<<Self::Model as Component>::Input, Self::StepError> {
+            let seconds = dt.as_secs_f64();
+            let time_in_minutes = state.input.time_in_minutes + seconds / 60.0;
 
-            let minutes = actual_dt.as_secs_f64() / 60.0;
-            let time_in_minutes = prev_state.input.time_in_minutes + minutes;
+            let position = state.input.position + state.input.velocity * seconds;
+            let velocity = state.input.velocity + state.output.acceleration * seconds;
 
-            Input {
+            Ok(Input {
                 time_in_minutes,
                 position,
                 velocity,
-            }
+            })
         }
     }
 
@@ -495,7 +370,6 @@ mod tests {
                 spring_constant: 0.0,
                 damping_coef: 0.0,
             },
-            integrator: FwdEuler,
         };
 
         let initial = Input {
@@ -550,7 +424,6 @@ mod tests {
                 spring_constant: 0.5,
                 damping_coef: 5.0,
             },
-            integrator: FwdEuler,
         };
 
         let initial = Input {
@@ -616,7 +489,7 @@ mod tests {
     #[error("{0} is bigger than max value of {1}")]
     struct CheckInputError(usize, usize);
 
-    /// A test simulation using [`CheckInput`] with a no-op integrator.
+    /// A test simulation using [`CheckInput`].
     ///
     /// Each step increments the input by 1.
     /// Yields an error when the input exceeds the maximum threshold `N`.
@@ -625,29 +498,18 @@ mod tests {
 
     impl<const N: usize> Simulation for CheckInputSim<N> {
         type Model = CheckInput;
-        type Integrator = ();
+        type StepError = CheckInputError;
 
         fn model(&self) -> &Self::Model {
             &CheckInput { max_value: N }
         }
 
-        fn integrator(&self) -> &Self::Integrator {
-            &()
-        }
-
-        fn prepare_integrator_input(
+        fn advance_time(
             &self,
-            _state: &State<Self::Model>,
-        ) -> <Self::Integrator as Integrator>::Input {
-        }
-
-        fn prepare_model_input(
-            &self,
-            prev_state: &State<Self::Model>,
-            _integrator_output: <Self::Integrator as Integrator>::Output,
-            _actual_dt: Duration,
-        ) -> <Self::Model as Component>::Input {
-            prev_state.input + 1
+            state: &State<Self::Model>,
+            _dt: Duration,
+        ) -> Result<<Self::Model as Component>::Input, Self::StepError> {
+            Ok(state.input + 1)
         }
     }
 
@@ -683,10 +545,7 @@ mod tests {
             .next()
             .expect("Fourth step yields a result")
             .expect_err("Fourth step is an error");
-        assert_eq!(
-            format!("{error}"),
-            "Model failed: 4 is bigger than max value of 3"
-        );
+        assert_eq!(format!("{error}"), "4 is bigger than max value of 3");
 
         assert!(iter.next().is_none());
     }

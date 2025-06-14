@@ -23,11 +23,10 @@ use std::{convert::Infallible, time::Duration};
 
 use twine_components::{
     fluid::IncompressibleLiquid,
-    integrators::ForwardEuler,
+    integrators::forward_euler,
     thermal::tank::{Tank, TankConfig, TankInput, TankOutput},
 };
-use twine_core::{Component, Integrator, Simulation, State, thermo::units::PositiveMassRate};
-use twine_macros::TimeIntegrable;
+use twine_core::{Component, DurationExt, Simulation, State, thermo::units::PositiveMassRate};
 use twine_plot::PlotApp;
 use uom::{
     ConstZero,
@@ -171,63 +170,43 @@ impl Component for TanksInRoom {
     }
 }
 
-/// A simulation of the `TanksInRoom` model using a `ForwardEuler` integrator.
+/// A simulation of the `TanksInRoom` model using forward Euler integration.
 #[derive(Debug)]
 struct TanksInRoomSim {
     model: TanksInRoom,
-    integrator: ForwardEuler<StateVariables>,
 }
 
 impl Simulation for TanksInRoomSim {
     type Model = TanksInRoom;
-    type Integrator = ForwardEuler<StateVariables>;
+    type StepError = Infallible;
 
     fn model(&self) -> &Self::Model {
         &self.model
     }
 
-    fn integrator(&self) -> &Self::Integrator {
-        &self.integrator
-    }
-
-    fn prepare_integrator_input(
+    fn advance_time(
         &self,
         state: &State<Self::Model>,
-    ) -> <Self::Integrator as Integrator>::Input {
-        let state_vars = StateVariables {
-            t_second_tank: state.input.t_second_tank,
-            t_first_tank: state.input.t_first_tank,
-        };
+        dt: Duration,
+    ) -> Result<<Self::Model as Component>::Input, Self::StepError> {
+        let State { input, output } = state;
+        let dt_time = dt.as_time();
 
-        let state_derivs = StateVariablesDt {
-            t_second_tank_dt: state.output.second_tank.tank_temperature_derivative,
-            t_first_tank_dt: state.output.first_tank.tank_temperature_derivative,
-        };
-
-        (state_vars, state_derivs)
+        Ok(Input {
+            time: input.time + dt_time,
+            t_first_tank: forward_euler::step(
+                input.t_first_tank,
+                output.first_tank.tank_temperature_derivative,
+                dt_time,
+            ),
+            t_second_tank: forward_euler::step(
+                input.t_second_tank,
+                output.second_tank.tank_temperature_derivative,
+                dt_time,
+            ),
+            ..input.clone()
+        })
     }
-
-    fn prepare_model_input(
-        &self,
-        prev_state: &State<Self::Model>,
-        integrator_output: <Self::Integrator as Integrator>::Output,
-        actual_dt: std::time::Duration,
-    ) -> <Self::Model as Component>::Input {
-        let dt_time = Time::new::<second>(actual_dt.as_secs_f64());
-        Input {
-            time: prev_state.input.time + dt_time,
-            t_second_tank: integrator_output.t_second_tank,
-            t_first_tank: integrator_output.t_first_tank,
-            ..prev_state.input
-        }
-    }
-}
-
-/// State variables for the simulation.
-#[derive(Debug, TimeIntegrable)]
-struct StateVariables {
-    t_first_tank: ThermodynamicTemperature,
-    t_second_tank: ThermodynamicTemperature,
 }
 
 /// A convenience struct for collecting time series temperature data.
@@ -283,10 +262,7 @@ fn main() {
     .set_draw_for_hour(VolumeRate::new::<gallon_per_minute>(0.2), 11);
 
     // Create the simulation.
-    let sim = TanksInRoomSim {
-        model,
-        integrator: ForwardEuler::new(),
-    };
+    let sim = TanksInRoomSim { model };
 
     // Specify the initial conditions.
     let initial_conditions = Input {
