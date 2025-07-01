@@ -29,7 +29,7 @@ use num_traits::Zero;
 /// [`PartialOrd`]: https://doc.rust-lang.org/std/cmp/trait.PartialOrd.html
 /// [`Zero`]: https://docs.rs/num-traits/latest/num_traits/identities/trait.Zero.html
 /// [`uom`]: https://docs.rs/uom/
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct NonNegative<T>(T);
 
 impl<T> NonNegative<T>
