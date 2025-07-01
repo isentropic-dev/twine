@@ -3363,6 +3363,7 @@ name = "twine-core"
 version = "0.2.0"
 dependencies = [
  "approx",
+ "num-traits",
  "petgraph",
  "thiserror 2.0.12",
  "uom",

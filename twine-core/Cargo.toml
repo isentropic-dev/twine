@@ -10,6 +10,7 @@ description = "A Rust framework for functional and composable system modeling."
 keywords = ["twine", "framework", "functional", "composable", "modeling"]
 
 [dependencies]
+num-traits = "0.2.19"
 petgraph = "0.7.1"
 thiserror = { workspace = true }
 uom = { workspace = true }
