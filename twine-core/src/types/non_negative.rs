@@ -1,6 +1,7 @@
 use std::ops::Add;
 
 use num_traits::Zero;
+use thiserror::Error;
 
 /// A wrapper type representing values that are guaranteed to be non-negative.
 ///
@@ -18,12 +19,12 @@ use num_traits::Zero;
 /// # Examples
 ///
 /// ```
-/// use twine_core::NonNegative;
+/// use twine_core::{NonNegative, NonNegativeError};
 ///
 /// let x = NonNegative::new(3).unwrap();
 /// assert_eq!(x.into_inner(), 3);
 ///
-/// assert!(NonNegative::new(-5).is_none());
+/// assert_eq!(NonNegative::new(-5).unwrap_err(), NonNegativeError::NegativeValue);
 /// ```
 ///
 /// [`PartialOrd`]: https://doc.rust-lang.org/std/cmp/trait.PartialOrd.html
@@ -32,18 +33,29 @@ use num_traits::Zero;
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct NonNegative<T>(T);
 
+/// Error returned when a value is not non-negative.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+#[non_exhaustive]
+pub enum NonNegativeError {
+    /// The input value was negative or otherwise failed the non-negative constraint.
+    #[error("value must be non-negative")]
+    NegativeValue,
+}
+
 impl<T> NonNegative<T>
 where
     T: PartialOrd + Zero,
 {
     /// Constructs a new `NonNegative<T>` if the input value is non-negative.
     ///
-    /// Returns `Some(Self)` if `value >= 0`, or `None` otherwise.
-    pub fn new(value: T) -> Option<Self> {
+    /// # Errors
+    ///
+    /// Returns an error if the input value is negative or unordered (e.g., NaN).
+    pub fn new(value: T) -> Result<Self, NonNegativeError> {
         if value >= T::zero() {
-            Some(Self(value))
+            Ok(Self(value))
         } else {
-            None
+            Err(NonNegativeError::NegativeValue)
         }
     }
 
@@ -115,34 +127,34 @@ mod tests {
         let two = one + one + zero;
         assert_eq!(two.into_inner(), 2);
 
-        assert!(NonNegative::new(-1).is_none(), "A negative value is not ok");
+        assert!(NonNegative::new(-1).is_err(), "A negative value is not ok");
     }
 
     #[test]
     fn non_negative_floats() {
-        assert!(NonNegative::new(2.0).is_some(), "Positive value is ok");
-        assert!(NonNegative::new(0.0).is_some(), "Zero value is ok");
-        assert!(NonNegative::new(-2.0).is_none(), "Negative value is not ok",);
-        assert!(NonNegative::new(f64::NAN).is_none(), "NaN is not ok");
+        assert!(NonNegative::new(2.0).is_ok(), "Positive value is ok");
+        assert!(NonNegative::new(0.0).is_ok(), "Zero value is ok");
+        assert!(NonNegative::new(-2.0).is_err(), "Negative value is not ok");
+        assert!(NonNegative::new(f64::NAN).is_err(), "NaN is not ok");
     }
 
     #[test]
     fn non_negative_mass_rate() {
         let mass_rate = MassRate::new::<kilogram_per_second>(5.0);
         assert!(
-            NonNegative::new(mass_rate).is_some(),
+            NonNegative::new(mass_rate).is_ok(),
             "A positive mass rate is ok",
         );
 
         let mass_rate = MassRate::new::<kilogram_per_second>(0.0);
         assert!(
-            NonNegative::new(mass_rate).is_some(),
+            NonNegative::new(mass_rate).is_ok(),
             "A zero mass rate is ok",
         );
 
         let mass_rate = MassRate::new::<kilogram_per_second>(-2.0);
         assert!(
-            NonNegative::new(mass_rate).is_none(),
+            NonNegative::new(mass_rate).is_err(),
             "A negative mass rate is not ok",
         );
     }
@@ -151,19 +163,19 @@ mod tests {
     fn non_negative_power() {
         let positive_power = Power::new::<watt>(5.0);
         assert!(
-            NonNegative::new(positive_power).is_some(),
+            NonNegative::new(positive_power).is_ok(),
             "A positive power value is ok",
         );
 
         let zero_power = Power::new::<watt>(0.0);
         assert!(
-            NonNegative::new(zero_power).is_some(),
+            NonNegative::new(zero_power).is_ok(),
             "A zero power value is ok"
         );
 
         let negative_power = Power::new::<watt>(-2.0);
         assert!(
-            NonNegative::new(negative_power).is_none(),
+            NonNegative::new(negative_power).is_err(),
             "A negative power value is not ok",
         );
     }

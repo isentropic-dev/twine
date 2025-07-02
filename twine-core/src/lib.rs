@@ -10,4 +10,4 @@ pub use component::Component;
 pub use simulation::{Simulation, State};
 pub use time::{DurationExt, TimeDerivativeOf};
 pub use twine::{Twine, TwineError};
-pub use types::NonNegative;
+pub use types::{NonNegative, NonNegativeError};
