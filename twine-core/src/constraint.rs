@@ -36,6 +36,7 @@ mod strictly_negative;
 mod strictly_positive;
 
 use std::marker::PhantomData;
+
 use thiserror::Error;
 
 pub use non_negative::NonNegative;
