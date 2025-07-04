@@ -1,4 +1,5 @@
 mod component;
+pub mod constraint;
 pub mod graph;
 mod simulation;
 pub mod thermo;
