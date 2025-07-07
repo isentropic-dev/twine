@@ -23,10 +23,11 @@ use std::{convert::Infallible, time::Duration};
 
 use twine_components::{
     fluid::IncompressibleLiquid,
-    integrators::forward_euler,
     thermal::tank::{Tank, TankConfig, TankInput, TankOutput},
 };
-use twine_core::{Component, DurationExt, Simulation, State, thermo::units::PositiveMassRate};
+use twine_core::{
+    Component, DurationExt, Simulation, State, TimeIntegrable, thermo::units::PositiveMassRate,
+};
 use twine_plot::PlotApp;
 use uom::{
     ConstZero,
@@ -194,16 +195,12 @@ impl Simulation for TanksInRoomSim {
 
         Ok(Input {
             time: input.time + dt_time,
-            t_first_tank: forward_euler::step(
-                input.t_first_tank,
-                output.first_tank.tank_temperature_derivative,
-                dt_time,
-            ),
-            t_second_tank: forward_euler::step(
-                input.t_second_tank,
-                output.second_tank.tank_temperature_derivative,
-                dt_time,
-            ),
+            t_first_tank: input
+                .t_first_tank
+                .step(output.first_tank.tank_temperature_derivative, dt_time),
+            t_second_tank: input
+                .t_second_tank
+                .step(output.second_tank.tank_temperature_derivative, dt_time),
             ..input.clone()
         })
     }

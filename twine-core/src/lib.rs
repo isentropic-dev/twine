@@ -8,5 +8,5 @@ mod twine;
 
 pub use component::Component;
 pub use simulation::{Simulation, State};
-pub use time::{DurationExt, TimeDerivative, TimeDifferentiable};
+pub use time::{DurationExt, TimeDerivative, TimeIntegrable};
 pub use twine::{Twine, TwineError};

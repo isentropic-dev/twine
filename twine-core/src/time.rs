@@ -1,108 +1,106 @@
 use std::{
+    fmt::Debug,
     ops::{Add, Div, Mul},
     time::Duration,
 };
 
 use uom::si::{f64::Time, time::second};
 
-/// A trait for types that can be differentiated with respect to time.
+/// A trait for types that can be integrated over time using a known derivative.
 ///
-/// This trait marks types that have a well-defined time derivative and support
-/// applying time-based changes using standard arithmetic operations.
+/// This trait describes types that have a well-defined time derivative and can
+/// be stepped forward (or backward) in time over a given interval.
+///
 /// It is primarily intended for unit-aware physical quantities, such as those
 /// defined using the `uom` crate.
 ///
-/// The associated type `Derivative` represents the instantaneous rate of change.
-/// The associated type `Delta` represents a finite change over a `Time` interval,
-/// defined as the product of the derivative and the interval.
+/// This trait imposes no operator bounds itself.
+/// However, it is implemented automatically for types that satisfy the
+/// following bounds:
 ///
-/// You do not need to implement this trait directly.
-/// It is implemented automatically for any type that satisfies the following bounds:
+/// - `Self: Div<Time, Output = Derivative>`
+/// - `Derivative: Mul<Time, Output = Delta>`
+/// - `Self: Add<Delta, Output = Self>`
 ///
-/// - `T: Div<Time, Output = Derivative>`: Defines the derivative as `T / Time`.
-/// - `Derivative: Mul<Time, Output = Delta>`: Defines the delta as `Derivative * Time`.
-/// - `T: Add<Delta, Output = T>`: Defines how to apply a delta to the original `T`.
+/// For such types, including most `uom` quantities, integration is performed
+/// using a forward Euler step:
+///
+/// ```text
+/// next_value = self + derivative * dt
+/// ```
 ///
 /// # Example
 ///
-/// To make a struct `State` compatible with `TimeDifferentiable`, implement the
-/// required operations using types that represent its derivative and delta:
+/// Here's how you might implement [`TimeIntegrable`] manually for a composite type:
 ///
-/// ```
-/// use std::ops::{Add, Div, Mul};
+/// ```rust
+/// use twine_core::{TimeIntegrable, TimeDerivative};
+/// use uom::si::f64::{MassDensity, ThermodynamicTemperature, Time};
 ///
-/// use twine_core::TimeDerivative;
-/// use uom::si::f64::*;
-///
+/// #[derive(Debug, Clone, PartialEq)]
 /// struct State {
 ///     temperature: ThermodynamicTemperature,
 ///     density: MassDensity,
 /// }
 ///
+/// #[derive(Debug, Clone, PartialEq)]
 /// struct StateDerivative {
 ///     temperature: TimeDerivative<ThermodynamicTemperature>,
 ///     density: TimeDerivative<MassDensity>,
 /// }
 ///
-/// struct StateDelta {
-///     temperature: TemperatureInterval,
-///     density: MassDensity,
-/// }
+/// impl TimeIntegrable for State {
+///     type Derivative = StateDerivative;
 ///
-/// impl Div<Time> for State {
-///     type Output = StateDerivative;
-///
-///     fn div(self, rhs: Time) -> Self::Output {
-///         StateDerivative {
-///             temperature: self.temperature / rhs,
-///             density: self.density / rhs,
-///         }
-///     }
-/// }
-///
-/// impl Mul<Time> for StateDerivative {
-///     type Output = StateDelta;
-///
-///     fn mul(self, rhs: Time) -> Self::Output {
-///         StateDelta {
-///             temperature: self.temperature * rhs,
-///             density: self.density * rhs,
-///         }
-///     }
-/// }
-///
-/// impl Add<StateDelta> for State {
-///     type Output = State;
-///
-///     fn add(self, rhs: StateDelta) -> Self::Output {
+///     fn step(self, derivative: StateDerivative, dt: Time) -> Self {
 ///         State {
-///             temperature: self.temperature + rhs.temperature,
-///             density: self.density + rhs.density,
+///             temperature: self.temperature + derivative.temperature * dt,
+///             density: self.density + derivative.density * dt,
 ///         }
 ///     }
 /// }
 /// ```
 ///
-/// With these implementations, `State` now satisfies `TimeDifferentiable`.
-pub trait TimeDifferentiable
-where
-    Self: Div<Time, Output = Self::Derivative> + Add<Self::Delta, Output = Self>,
-    Self::Derivative: Mul<Time, Output = Self::Delta>,
-{
-    type Derivative;
-    type Delta;
+/// Or, to derive this implementation automatically, you can use the
+/// `#[derive(TimeIntegrable)]` macro from the [`twine_macros`] crate:
+///
+/// ```ignore
+/// use twine_macros::TimeIntegrable;
+/// use uom::si::f64::{MassDensity, ThermodynamicTemperature};
+///
+/// #[derive(TimeIntegrable)]
+/// struct State {
+///     temperature: ThermodynamicTemperature,
+///     density: MassDensity,
+/// }
+/// ```
+///
+/// This generates the same `StateDerivative` struct and [`TimeIntegrable`]
+/// implementation as shown above.
+pub trait TimeIntegrable: Debug + Clone + PartialEq {
+    type Derivative: Debug + Clone + PartialEq;
+
+    /// Advances the value using its derivative over a time interval.
+    #[must_use]
+    fn step(self, derivative: Self::Derivative, dt: Time) -> Self;
 }
 
-impl<T> TimeDifferentiable for T
+impl<T, Derivative, Delta> TimeIntegrable for T
 where
-    T: Div<Time> + Add<<<T as Div<Time>>::Output as Mul<Time>>::Output, Output = T>,
-    <T as Div<Time>>::Output: Mul<Time>,
+    T: Debug + Clone + PartialEq,
+    T: Div<Time, Output = Derivative> + Add<Delta, Output = T>,
+    Derivative: Debug + Clone + PartialEq,
+    Derivative: Mul<Time, Output = Delta>,
 {
-    type Derivative = <T as Div<Time>>::Output;
-    type Delta = <Self::Derivative as Mul<Time>>::Output;
+    type Derivative = Derivative;
+
+    /// Computes a forward Euler integration step.
+    fn step(self, derivative: Self::Derivative, dt: Time) -> Self {
+        self + derivative * dt
+    }
 }
 
-/// The time derivative of a `TimeDifferentiable` quantity `T`.
+/// The time derivative associated with a `TimeIntegrable` type `T`.
 ///
 /// This alias is useful in type-level contexts (e.g., struct fields that
 /// represent time derivatives), especially when working with unit-aware types
@@ -112,7 +110,7 @@ where
 ///
 /// - `TimeDerivative<Length>` = `Velocity`
 /// - `TimeDerivative<Velocity>` = `Acceleration`
-pub type TimeDerivative<T> = <T as TimeDifferentiable>::Derivative;
+pub type TimeDerivative<T> = <T as TimeIntegrable>::Derivative;
 
 /// Extension trait for ergonomic operations on [`Duration`].
 ///
@@ -143,5 +141,40 @@ pub trait DurationExt {
 impl DurationExt for Duration {
     fn as_time(&self) -> Time {
         Time::new::<second>(self.as_secs_f64())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use approx::assert_relative_eq;
+    use uom::si::{
+        f64::{Length, TemperatureInterval, ThermodynamicTemperature, Time, Velocity},
+        length::meter,
+        temperature_interval::degree_celsius,
+        thermodynamic_temperature::kelvin,
+        time::{minute, second},
+        velocity::meter_per_second,
+    };
+
+    #[test]
+    fn step_length_forward() {
+        let position = Length::new::<meter>(5.0);
+        let velocity = Velocity::new::<meter_per_second>(2.0);
+        let dt = Time::new::<second>(1.5);
+
+        let next_position = position.step(velocity, dt);
+        assert_relative_eq!(next_position.get::<meter>(), 8.0);
+    }
+
+    #[test]
+    fn step_temperature_forward() {
+        let temperature = ThermodynamicTemperature::new::<kelvin>(300.0);
+        let rate = TemperatureInterval::new::<degree_celsius>(10.0) / Time::new::<minute>(1.0);
+        let dt = Time::new::<second>(30.0);
+
+        let next_temperature = temperature.step(rate, dt);
+        assert_relative_eq!(next_temperature.get::<kelvin>(), 305.0);
     }
 }

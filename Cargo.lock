@@ -3413,6 +3413,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "twine-thermo"
+version = "0.2.0"
+dependencies = [
+ "approx",
+ "thiserror 2.0.12",
+ "twine-core",
+ "uom",
+]
+
+[[package]]
 name = "type-map"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

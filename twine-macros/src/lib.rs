@@ -175,42 +175,23 @@ pub fn compose(attr: TokenStream, item: TokenStream) -> TokenStream {
     parsed.try_expand().unwrap_or_else(|err| err).into()
 }
 
-/// Derives the `TimeIntegrable` trait for structs containing state variables.
-///
-/// This macro automates the implementation of time integration for simulation
-/// state structs by generating the necessary boilerplate code for numerical
-/// integration. It creates a derivatives struct and implements the required
-/// traits for time-stepping operations.
+/// Derives the [`TimeIntegrable`] trait for structs containing time-evolving state.
 ///
 /// When applied to a struct, this macro:
 ///
-/// - Generates a derivatives struct (`{StructName}Dt`) with `TimeDerivativeOf<T>`
-///   fields corresponding to each original field.
-/// - Implements `Div<Time>` to convert state variables to their time derivatives.
-/// - Implements `TimeIntegrable` to perform time-stepping integration.
+/// - Generates a derivative struct (`{StructName}Derivative`) with
+///   [`TimeDerivative<T>`] fields for each field in the original struct.
+/// - Implements [`TimeIntegrable`] for the struct, delegating to `.step(...)`
+///   on each field.
 ///
-/// ## Naming Conventions
-///
-/// - `{StructName}Dt`: A struct containing time derivatives of each field,
-///   with field names suffixed with `_dt`.
+/// Each field is integrated using its own [`TimeIntegrable`] implementation,
+/// allowing nested or composite integration across the full structure.
 ///
 /// ## Restrictions
 ///
 /// - Structs must use named fields.
 /// - Generic parameters are not supported.
-/// - All field types must support division by `Time` and addition operations
-///   required for integration (the compiler will enforce these constraints).
-///
-/// ## Integration Pattern
-///
-/// The generated code follows this mathematical pattern for each field:
-///
-/// ```text
-/// new_value = old_value + derivative * dt
-/// ```
-///
-/// Where `derivative` comes from dividing the field by time, and `dt` is the
-/// integration time step.
+/// - All fields must implement [`TimeIntegrable`].
 ///
 /// ## Example
 ///
@@ -227,31 +208,26 @@ pub fn compose(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// ### Expanded
 ///
 /// ```ignore
-/// struct StateVariablesDt {
-///     temperature_dt: TimeDerivativeOf<ThermodynamicTemperature>,
-///     pressure_dt: TimeDerivativeOf<Pressure>,
-/// }
-///
-/// impl Div<Time> for StateVariables {
-///     type Output = StateVariablesDt;
-///
-///     fn div(self, rhs: Time) -> Self::Output {
-///         Self::Output {
-///             temperature_dt: self.temperature / rhs,
-///             pressure_dt: self.pressure / rhs,
-///         }
-///     }
+/// #[derive(Debug, Clone, Copy, PartialEq)]
+/// struct StateVariablesDerivative {
+///     temperature: TimeDerivative<ThermodynamicTemperature>,
+///     pressure: TimeDerivative<Pressure>,
 /// }
 ///
 /// impl TimeIntegrable for StateVariables {
-///     fn step_by_time(self, derivative: StateVariablesDt, dt: Time) -> Self {
+///     type Derivative = StateVariablesDerivative;
+///
+///     fn step(self, derivative: StateVariablesDerivative, dt: Time) -> Self {
 ///         Self {
-///             temperature: self.temperature + derivative.temperature_dt * dt,
-///             pressure: self.pressure + derivative.pressure_dt * dt,
+///             temperature: self.temperature.step(derivative.temperature, dt),
+///             pressure: self.pressure.step(derivative.pressure, dt),
 ///         }
 ///     }
 /// }
 /// ```
+///
+/// [`TimeIntegrable`]: twine_core::TimeIntegrable
+/// [`TimeDerivative<T>`]: twine_core::TimeDerivative
 #[proc_macro_derive(TimeIntegrable)]
 pub fn derive_time_integrable(input: TokenStream) -> TokenStream {
     let parsed = parse_macro_input!(input as time_integrable::Parsed);
