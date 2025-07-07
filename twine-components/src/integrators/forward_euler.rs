@@ -3,22 +3,14 @@
 //! This integrator is best suited for simple dynamic systems where
 //! computational efficiency takes priority over numerical accuracy.
 
-use std::{
-    convert::Infallible,
-    marker::PhantomData,
-    ops::{Add, Div, Mul},
-};
+use std::{convert::Infallible, marker::PhantomData};
 
-use twine_core::{Component, TimeDerivativeOf};
+use twine_core::{Component, TimeDerivative, TimeDifferentiable};
 use uom::si::f64::Time;
 
 /// Performs a forward Euler integration step: `value + derivative * dt`.
 #[must_use]
-pub fn step<T>(value: T, derivative: TimeDerivativeOf<T>, dt: Time) -> T
-where
-    T: Div<Time> + Add<<TimeDerivativeOf<T> as Mul<Time>>::Output, Output = T>,
-    TimeDerivativeOf<T>: Mul<Time>,
-{
+pub fn step<T: TimeDifferentiable>(value: T, derivative: TimeDerivative<T>, dt: Time) -> T {
     value + derivative * dt
 }
 
@@ -40,12 +32,8 @@ impl<T> ForwardEuler<T> {
     }
 }
 
-impl<T> Component for ForwardEuler<T>
-where
-    T: Div<Time> + Add<<TimeDerivativeOf<T> as Mul<Time>>::Output, Output = T>,
-    TimeDerivativeOf<T>: Mul<Time>,
-{
-    type Input = (T, TimeDerivativeOf<T>, Time);
+impl<T: TimeDifferentiable> Component for ForwardEuler<T> {
+    type Input = (T, TimeDerivative<T>, Time);
     type Output = T;
     type Error = Infallible;
 
