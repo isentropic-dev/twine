@@ -5,12 +5,12 @@
 
 use std::{convert::Infallible, marker::PhantomData};
 
-use twine_core::{Component, TimeDerivative, TimeDifferentiable};
+use twine_core::{Component, TimeDifferentiable};
 use uom::si::f64::Time;
 
 /// Performs a forward Euler integration step: `value + derivative * dt`.
 #[must_use]
-pub fn step<T: TimeDifferentiable>(value: T, derivative: TimeDerivative<T>, dt: Time) -> T {
+pub fn step<T: TimeDifferentiable>(value: T, derivative: T::Derivative, dt: Time) -> T {
     value + derivative * dt
 }
 
@@ -33,7 +33,7 @@ impl<T> ForwardEuler<T> {
 }
 
 impl<T: TimeDifferentiable> Component for ForwardEuler<T> {
-    type Input = (T, TimeDerivative<T>, Time);
+    type Input = (T, T::Derivative, Time);
     type Output = T;
     type Error = Infallible;
 

@@ -23,7 +23,7 @@ use uom::si::{f64::Time, time::second};
 /// - `Derivative: Mul<Time, Output = Delta>`: Defines the delta as `Derivative * Time`.
 /// - `T: Add<Delta, Output = T>`: Defines how to apply a delta to the original `T`.
 ///
-/// ### Example
+/// # Example
 ///
 /// To make a struct `State` compatible with `TimeDifferentiable`, implement the
 /// required operations using types that represent its derivative and delta:
@@ -104,17 +104,11 @@ where
 
 /// The time derivative of a `TimeDifferentiable` quantity `T`.
 ///
-/// This alias is useful when writing generic, unit-aware APIs involving
-/// quantities that vary over time.
+/// This alias is useful in type-level contexts (e.g., struct fields that
+/// represent time derivatives), especially when working with unit-aware types
+/// from the `uom` crate.
 ///
-/// For instance, a generic integration function might be written as:
-///
-/// ```ignore
-/// fn integrate<T: TimeDifferentiable>(value: T, rate: TimeDerivative<T>, dt: Time) -> T
-/// ```
-///
-/// It also works naturally with `uom::Quantity` types, allowing APIs to express
-/// relationships between physical quantities and their time derivatives:
+/// # Examples
 ///
 /// - `TimeDerivative<Length>` = `Velocity`
 /// - `TimeDerivative<Velocity>` = `Acceleration`
