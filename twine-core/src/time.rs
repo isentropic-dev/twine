@@ -1,17 +1,118 @@
-use std::{ops::Div, time::Duration};
+use std::{
+    ops::{Add, Div, Mul},
+    time::Duration,
+};
 
 use uom::si::{f64::Time, time::second};
 
-/// The time derivative of a quantity `T`.
+/// A trait for types that can be differentiated with respect to time.
 ///
-/// This alias is useful when modeling physical systems, where `T` is a unit-aware
-/// quantity from the [`uom`] crate and time is represented by [`uom::si::f64::Time`].
+/// This trait marks types that have a well-defined time derivative and support
+/// applying time-based changes using standard arithmetic operations.
+/// It is primarily intended for unit-aware physical quantities, such as those
+/// defined using the `uom` crate.
+///
+/// The associated type `Derivative` represents the instantaneous rate of change.
+/// The associated type `Delta` represents a finite change over a `Time` interval,
+/// defined as the product of the derivative and the interval.
+///
+/// You do not need to implement this trait directly.
+/// It is implemented automatically for any type that satisfies the following bounds:
+///
+/// - `T: Div<Time, Output = Derivative>`: Defines the derivative as `T / Time`.
+/// - `Derivative: Mul<Time, Output = Delta>`: Defines the delta as `Derivative * Time`.
+/// - `T: Add<Delta, Output = T>`: Defines how to apply a delta to the original `T`.
+///
+/// # Example
+///
+/// To make a struct `State` compatible with `TimeDifferentiable`, implement the
+/// required operations using types that represent its derivative and delta:
+///
+/// ```
+/// use std::ops::{Add, Div, Mul};
+///
+/// use twine_core::TimeDerivative;
+/// use uom::si::f64::*;
+///
+/// struct State {
+///     temperature: ThermodynamicTemperature,
+///     density: MassDensity,
+/// }
+///
+/// struct StateDerivative {
+///     temperature: TimeDerivative<ThermodynamicTemperature>,
+///     density: TimeDerivative<MassDensity>,
+/// }
+///
+/// struct StateDelta {
+///     temperature: TemperatureInterval,
+///     density: MassDensity,
+/// }
+///
+/// impl Div<Time> for State {
+///     type Output = StateDerivative;
+///
+///     fn div(self, rhs: Time) -> Self::Output {
+///         StateDerivative {
+///             temperature: self.temperature / rhs,
+///             density: self.density / rhs,
+///         }
+///     }
+/// }
+///
+/// impl Mul<Time> for StateDerivative {
+///     type Output = StateDelta;
+///
+///     fn mul(self, rhs: Time) -> Self::Output {
+///         StateDelta {
+///             temperature: self.temperature * rhs,
+///             density: self.density * rhs,
+///         }
+///     }
+/// }
+///
+/// impl Add<StateDelta> for State {
+///     type Output = State;
+///
+///     fn add(self, rhs: StateDelta) -> Self::Output {
+///         State {
+///             temperature: self.temperature + rhs.temperature,
+///             density: self.density + rhs.density,
+///         }
+///     }
+/// }
+/// ```
+///
+/// With these implementations, `State` now satisfies `TimeDifferentiable`.
+pub trait TimeDifferentiable
+where
+    Self: Div<Time, Output = Self::Derivative> + Add<Self::Delta, Output = Self>,
+    Self::Derivative: Mul<Time, Output = Self::Delta>,
+{
+    type Derivative;
+    type Delta;
+}
+
+impl<T> TimeDifferentiable for T
+where
+    T: Div<Time> + Add<<<T as Div<Time>>::Output as Mul<Time>>::Output, Output = T>,
+    <T as Div<Time>>::Output: Mul<Time>,
+{
+    type Derivative = <T as Div<Time>>::Output;
+    type Delta = <Self::Derivative as Mul<Time>>::Output;
+}
+
+/// The time derivative of a `TimeDifferentiable` quantity `T`.
+///
+/// This alias is useful in type-level contexts (e.g., struct fields that
+/// represent time derivatives), especially when working with unit-aware types
+/// from the `uom` crate.
 ///
 /// # Examples
 ///
-/// - `TimeDerivativeOf<Length>` = `Velocity`
-/// - `TimeDerivativeOf<Velocity>` = `Acceleration`
-pub type TimeDerivativeOf<T> = <T as Div<Time>>::Output;
+/// - `TimeDerivative<Length>` = `Velocity`
+/// - `TimeDerivative<Velocity>` = `Acceleration`
+pub type TimeDerivative<T> = <T as TimeDifferentiable>::Derivative;
 
 /// Extension trait for ergonomic operations on [`Duration`].
 ///

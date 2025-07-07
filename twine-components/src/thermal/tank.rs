@@ -1,6 +1,6 @@
 use thiserror::Error;
 use twine_core::{
-    Component, TimeDerivativeOf,
+    Component, TimeDerivative,
     thermo::{
         fluid::{
             FluidPropertyError, FluidPropertyModel, ProvidesCv, ProvidesDensity, ProvidesEnthalpy,
@@ -114,7 +114,7 @@ pub struct TankOutput {
     /// Rate of change of the tank fluid temperature.
     ///
     /// Positive for heating, negative for cooling.
-    pub tank_temperature_derivative: TimeDerivativeOf<ThermodynamicTemperature>,
+    pub tank_temperature_derivative: TimeDerivative<ThermodynamicTemperature>,
 }
 
 /// Errors that can occur while evaluating the tank's energy balance.
