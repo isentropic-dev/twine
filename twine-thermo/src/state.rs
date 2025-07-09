@@ -61,7 +61,7 @@ impl<Fluid: TimeIntegrable> TimeIntegrable for State<Fluid> {
         Self {
             temperature: self.temperature.step(derivative.temperature, dt),
             density: self.density.step(derivative.density, dt),
-            fluid: self.fluid.step(derivative.clone().fluid, dt),
+            fluid: self.fluid.step(derivative.fluid, dt),
         }
     }
 }
