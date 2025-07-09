@@ -58,11 +58,10 @@ impl<Fluid: TimeIntegrable> TimeIntegrable for State<Fluid> {
     type Derivative = StateDerivative<Fluid>;
 
     fn step(self, derivative: Self::Derivative, dt: Time) -> Self {
-        let fluid_dt = derivative.clone().fluid;
         Self {
             temperature: self.temperature.step(derivative.temperature, dt),
             density: self.density.step(derivative.density, dt),
-            fluid: self.fluid.step(fluid_dt, dt),
+            fluid: self.fluid.step(derivative.clone().fluid, dt),
         }
     }
 }
