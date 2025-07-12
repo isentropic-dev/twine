@@ -90,19 +90,19 @@ pub trait ThermodynamicProperties<F> {
 ///
 /// A blanket implementation is provided for `(ThermodynamicTemperature, MassDensity)`
 /// when the fluid type implements `Default`.
-pub trait StateFrom<F, Input> {
+pub trait StateFrom<Fluid, Input> {
     type Error;
 
-    /// Returns a `State<F>` based on the provided generic `Input`.
+    /// Returns a `State<Fluid>` based on the provided generic `Input`.
     ///
     /// # Errors
     ///
     /// Returns [`Self::Error`] if the state cannot be created from the given inputs.
     /// The error type depends on the specific model implementation.
-    fn state_from(&self, input: Input) -> Result<State<F>, Self::Error>;
+    fn state_from(&self, input: Input) -> Result<State<Fluid>, Self::Error>;
 }
 
-/// Enables creating states from temperature and density pairs for any fluid with Default.
+/// Enables creating states from temperature and density pairs for any fluid with `Default`.
 impl<Model, Fluid: Default> StateFrom<Fluid, (ThermodynamicTemperature, MassDensity)> for Model {
     type Error = Infallible;
 
