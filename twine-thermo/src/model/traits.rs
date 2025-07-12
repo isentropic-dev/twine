@@ -67,25 +67,33 @@ pub trait ThermodynamicProperties<F> {
     fn cv(&self, state: &State<F>) -> Result<SpecificHeatCapacity, PropertyError>;
 }
 
+/// Trait for creating thermodynamic states from various input combinations.
+///
+/// This trait enables models to construct a `State<F>` from different types of
+/// thermodynamic inputs, providing flexibility in how states are specified.
+///
+/// This trait is commonly implemented for fluid types that have `Default`,
+/// allowing the model to create the fluid instance internally from just
+/// thermodynamic properties.
+///
+/// Common input patterns include tuples of thermodynamic properties:
+/// - `(ThermodynamicTemperature, MassDensity)` - Direct temperature and density
+/// - `(ThermodynamicTemperature, Pressure)` - Temperature and pressure (model calculates density)
+/// - `(Pressure, MassDensity)` - Pressure and density (model calculates temperature)
+/// - `(Pressure, SpecificEntropy)` - Pressure and entropy (model calculates temperature and density)
+///
+/// Single values are also supported, such as `ThermodynamicTemperature` alone
+/// for incompressible fluids (which use the fluid's reference density).
+///
+/// The generic design allows models to define which input combinations they
+/// support by implementing this trait for specific `Input` types.
+///
+/// A blanket implementation is provided for `(ThermodynamicTemperature, MassDensity)`
+/// when the fluid type implements `Default`.
 pub trait StateFrom<F, Input> {
     type Error;
 
     /// Returns a `State<F>` based on the provided generic `Input`.
-    ///
-    /// This trait is commonly implemented for fluid types that have `Default`,
-    /// allowing the model to create the fluid instance internally from just
-    /// thermodynamic properties.
-    ///
-    /// Common input patterns include tuples of thermodynamic properties:
-    /// - `(ThermodynamicTemperature, MassDensity)` - Direct temperature and density
-    /// - `(ThermodynamicTemperature, Pressure)` - Temperature and pressure (model calculates density)
-    /// - `(Pressure, MassDensity)` - Pressure and density (model calculates temperature)
-    ///
-    /// Single values are also supported, such as `ThermodynamicTemperature` alone
-    /// for incompressible fluids (which use the fluid's reference density).
-    ///
-    /// The generic design allows models to define which input combinations they
-    /// support by implementing this trait for specific `Input` types.
     ///
     /// # Errors
     ///
