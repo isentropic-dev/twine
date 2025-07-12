@@ -102,6 +102,7 @@ pub trait StateFrom<F, Input> {
     fn state_from(&self, input: Input) -> Result<State<F>, Self::Error>;
 }
 
+/// Enables creating states from temperature and density pairs for any fluid with Default.
 impl<Model, Fluid: Default> StateFrom<Fluid, (ThermodynamicTemperature, MassDensity)> for Model {
     type Error = Infallible;
 

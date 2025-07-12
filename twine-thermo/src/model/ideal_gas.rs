@@ -83,6 +83,7 @@ pub trait IdealGasFluid {
 pub struct IdealGas;
 
 impl IdealGas {
+    /// Creates a state at the fluid's reference temperature and pressure.
     #[must_use]
     pub fn reference_state<F: IdealGasFluid>(fluid: F) -> State<F> {
         let temperature = fluid.reference_temperature();
@@ -183,6 +184,7 @@ impl<F: IdealGasFluid> ThermodynamicProperties<F> for IdealGas {
     }
 }
 
+/// Enables creating ideal gas states from temperature and pressure pairs.
 impl<F: IdealGasFluid + Default> StateFrom<F, (ThermodynamicTemperature, Pressure)> for IdealGas {
     type Error = Infallible;
 
@@ -201,6 +203,7 @@ impl<F: IdealGasFluid + Default> StateFrom<F, (ThermodynamicTemperature, Pressur
     }
 }
 
+/// Enables creating ideal gas states from pressure and density pairs.
 impl<F: IdealGasFluid + Default> StateFrom<F, (Pressure, MassDensity)> for IdealGas {
     type Error = Infallible;
 

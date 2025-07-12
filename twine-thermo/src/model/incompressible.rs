@@ -67,6 +67,7 @@ pub trait IncompressibleFluid {
 pub struct Incompressible;
 
 impl Incompressible {
+    /// Creates a state at the fluid's reference temperature and density.
     #[must_use]
     pub fn reference_state<F: IncompressibleFluid>(fluid: F) -> State<F> {
         let temperature = fluid.reference_temperature();
@@ -125,6 +126,7 @@ impl<F: IncompressibleFluid> ThermodynamicProperties<F> for Incompressible {
     }
 }
 
+/// Enables creating incompressible fluid states from temperature alone (uses reference density).
 impl<F: IncompressibleFluid + Default> StateFrom<F, ThermodynamicTemperature> for Incompressible {
     type Error = Infallible;
 
