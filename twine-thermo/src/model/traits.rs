@@ -72,8 +72,8 @@ pub trait ThermodynamicProperties<Fluid> {
 
 /// Trait for creating thermodynamic states from various input combinations.
 ///
-/// This trait enables models to construct a `State<F>` from different types of
-/// thermodynamic inputs, providing flexibility in how states are specified.
+/// This trait enables models to construct a `State<Fluid>` from different types
+/// of thermodynamic inputs, providing flexibility in how states are specified.
 ///
 /// This trait is commonly implemented for fluid types that have `Default`,
 /// allowing the model to create the fluid instance internally from just
