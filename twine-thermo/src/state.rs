@@ -2,12 +2,12 @@ use uom::si::f64::{MassDensity, ThermodynamicTemperature};
 
 /// Represents the thermodynamic state of a fluid.
 ///
-/// A `State<Fluid>` captures the instantaneous thermodynamic conditions of a
-/// specific fluid, including temperature, density, and any fluid-specific data.
+/// A `State<Fluid>` captures the thermodynamic state of a specific fluid,
+/// including its temperature, density, and any fluid-specific data.
 ///
-/// The `fluid` field can be a simple marker type, such as [`Air`] or [`Water`],
-/// or a structured type containing additional data, such as mixture composition
-/// or particle concentrations.
+/// The `Fluid` type parameter can be a simple marker type, such as [`Air`] or
+/// [`Water`], or a structured type containing additional data, such as mixture
+/// composition or particle concentration.
 ///
 /// `State` is the primary input to [`ThermodynamicProperties`] models for
 /// calculating pressure, enthalpy, entropy, and related quantities.
@@ -15,14 +15,12 @@ use uom::si::f64::{MassDensity, ThermodynamicTemperature};
 /// # Example
 ///
 /// ```
-/// use twine_thermo::State;
+/// use twine_thermo::{State, fluid::Air};
 /// use uom::si::{
 ///     f64::{ThermodynamicTemperature, MassDensity},
 ///     thermodynamic_temperature::kelvin,
 ///     mass_density::kilogram_per_cubic_meter,
 /// };
-///
-/// struct Air;
 ///
 /// let state = State {
 ///     temperature: ThermodynamicTemperature::new::<kelvin>(300.0),
