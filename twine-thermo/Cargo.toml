@@ -1,0 +1,18 @@
+[package]
+name = "twine-thermo"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Thermodynamic and fluid property modeling for the Twine framework."
+keywords = ["twine", "framework", "modeling", "thermodynamics", "fluid"]
+
+[dependencies]
+twine-core = { version = "0.2.0", path = "../twine-core" }
+thiserror = { workspace = true }
+uom = { workspace = true }
+
+[dev-dependencies]
+approx = { workspace = true }

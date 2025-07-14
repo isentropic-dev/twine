@@ -8,6 +8,7 @@ members = [
   "twine-examples",
   "twine-macros",
   "twine-plot",
+  "twine-thermo",
 ]
 
 [workspace.package]
