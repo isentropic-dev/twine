@@ -69,21 +69,17 @@ pub struct Incompressible;
 impl Incompressible {
     /// Creates a state at the fluid's reference temperature and density.
     #[must_use]
-    pub fn reference_state<F: IncompressibleFluid>(fluid: F) -> State<F> {
+    pub fn reference_state<F: IncompressibleFluid>(fluid: F) -> State<F, Self> {
         let temperature = fluid.reference_temperature();
         let density = fluid.reference_density();
 
-        State {
-            temperature,
-            density,
-            fluid,
-        }
+        State::new(temperature, density, fluid)
     }
 }
 
 impl<F: IncompressibleFluid> ThermodynamicProperties<F> for Incompressible {
     /// Pressure is not a thermodynamic property of an incompressible liquid.
-    fn pressure(&self, _state: &State<F>) -> Result<Pressure, PropertyError> {
+    fn pressure(&self, _state: &State<F, Self>) -> Result<Pressure, PropertyError> {
         Err(PropertyError::NotImplemented {
             property: "pressure",
             context: Some(
@@ -93,12 +89,15 @@ impl<F: IncompressibleFluid> ThermodynamicProperties<F> for Incompressible {
     }
 
     /// Computes internal energy, which is equal to enthalpy for incompressible fluids.
-    fn internal_energy(&self, state: &State<F>) -> Result<SpecificInternalEnergy, PropertyError> {
+    fn internal_energy(
+        &self,
+        state: &State<F, Self>,
+    ) -> Result<SpecificInternalEnergy, PropertyError> {
         self.enthalpy(state)
     }
 
     /// Computes enthalpy using `h = h₀ + c·(T − T₀)`.
-    fn enthalpy(&self, state: &State<F>) -> Result<SpecificEnthalpy, PropertyError> {
+    fn enthalpy(&self, state: &State<F, Self>) -> Result<SpecificEnthalpy, PropertyError> {
         let c = state.fluid.specific_heat();
         let t_ref = state.fluid.reference_temperature();
         let h_ref = state.fluid.reference_enthalpy();
@@ -107,7 +106,7 @@ impl<F: IncompressibleFluid> ThermodynamicProperties<F> for Incompressible {
     }
 
     /// Computes entropy with `s = s₀ + c·ln(T/T₀)`.
-    fn entropy(&self, state: &State<F>) -> Result<SpecificEntropy, PropertyError> {
+    fn entropy(&self, state: &State<F, Self>) -> Result<SpecificEntropy, PropertyError> {
         let c = state.fluid.specific_heat();
         let t_ref = state.fluid.reference_temperature();
         let s_ref = state.fluid.reference_entropy();
@@ -116,12 +115,12 @@ impl<F: IncompressibleFluid> ThermodynamicProperties<F> for Incompressible {
     }
 
     /// Returns the constant specific heat from the fluid.
-    fn cp(&self, state: &State<F>) -> Result<SpecificHeatCapacity, PropertyError> {
+    fn cp(&self, state: &State<F, Self>) -> Result<SpecificHeatCapacity, PropertyError> {
         Ok(state.fluid.specific_heat())
     }
 
     /// Returns the constant specific heat from the fluid.
-    fn cv(&self, state: &State<F>) -> Result<SpecificHeatCapacity, PropertyError> {
+    fn cv(&self, state: &State<F, Self>) -> Result<SpecificHeatCapacity, PropertyError> {
         Ok(state.fluid.specific_heat())
     }
 }
@@ -130,15 +129,14 @@ impl<F: IncompressibleFluid> ThermodynamicProperties<F> for Incompressible {
 impl<F: IncompressibleFluid + Default> StateFrom<F, ThermodynamicTemperature> for Incompressible {
     type Error = Infallible;
 
-    fn state_from(&self, temperature: ThermodynamicTemperature) -> Result<State<F>, Self::Error> {
+    fn state_from(
+        &self,
+        temperature: ThermodynamicTemperature,
+    ) -> Result<State<F, Self>, Self::Error> {
         let fluid = F::default();
         let density = fluid.reference_density();
 
-        Ok(State {
-            temperature,
-            density,
-            fluid,
-        })
+        Ok(State::new(temperature, density, fluid))
     }
 }
 
@@ -184,7 +182,7 @@ mod tests {
     #[test]
     fn internal_energy_equals_enthalpy() -> Result<(), PropertyError> {
         // State at specified temperature and reference density.
-        let state: State<MockLiquid> = Incompressible
+        let state: State<MockLiquid, Incompressible> = Incompressible
             .state_from(ThermodynamicTemperature::new::<degree_celsius>(15.0))
             .unwrap();
 
@@ -198,7 +196,7 @@ mod tests {
     #[test]
     fn increase_temperature() -> Result<(), PropertyError> {
         // State at specified temperature and density.
-        let state_a: State<MockLiquid> = Incompressible
+        let state_a: State<MockLiquid, _> = Incompressible
             .state_from((
                 ThermodynamicTemperature::new::<degree_celsius>(30.0),
                 MassDensity::new::<kilogram_per_cubic_meter>(2.0),

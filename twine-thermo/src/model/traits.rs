@@ -23,13 +23,13 @@ use crate::{
 ///
 /// This approach supports both broad reuse and precise specialization,
 /// depending on the modeling context.
-pub trait ThermodynamicProperties<Fluid> {
+pub trait ThermodynamicProperties<Fluid>: Sized {
     /// Returns the pressure for the given state.
     ///
     /// # Errors
     ///
     /// Returns a [`PropertyError`] if the pressure cannot be calculated.
-    fn pressure(&self, state: &State<Fluid>) -> Result<Pressure, PropertyError>;
+    fn pressure(&self, state: &State<Fluid, Self>) -> Result<Pressure, PropertyError>;
 
     /// Returns the specific internal energy for the given state.
     ///
@@ -38,7 +38,7 @@ pub trait ThermodynamicProperties<Fluid> {
     /// Returns a [`PropertyError`] if the internal energy cannot be calculated.
     fn internal_energy(
         &self,
-        state: &State<Fluid>,
+        state: &State<Fluid, Self>,
     ) -> Result<SpecificInternalEnergy, PropertyError>;
 
     /// Returns the specific enthalpy for the given state.
@@ -46,34 +46,35 @@ pub trait ThermodynamicProperties<Fluid> {
     /// # Errors
     ///
     /// Returns a [`PropertyError`] if the enthalpy cannot be calculated.
-    fn enthalpy(&self, state: &State<Fluid>) -> Result<SpecificEnthalpy, PropertyError>;
+    fn enthalpy(&self, state: &State<Fluid, Self>) -> Result<SpecificEnthalpy, PropertyError>;
 
     /// Returns the specific entropy for the given state.
     ///
     /// # Errors
     ///
     /// Returns a [`PropertyError`] if the entropy cannot be calculated.
-    fn entropy(&self, state: &State<Fluid>) -> Result<SpecificEntropy, PropertyError>;
+    fn entropy(&self, state: &State<Fluid, Self>) -> Result<SpecificEntropy, PropertyError>;
 
     /// Returns the specific heat capacity at constant pressure.
     ///
     /// # Errors
     ///
     /// Returns a [`PropertyError`] if `cp` cannot be calculated.
-    fn cp(&self, state: &State<Fluid>) -> Result<SpecificHeatCapacity, PropertyError>;
+    fn cp(&self, state: &State<Fluid, Self>) -> Result<SpecificHeatCapacity, PropertyError>;
 
     /// Returns the specific heat capacity at constant volume.
     ///
     /// # Errors
     ///
     /// Returns a [`PropertyError`] if `cv` cannot be calculated.
-    fn cv(&self, state: &State<Fluid>) -> Result<SpecificHeatCapacity, PropertyError>;
+    fn cv(&self, state: &State<Fluid, Self>) -> Result<SpecificHeatCapacity, PropertyError>;
 }
 
 /// Trait for creating thermodynamic states from various input combinations.
 ///
-/// This trait enables models to construct a `State<Fluid>` from different types
-/// of thermodynamic inputs, providing flexibility in how states are specified.
+/// This trait enables models to construct a `State<Fluid, Model>` instance from
+/// different types of thermodynamic inputs, providing flexibility in how states
+/// are specified.
 ///
 /// This trait is commonly implemented for fluid types that have `Default`,
 /// allowing the model to create the fluid instance internally from just
@@ -93,30 +94,26 @@ pub trait ThermodynamicProperties<Fluid> {
 ///
 /// A blanket implementation is provided for `(ThermodynamicTemperature, MassDensity)`
 /// when the fluid type implements `Default`.
-pub trait StateFrom<Fluid, Input> {
+pub trait StateFrom<Fluid, Input>: Sized {
     type Error;
 
-    /// Returns a `State<Fluid>` based on the provided generic `Input`.
+    /// Returns a `State<Fluid, Model>` based on the provided generic `Input`.
     ///
     /// # Errors
     ///
     /// Returns [`Self::Error`] if the state cannot be created from the given inputs.
     /// The error type depends on the specific model implementation.
-    fn state_from(&self, input: Input) -> Result<State<Fluid>, Self::Error>;
+    fn state_from(&self, input: Input) -> Result<State<Fluid, Self>, Self::Error>;
 }
 
 /// Enables creating states from temperature and density pairs for any fluid with `Default`.
-impl<Model, Fluid: Default> StateFrom<Fluid, (ThermodynamicTemperature, MassDensity)> for Model {
+impl<Fluid: Default, Model> StateFrom<Fluid, (ThermodynamicTemperature, MassDensity)> for Model {
     type Error = Infallible;
 
     fn state_from(
         &self,
         (temperature, density): (ThermodynamicTemperature, MassDensity),
-    ) -> Result<State<Fluid>, Self::Error> {
-        Ok(State {
-            temperature,
-            density,
-            fluid: Fluid::default(),
-        })
+    ) -> Result<State<Fluid, Model>, Self::Error> {
+        Ok(State::new(temperature, density, Fluid::default()))
     }
 }

@@ -85,16 +85,12 @@ pub struct IdealGas;
 impl IdealGas {
     /// Creates a state at the fluid's reference temperature and pressure.
     #[must_use]
-    pub fn reference_state<F: IdealGasFluid>(fluid: F) -> State<F> {
+    pub fn reference_state<F: IdealGasFluid>(fluid: F) -> State<F, Self> {
         let temperature = fluid.reference_temperature();
         let pressure = fluid.reference_pressure();
         let density = pressure / (fluid.gas_constant() * temperature);
 
-        State {
-            temperature,
-            density,
-            fluid,
-        }
+        State::new(temperature, density, fluid)
     }
 
     /// Computes pressure using the ideal gas law.
@@ -138,7 +134,7 @@ impl IdealGas {
 
 impl<F: IdealGasFluid> ThermodynamicProperties<F> for IdealGas {
     /// Computes pressure with `P = ρ·R·T`.
-    fn pressure(&self, state: &State<F>) -> Result<Pressure, PropertyError> {
+    fn pressure(&self, state: &State<F, Self>) -> Result<Pressure, PropertyError> {
         let t = state.temperature;
         let d = state.density;
         let r = state.fluid.gas_constant();
@@ -147,12 +143,15 @@ impl<F: IdealGasFluid> ThermodynamicProperties<F> for IdealGas {
     }
 
     /// Computes internal energy with `u = h − R·T`.
-    fn internal_energy(&self, state: &State<F>) -> Result<SpecificInternalEnergy, PropertyError> {
+    fn internal_energy(
+        &self,
+        state: &State<F, Self>,
+    ) -> Result<SpecificInternalEnergy, PropertyError> {
         Ok(self.enthalpy(state)? - state.fluid.gas_constant() * state.temperature)
     }
 
     /// Computes enthalpy with `h = h₀ + cp·(T − T₀)`.
-    fn enthalpy(&self, state: &State<F>) -> Result<SpecificEnthalpy, PropertyError> {
+    fn enthalpy(&self, state: &State<F, Self>) -> Result<SpecificEnthalpy, PropertyError> {
         let cp = state.fluid.cp();
         let t_ref = state.fluid.reference_temperature();
         let h_ref = state.fluid.reference_enthalpy();
@@ -161,7 +160,7 @@ impl<F: IdealGasFluid> ThermodynamicProperties<F> for IdealGas {
     }
 
     /// Computes entropy with `s = s₀ + cp·ln(T⁄T₀) − R·ln(p⁄p₀)`.
-    fn entropy(&self, state: &State<F>) -> Result<SpecificEntropy, PropertyError> {
+    fn entropy(&self, state: &State<F, Self>) -> Result<SpecificEntropy, PropertyError> {
         let cp = state.fluid.cp();
         let r = state.fluid.gas_constant();
         let t_ref = state.fluid.reference_temperature();
@@ -174,12 +173,12 @@ impl<F: IdealGasFluid> ThermodynamicProperties<F> for IdealGas {
     }
 
     /// Returns the constant `cp` from the fluid.
-    fn cp(&self, state: &State<F>) -> Result<SpecificHeatCapacity, PropertyError> {
+    fn cp(&self, state: &State<F, Self>) -> Result<SpecificHeatCapacity, PropertyError> {
         Ok(state.fluid.cp())
     }
 
     /// Computes the constant `cv = cp − R`.
-    fn cv(&self, state: &State<F>) -> Result<SpecificHeatCapacity, PropertyError> {
+    fn cv(&self, state: &State<F, Self>) -> Result<SpecificHeatCapacity, PropertyError> {
         Ok(state.fluid.cp() - state.fluid.gas_constant())
     }
 }
@@ -191,15 +190,11 @@ impl<F: IdealGasFluid + Default> StateFrom<F, (ThermodynamicTemperature, Pressur
     fn state_from(
         &self,
         (temperature, pressure): (ThermodynamicTemperature, Pressure),
-    ) -> Result<State<F>, Self::Error> {
+    ) -> Result<State<F, Self>, Self::Error> {
         let fluid = F::default();
         let density = IdealGas::density(temperature, pressure, fluid.gas_constant());
 
-        Ok(State {
-            temperature,
-            density,
-            fluid,
-        })
+        Ok(State::new(temperature, density, fluid))
     }
 }
 
@@ -210,15 +205,11 @@ impl<F: IdealGasFluid + Default> StateFrom<F, (Pressure, MassDensity)> for Ideal
     fn state_from(
         &self,
         (pressure, density): (Pressure, MassDensity),
-    ) -> Result<State<F>, Self::Error> {
+    ) -> Result<State<F, Self>, Self::Error> {
         let fluid = F::default();
         let temperature = IdealGas::temperature(pressure, density, fluid.gas_constant());
 
-        Ok(State {
-            temperature,
-            density,
-            fluid,
-        })
+        Ok(State::new(temperature, density, fluid))
     }
 }
 
@@ -272,7 +263,7 @@ mod tests {
         // State from a temperature and pressure.
         let temp = ThermodynamicTemperature::new::<degree_celsius>(50.0);
         let pres = Pressure::new::<kilopascal>(100.0);
-        let state_a: State<MockGas> = IdealGas.state_from((temp, pres)).unwrap();
+        let state_a: State<MockGas, IdealGas> = IdealGas.state_from((temp, pres)).unwrap();
 
         let state_b = state_a
             .clone()
@@ -299,7 +290,7 @@ mod tests {
         // State from a pressure and density.
         let pres = Pressure::new::<psi>(100.0);
         let dens = MassDensity::new::<pound_per_cubic_foot>(0.1);
-        let state_a: State<MockGas> = IdealGas.state_from((pres, dens)).unwrap();
+        let state_a: State<MockGas, _> = IdealGas.state_from((pres, dens)).unwrap();
 
         let state_b = state_a.clone().with_density(dens * 2.0);
 
