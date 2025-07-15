@@ -4,6 +4,7 @@ use uom::si::f64::{MassDensity, Pressure, SpecificHeatCapacity, ThermodynamicTem
 
 use crate::{
     PropertyError, State,
+    fluid::MarkerFluid,
     units::{SpecificEnthalpy, SpecificEntropy, SpecificInternalEnergy},
 };
 
@@ -75,11 +76,7 @@ pub trait ThermodynamicProperties<Fluid> {
 /// This trait enables models to construct a `State<Fluid>` from different types
 /// of thermodynamic inputs, providing flexibility in how states are specified.
 ///
-/// This trait is commonly implemented for fluid types that have `Default`,
-/// allowing the model to create the fluid instance internally from just
-/// thermodynamic properties.
-///
-/// Common input patterns include tuples of thermodynamic properties:
+/// Common input patterns when the fluid is a [`MarkerFluid`] include tuples of:
 /// - `(ThermodynamicTemperature, MassDensity)` - Direct temperature and density
 /// - `(ThermodynamicTemperature, Pressure)` - Temperature and pressure (model calculates density)
 /// - `(Pressure, MassDensity)` - Pressure and density (model calculates temperature)
@@ -92,7 +89,7 @@ pub trait ThermodynamicProperties<Fluid> {
 /// support by implementing this trait for specific `Input` types.
 ///
 /// A blanket implementation is provided for `(ThermodynamicTemperature, MassDensity)`
-/// when the fluid type implements `Default`.
+/// when the fluid is a [`MarkerFluid`].
 pub trait StateFrom<Fluid, Input> {
     type Error;
 
@@ -105,8 +102,10 @@ pub trait StateFrom<Fluid, Input> {
     fn state_from(&self, input: Input) -> Result<State<Fluid>, Self::Error>;
 }
 
-/// Enables creating states from temperature and density pairs for any fluid with `Default`.
-impl<Model, Fluid: Default> StateFrom<Fluid, (ThermodynamicTemperature, MassDensity)> for Model {
+/// Enables state creation from temperature and density for any [`MarkerFluid`].
+impl<Model, Fluid: MarkerFluid> StateFrom<Fluid, (ThermodynamicTemperature, MassDensity)>
+    for Model
+{
     type Error = Infallible;
 
     fn state_from(

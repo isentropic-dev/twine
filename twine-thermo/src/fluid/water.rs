@@ -7,8 +7,12 @@ use uom::si::{
 
 use crate::model::incompressible::IncompressibleFluid;
 
+use super::MarkerFluid;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Water;
+
+impl MarkerFluid for Water {}
 
 /// Standard properties for incompressible water.
 ///
