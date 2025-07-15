@@ -10,7 +10,7 @@ use uom::{
 
 use crate::{
     PropertyError, State,
-    fluid::MarkerFluid,
+    fluid::Stateless,
     units::{
         SpecificEnthalpy, SpecificEntropy, SpecificGasConstant, SpecificInternalEnergy,
         TemperatureDifference,
@@ -185,8 +185,8 @@ impl<F: IdealGasFluid> ThermodynamicProperties<F> for IdealGas {
     }
 }
 
-/// Enables state creation from temperature and pressure for any [`MarkerFluid`].
-impl<F: IdealGasFluid + MarkerFluid> StateFrom<F, (ThermodynamicTemperature, Pressure)>
+/// Enables state creation from temperature and pressure for any [`Stateless`] fluid.
+impl<F: IdealGasFluid + Stateless> StateFrom<F, (ThermodynamicTemperature, Pressure)>
     for IdealGas
 {
     type Error = Infallible;
@@ -206,8 +206,8 @@ impl<F: IdealGasFluid + MarkerFluid> StateFrom<F, (ThermodynamicTemperature, Pre
     }
 }
 
-/// Enables state creation from pressure and density for any [`MarkerFluid`].
-impl<F: IdealGasFluid + MarkerFluid> StateFrom<F, (Pressure, MassDensity)> for IdealGas {
+/// Enables state creation from pressure and density for any [`Stateless`] fluid.
+impl<F: IdealGasFluid + Stateless> StateFrom<F, (Pressure, MassDensity)> for IdealGas {
     type Error = Infallible;
 
     fn state_from(
@@ -240,7 +240,7 @@ mod tests {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
     struct MockGas;
 
-    impl MarkerFluid for MockGas {}
+    impl Stateless for MockGas {}
 
     impl IdealGasFluid for MockGas {
         fn gas_constant(&self) -> SpecificGasConstant {

@@ -7,12 +7,12 @@ use uom::si::{
 
 use crate::{model::ideal_gas::IdealGasFluid, units::SpecificGasConstant};
 
-use super::MarkerFluid;
+use super::Stateless;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Air;
 
-impl MarkerFluid for Air {}
+impl Stateless for Air {}
 
 /// Standard ideal gas properties for dry air.
 ///

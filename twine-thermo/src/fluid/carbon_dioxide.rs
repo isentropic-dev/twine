@@ -7,12 +7,12 @@ use uom::si::{
 
 use crate::{model::ideal_gas::IdealGasFluid, units::SpecificGasConstant};
 
-use super::MarkerFluid;
+use super::Stateless;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct CarbonDioxide;
 
-impl MarkerFluid for CarbonDioxide {}
+impl Stateless for CarbonDioxide {}
 
 /// Standard ideal gas properties for carbon dioxide.
 ///
