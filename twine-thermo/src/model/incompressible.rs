@@ -127,9 +127,9 @@ impl<F: IncompressibleFluid> ThermodynamicProperties<F> for Incompressible {
     }
 }
 
-/// Enables state creation from temperature alonefor any [`MarkerFluid`].
+/// Enables state creation from temperature alone for any [`MarkerFluid`].
 ///
-/// The returned state uses the fluid’s reference density.
+/// The returned state uses the fluid's reference density.
 impl<F: IncompressibleFluid + MarkerFluid> StateFrom<F, ThermodynamicTemperature>
     for Incompressible
 {
