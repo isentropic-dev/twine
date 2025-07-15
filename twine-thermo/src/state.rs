@@ -1,6 +1,6 @@
 use uom::si::f64::{MassDensity, ThermodynamicTemperature};
 
-/// Represents the thermodynamic state of a fluid.
+/// The thermodynamic state of a fluid.
 ///
 /// A `State<Fluid>` captures the thermodynamic state of a specific fluid,
 /// including its temperature, density, and any fluid-specific data.
