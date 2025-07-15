@@ -10,6 +10,7 @@ use uom::{
 
 use crate::{
     PropertyError, State,
+    fluid::Stateless,
     units::{
         SpecificEnthalpy, SpecificEntropy, SpecificGasConstant, SpecificInternalEnergy,
         TemperatureDifference,
@@ -88,7 +89,7 @@ impl IdealGas {
     pub fn reference_state<F: IdealGasFluid>(fluid: F) -> State<F> {
         let temperature = fluid.reference_temperature();
         let pressure = fluid.reference_pressure();
-        let density = pressure / (fluid.gas_constant() * temperature);
+        let density = IdealGas::density(temperature, pressure, fluid.gas_constant());
 
         State {
             temperature,
@@ -184,8 +185,10 @@ impl<F: IdealGasFluid> ThermodynamicProperties<F> for IdealGas {
     }
 }
 
-/// Enables creating ideal gas states from temperature and pressure pairs.
-impl<F: IdealGasFluid + Default> StateFrom<F, (ThermodynamicTemperature, Pressure)> for IdealGas {
+/// Enables state creation from temperature and pressure for any [`Stateless`] fluid.
+impl<F: IdealGasFluid + Stateless> StateFrom<F, (ThermodynamicTemperature, Pressure)>
+    for IdealGas
+{
     type Error = Infallible;
 
     fn state_from(
@@ -203,8 +206,8 @@ impl<F: IdealGasFluid + Default> StateFrom<F, (ThermodynamicTemperature, Pressur
     }
 }
 
-/// Enables creating ideal gas states from pressure and density pairs.
-impl<F: IdealGasFluid + Default> StateFrom<F, (Pressure, MassDensity)> for IdealGas {
+/// Enables state creation from pressure and density for any [`Stateless`] fluid.
+impl<F: IdealGasFluid + Stateless> StateFrom<F, (Pressure, MassDensity)> for IdealGas {
     type Error = Infallible;
 
     fn state_from(
@@ -236,6 +239,8 @@ mod tests {
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
     struct MockGas;
+
+    impl Stateless for MockGas {}
 
     impl IdealGasFluid for MockGas {
         fn gas_constant(&self) -> SpecificGasConstant {

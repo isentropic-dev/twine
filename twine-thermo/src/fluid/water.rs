@@ -7,8 +7,12 @@ use uom::si::{
 
 use crate::model::incompressible::IncompressibleFluid;
 
+use super::Stateless;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Water;
+
+impl Stateless for Water {}
 
 /// Standard properties for incompressible water.
 ///

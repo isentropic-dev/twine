@@ -7,6 +7,7 @@ use uom::{
 
 use crate::{
     PropertyError, State,
+    fluid::Stateless,
     units::{SpecificEnthalpy, SpecificEntropy, SpecificInternalEnergy, TemperatureDifference},
 };
 
@@ -126,8 +127,12 @@ impl<F: IncompressibleFluid> ThermodynamicProperties<F> for Incompressible {
     }
 }
 
-/// Enables creating incompressible fluid states from temperature alone (uses reference density).
-impl<F: IncompressibleFluid + Default> StateFrom<F, ThermodynamicTemperature> for Incompressible {
+/// Enables state creation from temperature alone for any [`Stateless`] fluid.
+///
+/// The returned state uses the fluid's reference density.
+impl<F: IncompressibleFluid + Stateless> StateFrom<F, ThermodynamicTemperature>
+    for Incompressible
+{
     type Error = Infallible;
 
     fn state_from(&self, temperature: ThermodynamicTemperature) -> Result<State<F>, Self::Error> {
@@ -154,10 +159,12 @@ mod tests {
         thermodynamic_temperature::degree_celsius,
     };
 
-    use crate::units::TemperatureDifference;
+    use crate::{fluid::Stateless, units::TemperatureDifference};
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
     struct MockLiquid;
+
+    impl Stateless for MockLiquid {}
 
     impl IncompressibleFluid for MockLiquid {
         fn specific_heat(&self) -> SpecificHeatCapacity {
