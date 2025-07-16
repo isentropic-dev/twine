@@ -1,14 +1,15 @@
 use std::{
+    fmt::Debug,
     ops::{Add, Div, Mul},
     time::Duration,
 };
 
 use uom::si::{f64::Time, time::second};
 
-/// A trait for types that can be differentiated with respect to time.
+/// A trait for time-differentiable types that support finite time stepping.
 ///
-/// This trait marks types that have a well-defined time derivative and support
-/// applying time-based changes using standard arithmetic operations.
+/// This trait represents types that have a well-defined time derivative and
+/// support integration over a time step using standard arithmetic operations.
 /// It is primarily intended for unit-aware physical quantities, such as those
 /// defined using the `uom` crate.
 ///
@@ -19,63 +20,68 @@ use uom::si::{f64::Time, time::second};
 /// You do not need to implement this trait directly.
 /// It is implemented automatically for any type that satisfies the following bounds:
 ///
-/// - `T: Div<Time, Output = Derivative>`: Defines the derivative as `T / Time`.
-/// - `Derivative: Mul<Time, Output = Delta>`: Defines the delta as `Derivative * Time`.
-/// - `T: Add<Delta, Output = T>`: Defines how to apply a delta to the original `T`.
+/// - `T: Div<Time, Output = Derivative>`: Defines the derivative as `T / Time`
+/// - `Derivative: Mul<Time, Output = Delta>`: Defines the delta as `Derivative * Time`
+/// - `T: Add<Delta, Output = T>`: Enables applying a delta to produce an updated value
+/// - `T`, `Derivative`, and `Delta` implement `Debug`, `Clone`, and `PartialEq`
 ///
 /// # Example
 ///
-/// To make a struct `State` compatible with `TimeDifferentiable`, implement the
-/// required operations using types that represent its derivative and delta:
+/// To make a struct `MyState` compatible with `TimeDifferentiable`, provide
+/// implementations of the required operations for it and the associated
+/// `Derivative` and `Delta` types:
 ///
 /// ```
 /// use std::ops::{Add, Div, Mul};
 ///
 /// use twine_core::TimeDerivative;
-/// use uom::si::f64::*;
+/// use uom::si::f64::{MassDensity, TemperatureInterval, ThermodynamicTemperature, Time};
 ///
-/// struct State {
+/// #[derive(Debug, Clone, PartialEq)]
+/// struct MyState {
 ///     temperature: ThermodynamicTemperature,
 ///     density: MassDensity,
 /// }
 ///
-/// struct StateDerivative {
+/// #[derive(Debug, Clone, PartialEq)]
+/// struct MyStateDerivative {
 ///     temperature: TimeDerivative<ThermodynamicTemperature>,
 ///     density: TimeDerivative<MassDensity>,
 /// }
 ///
-/// struct StateDelta {
+/// #[derive(Debug, Clone, PartialEq)]
+/// struct MyStateDelta {
 ///     temperature: TemperatureInterval,
 ///     density: MassDensity,
 /// }
 ///
-/// impl Div<Time> for State {
-///     type Output = StateDerivative;
+/// impl Div<Time> for MyState {
+///     type Output = MyStateDerivative;
 ///
 ///     fn div(self, rhs: Time) -> Self::Output {
-///         StateDerivative {
+///         Self::Output {
 ///             temperature: self.temperature / rhs,
 ///             density: self.density / rhs,
 ///         }
 ///     }
 /// }
 ///
-/// impl Mul<Time> for StateDerivative {
-///     type Output = StateDelta;
+/// impl Mul<Time> for MyStateDerivative {
+///     type Output = MyStateDelta;
 ///
 ///     fn mul(self, rhs: Time) -> Self::Output {
-///         StateDelta {
+///         Self::Output {
 ///             temperature: self.temperature * rhs,
 ///             density: self.density * rhs,
 ///         }
 ///     }
 /// }
 ///
-/// impl Add<StateDelta> for State {
-///     type Output = State;
+/// impl Add<MyStateDelta> for MyState {
+///     type Output = Self;
 ///
-///     fn add(self, rhs: StateDelta) -> Self::Output {
-///         State {
+///     fn add(self, rhs: MyStateDelta) -> Self::Output {
+///         Self::Output {
 ///             temperature: self.temperature + rhs.temperature,
 ///             density: self.density + rhs.density,
 ///         }
@@ -83,23 +89,22 @@ use uom::si::{f64::Time, time::second};
 /// }
 /// ```
 ///
-/// With these implementations, `State` now satisfies `TimeDifferentiable`.
-pub trait TimeDifferentiable
-where
-    Self: Div<Time, Output = Self::Derivative> + Add<Self::Delta, Output = Self>,
-    Self::Derivative: Mul<Time, Output = Self::Delta>,
+/// With these implementations, `MyState` now satisfies `TimeDifferentiable`.
+pub trait TimeDifferentiable:
+    Debug + Clone + PartialEq + Div<Time, Output = Self::Derivative> + Add<Self::Delta, Output = Self>
 {
-    type Derivative;
-    type Delta;
+    type Derivative: Debug + Clone + PartialEq + Mul<Time, Output = Self::Delta>;
+    type Delta: Debug + Clone + PartialEq;
 }
 
-impl<T> TimeDifferentiable for T
+impl<T, Derivative, Delta> TimeDifferentiable for T
 where
-    T: Div<Time> + Add<<<T as Div<Time>>::Output as Mul<Time>>::Output, Output = T>,
-    <T as Div<Time>>::Output: Mul<Time>,
+    T: Debug + Clone + PartialEq + Div<Time, Output = Derivative> + Add<Delta, Output = T>,
+    Derivative: Debug + Clone + PartialEq + Mul<Time, Output = Delta>,
+    Delta: Debug + Clone + PartialEq,
 {
-    type Derivative = <T as Div<Time>>::Output;
-    type Delta = <Self::Derivative as Mul<Time>>::Output;
+    type Derivative = Derivative;
+    type Delta = Delta;
 }
 
 /// The time derivative of a `TimeDifferentiable` quantity `T`.
