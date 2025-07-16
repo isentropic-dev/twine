@@ -10,4 +10,4 @@ pub mod units;
 
 pub use error::PropertyError;
 pub use flow::Flow;
-pub use state::State;
+pub use state::{State, StateDerivative};
