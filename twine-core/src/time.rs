@@ -20,7 +20,7 @@ use uom::si::{f64::Time, time::second};
 /// - `T: Div<Time, Output = Derivative>`: Defines the derivative as `T / Time`
 /// - `Derivative: Mul<Time, Output = Delta>`: Defines the delta as `Derivative * Time`
 /// - `T: Add<Delta, Output = T>`: Enables applying a delta to produce an updated value
-/// - `T`, `Derivative`, and `Delta` implement `Debug`, `Clone`, and `PartialEq`
+/// - `T` and `Derivative` implement `Debug`, `Clone`, and `PartialEq`
 ///
 /// For such types, which include all `uom` quantities,
 /// integration is performed using a forward Euler step:
