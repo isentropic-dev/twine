@@ -15,11 +15,12 @@ use uom::si::{f64::Time, time::second};
 /// such as those provided by the [`uom`] crate.
 ///
 /// It imposes no operator bounds directly. However, it is automatically
-/// implemented for any type that satisfies the following bounds:
+/// implemented for any type `T` that satisfies the following bounds:
 ///
-/// - `Self: Div<Time, Output = Derivative>`
-/// - `Derivative: Mul<Time, Output = Delta>`
-/// - `Self: Add<Delta, Output = Self>`
+/// - `T: Div<Time, Output = Derivative>`: Defines the derivative as `T / Time`
+/// - `Derivative: Mul<Time, Output = Delta>`: Defines the delta as `Derivative * Time`
+/// - `T: Add<Delta, Output = T>`: Enables applying a delta to produce an updated value
+/// - `T`, `Derivative`, and `Delta` implement `Debug`, `Clone`, and `PartialEq`
 ///
 /// For such types, which include all `uom` quantities,
 /// integration is performed using a forward Euler step:
