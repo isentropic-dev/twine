@@ -297,10 +297,10 @@ pub fn derive_time_integrable(input: TokenStream) -> TokenStream {
 /// ### Expanded
 ///
 /// ```ignore
-/// #[derive(Debug, Clone, PartialEq)]
+/// #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 /// struct ConfigurationTimeDerivative;
 ///
-/// #[derive(Debug, Clone, PartialEq)]
+/// #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 /// struct ConfigurationTimeDelta;
 ///
 /// impl Div<Time> for Configuration {

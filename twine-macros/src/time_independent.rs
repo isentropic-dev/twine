@@ -57,7 +57,7 @@ impl Parsed {
         let vis = &self.vis;
 
         quote! {
-            #[derive(Debug, Clone, PartialEq)]
+            #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
             #vis struct #derivative_struct_name #generics;
         }
     }
@@ -69,7 +69,7 @@ impl Parsed {
         let vis = &self.vis;
 
         quote! {
-            #[derive(Debug, Clone, PartialEq)]
+            #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
             #vis struct #delta_struct_name #generics;
         }
     }
@@ -144,10 +144,10 @@ mod tests {
         let generated_code = parsed.expand();
 
         let expected_code = quote! {
-            #[derive(Debug, Clone, PartialEq)]
+            #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
             struct MyStateTimeDerivative;
 
-            #[derive(Debug, Clone, PartialEq)]
+            #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
             struct MyStateTimeDelta;
 
             impl std::ops::Div<uom::si::f64::Time> for MyState {
@@ -186,10 +186,10 @@ mod tests {
         let generated_code = parsed.expand();
 
         let expected_code = quote! {
-            #[derive(Debug, Clone, PartialEq)]
+            #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
             struct TupleStateTimeDerivative;
 
-            #[derive(Debug, Clone, PartialEq)]
+            #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
             struct TupleStateTimeDelta;
 
             impl std::ops::Div<uom::si::f64::Time> for TupleState {
@@ -228,10 +228,10 @@ mod tests {
         let generated_code = parsed.expand();
 
         let expected_code = quote! {
-            #[derive(Debug, Clone, PartialEq)]
+            #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
             struct GenericStateTimeDerivative<T>;
 
-            #[derive(Debug, Clone, PartialEq)]
+            #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
             struct GenericStateTimeDelta<T>;
 
             impl<T> std::ops::Div<uom::si::f64::Time> for GenericState<T> {
@@ -270,10 +270,10 @@ mod tests {
         let generated_code = parsed.expand();
 
         let expected_code = quote! {
-            #[derive(Debug, Clone, PartialEq)]
+            #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
             struct UnitStateTimeDerivative;
 
-            #[derive(Debug, Clone, PartialEq)]
+            #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
             struct UnitStateTimeDelta;
 
             impl std::ops::Div<uom::si::f64::Time> for UnitState {
@@ -312,10 +312,10 @@ mod tests {
         let generated_code = parsed.expand();
 
         let expected_code = quote! {
-            #[derive(Debug, Clone, PartialEq)]
+            #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
             struct MyEnumTimeDerivative;
 
-            #[derive(Debug, Clone, PartialEq)]
+            #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
             struct MyEnumTimeDelta;
 
             impl std::ops::Div<uom::si::f64::Time> for MyEnum {
@@ -354,10 +354,10 @@ mod tests {
         let generated_code = parsed.expand();
 
         let expected_code = quote! {
-            #[derive(Debug, Clone, PartialEq)]
+            #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
             struct ResultTimeDerivative<T, E>;
 
-            #[derive(Debug, Clone, PartialEq)]
+            #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
             struct ResultTimeDelta<T, E>;
 
             impl<T, E> std::ops::Div<uom::si::f64::Time> for Result<T, E> {
@@ -396,10 +396,10 @@ mod tests {
         let generated_code = parsed.expand();
 
         let expected_code = quote! {
-            #[derive(Debug, Clone, PartialEq)]
+            #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
             pub struct PublicStateTimeDerivative;
 
-            #[derive(Debug, Clone, PartialEq)]
+            #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
             pub struct PublicStateTimeDelta;
 
             impl std::ops::Div<uom::si::f64::Time> for PublicState {
