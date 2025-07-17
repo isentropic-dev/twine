@@ -21,8 +21,7 @@
 //! Mass and energy conservation laws, together with additional physical
 //! constraints, determine which variables are solved for in a given scenario:
 //!
-//! - **Fixed Flow:** All inflow and outflow rates are specified,
-//!   and the system's state evolves accordingly.
+//! - **Fixed Flow:** All inflow and outflow rates are specified.
 //! - **Constant Pressure:** One or more system variables are adjusted as needed
 //!   to maintain constant pressure.
 //! - *(Planned: Constant Density, Variable Volume, etc.)*
