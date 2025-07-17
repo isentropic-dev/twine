@@ -62,7 +62,7 @@ pub trait ControlVolumeFixedFlow<Fluid: TimeDifferentiable> {
     /// # Errors
     ///
     /// Returns a [`PropertyError`] if the state derivative cannot be computed.
-    fn state_derivative_at_fixed_outflow(
+    fn state_derivative(
         &self,
         volume: Constrained<Volume, StrictlyPositive>,
         state: &State<Fluid>,
@@ -91,7 +91,7 @@ pub trait ControlVolumeConstantPressure<Fluid: TimeDifferentiable> {
     /// # Errors
     ///
     /// Returns a [`PropertyError`] if the state derivative cannot be computed.
-    fn state_derivative_at_constant_pressure(
+    fn state_derivative_and_outflow(
         &self,
         volume: Constrained<Volume, StrictlyPositive>,
         state: &State<Fluid>,
