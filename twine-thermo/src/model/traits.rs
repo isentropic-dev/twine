@@ -1,8 +1,10 @@
+mod control_volume_dynamics;
 mod flow_operations;
 mod state_from;
 mod state_operations;
 mod thermodynamic_properties;
 
+pub use control_volume_dynamics::ControlVolumeDynamics;
 pub use flow_operations::FlowOperations;
 pub use state_from::StateFrom;
 pub use state_operations::StateOperations;
