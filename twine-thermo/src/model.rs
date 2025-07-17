@@ -4,5 +4,6 @@ pub mod ideal_gas;
 pub mod incompressible;
 
 pub use traits::{
-    ControlVolumeDynamics, FlowOperations, StateFrom, StateOperations, ThermodynamicProperties,
+    ControlVolumeConstantPressure, ControlVolumeDynamics, ControlVolumeFixedFlow, FlowOperations,
+    StateFrom, StateOperations, ThermodynamicProperties,
 };
