@@ -1,5 +1,6 @@
 mod composable;
 mod compose;
+mod time_independent;
 mod time_integrable;
 mod utils;
 
@@ -255,5 +256,82 @@ pub fn compose(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_derive(TimeIntegrable)]
 pub fn derive_time_integrable(input: TokenStream) -> TokenStream {
     let parsed = parse_macro_input!(input as time_integrable::Parsed);
+    parsed.expand().into()
+}
+
+/// Makes time-independent types compatible with `TimeDifferentiable`.
+///
+/// This macro implements the required [`uom::si::f64::Time`]-related operations
+/// (`Div`, `Mul`, `Add`) as no-ops for types that don't actually change over time.
+///
+/// When applied to a type, this macro:
+///
+/// - Generates zero-sized derivative and delta types:
+///   - `{TypeName}TimeDerivative`
+///   - `{TypeName}TimeDelta`
+/// - Implements `Div<Time>` that returns the derivative type
+/// - Implements `Mul<Time>` on the derivative that returns the delta type
+/// - Implements `Add<Delta>` that returns the original type unchanged
+///
+/// ## Supported Types
+///
+/// - Named structs: `struct MyState { field: Type }`
+/// - Tuple structs: `struct MyState(Type1, Type2)`
+/// - Unit structs: `struct MyState;`
+/// - Generic structs: `struct MyState<T> { field: T }`
+/// - Enums: `enum Status { Active, Inactive }`
+/// - Generic enums: `enum Result<T, E> { Ok(T), Err(E) }`
+///
+/// ## Example
+///
+/// ### Input
+///
+/// ```ignore
+/// #[derive(TimeIndependent)]
+/// struct Configuration {
+///     setting: bool,
+///     value: f64,
+/// }
+/// ```
+///
+/// ### Expanded
+///
+/// ```ignore
+/// #[derive(Debug, Clone, PartialEq)]
+/// struct ConfigurationTimeDerivative;
+///
+/// #[derive(Debug, Clone, PartialEq)]
+/// struct ConfigurationTimeDelta;
+///
+/// impl Div<Time> for Configuration {
+///     type Output = ConfigurationTimeDerivative;
+///
+///     fn div(self, _rhs: Time) -> Self::Output {
+///         ConfigurationTimeDerivative
+///     }
+/// }
+///
+/// impl Mul<Time> for ConfigurationTimeDerivative {
+///     type Output = ConfigurationTimeDelta;
+///
+///     fn mul(self, _rhs: Time) -> Self::Output {
+///         ConfigurationTimeDelta
+///     }
+/// }
+///
+/// impl Add<ConfigurationTimeDelta> for Configuration {
+///     type Output = Self;
+///
+///     fn add(self, _rhs: ConfigurationTimeDelta) -> Self::Output {
+///         self
+///     }
+/// }
+/// ```
+///
+/// This makes `Configuration` compatible with `TimeDifferentiable` while ensuring
+/// that time integration operations don't actually modify the struct.
+#[proc_macro_derive(TimeIndependent)]
+pub fn derive_time_independent(input: TokenStream) -> TokenStream {
+    let parsed = parse_macro_input!(input as time_independent::Parsed);
     parsed.expand().into()
 }
