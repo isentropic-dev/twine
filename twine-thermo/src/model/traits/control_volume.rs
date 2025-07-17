@@ -9,7 +9,7 @@
 //! All traits in this module assume:
 //!
 //! - The control volume has fixed geometry and size.
-//! - The internal fluid state is spatially uniform.
+//! - The internal fluid state is spatially uniform (well mixed).
 //! - Outflow exits at the current internal state.
 //! - Heat and work are specified as net energy transfer rates.
 //! - Kinetic and potential energy changes are negligible.
