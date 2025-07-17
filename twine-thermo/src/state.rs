@@ -1,3 +1,4 @@
+use twine_core::{TimeDerivative, TimeDifferentiable};
 use uom::si::f64::{MassDensity, ThermodynamicTemperature};
 
 /// The thermodynamic state of a fluid.
@@ -33,6 +34,18 @@ pub struct State<Fluid> {
     pub temperature: ThermodynamicTemperature,
     pub density: MassDensity,
     pub fluid: Fluid,
+}
+
+/// The time derivative of a fluid's thermodynamic state.
+///
+/// A `StateDerivative<Fluid>` represents the instantaneous rate of change of a
+/// thermodynamic state, including the time derivatives of temperature, density,
+/// and any fluid-specific data that varies over time.
+#[derive(Debug, Clone, PartialEq)]
+pub struct StateDerivative<Fluid: TimeDifferentiable> {
+    pub temperature: TimeDerivative<ThermodynamicTemperature>,
+    pub density: TimeDerivative<MassDensity>,
+    pub fluid: TimeDerivative<Fluid>,
 }
 
 impl<Fluid> State<Fluid> {
