@@ -12,13 +12,13 @@ use crate::State;
 /// flow has a single, well-defined direction.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Flow<Fluid> {
-    pub mass_flow: Constrained<MassRate, NonNegative>,
+    pub mass_rate: Constrained<MassRate, NonNegative>,
     pub state: State<Fluid>,
 }
 
 impl<Fluid> Flow<Fluid> {
     /// Creates a new `Flow` from a mass flow rate and thermodynamic state.
-    pub fn new(mass_flow: Constrained<MassRate, NonNegative>, state: State<Fluid>) -> Self {
-        Self { mass_flow, state }
+    pub fn new(mass_rate: Constrained<MassRate, NonNegative>, state: State<Fluid>) -> Self {
+        Self { mass_rate, state }
     }
 }
