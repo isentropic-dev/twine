@@ -210,7 +210,7 @@ where
     ) -> Result<StateDerivative<F>, PropertyError> {
         let vol = volume.into_inner();
         let mass = vol * state.density;
-        let cv = self.cv(state).expect("Infallible for IdealGas");
+        let cv = self.cv(state)?;
 
         // Incoming flow
         let (m_dot_in, q_dot_in) = inflows.iter().fold(
@@ -225,7 +225,7 @@ where
 
         // Outgoing flow
         let m_dot_out = outflow.into_inner();
-        let q_dot_out = m_dot_out * self.enthalpy(state).expect("Infallible for IdealGas");
+        let q_dot_out = m_dot_out * self.enthalpy(state)?;
 
         // Mass balance
         let dens_dt = (m_dot_in - m_dot_out) / vol;
@@ -464,7 +464,7 @@ mod tests {
         assert_relative_eq!(current_pressure.get::<kilopascal>(), 120.0);
 
         // Evolve state by 1 second using the computed derivatives.
-        let future_state = state.step(derivative.clone(), Time::new::<second>(1.0));
+        let future_state = state.step(derivative, Time::new::<second>(1.0));
         assert_relative_eq!(future_state.density.get::<kilogram_per_cubic_meter>(), 0.9);
         assert_relative_eq!(future_state.temperature.get::<kelvin>(), 295.525);
 
