@@ -1,5 +1,6 @@
+use twine_core::TimeIntegrable;
 use uom::si::{
-    f64::{Pressure, SpecificHeatCapacity, ThermodynamicTemperature},
+    f64::{Pressure, SpecificHeatCapacity, ThermodynamicTemperature, Time},
     pressure::atmosphere,
     specific_heat_capacity::joule_per_kilogram_kelvin,
     thermodynamic_temperature::degree_celsius,
@@ -11,6 +12,14 @@ use super::Stateless;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Air;
+
+impl TimeIntegrable for Air {
+    type Derivative = ();
+
+    fn step(self, _derivative: Self::Derivative, _dt: Time) -> Self {
+        self
+    }
+}
 
 impl Stateless for Air {}
 
