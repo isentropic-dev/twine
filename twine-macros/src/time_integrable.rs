@@ -1,7 +1,7 @@
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{
-    Error, Fields, FieldsNamed, Ident, ItemStruct, Result,
+    Error, Fields, FieldsNamed, Generics, Ident, ItemStruct, Result, Visibility,
     parse::{Parse, ParseStream},
 };
 
@@ -9,7 +9,9 @@ use crate::utils::IdentExt;
 
 #[derive(Debug)]
 pub(crate) struct Parsed {
+    vis: Visibility,
     ident: Ident,
+    generics: Generics,
     fields: FieldsNamed,
 }
 
@@ -17,18 +19,12 @@ impl Parse for Parsed {
     /// Parses a struct definition and validates constraints.
     fn parse(input: ParseStream) -> Result<Self> {
         let ItemStruct {
+            vis,
             ident,
             generics,
             fields,
             ..
         } = input.parse()?;
-
-        if !generics.params.is_empty() {
-            return Err(Error::new_spanned(
-                generics,
-                "Generic parameters are not allowed. Remove them to use this macro.",
-            ));
-        }
 
         let Fields::Named(fields) = fields else {
             return Err(Error::new_spanned(
@@ -37,7 +33,12 @@ impl Parse for Parsed {
             ));
         };
 
-        Ok(Parsed { ident, fields })
+        Ok(Parsed {
+            vis,
+            ident,
+            generics,
+            fields,
+        })
     }
 }
 
@@ -45,75 +46,47 @@ impl Parsed {
     /// Generates the full token stream for the macro expansion.
     pub fn expand(self) -> TokenStream {
         let derivatives_struct = self.generate_derivatives_struct();
-        let div_impl = self.generate_div_impl();
         let time_integrable_impl = self.generate_time_integrable_impl();
 
         quote! {
             #derivatives_struct
-            #div_impl
             #time_integrable_impl
         }
     }
 
-    /// Generates a derivatives struct with `TimeDerivativeOf<T>` for each field.
+    /// Generates a derivatives struct with `TimeDerivative<T>` for each field,
+    /// using the same field names as the original struct.
     fn generate_derivatives_struct(&self) -> TokenStream {
-        let deriv_struct_name = self.ident.with_suffix("Dt");
+        let vis = &self.vis;
+        let deriv_struct_name = self.ident.with_suffix("TimeDerivative");
+        let (impl_generics, _ty_generics, where_clause) = self.generics.split_for_impl();
 
         let derivative_fields: Vec<_> = self
             .fields
             .named
             .iter()
             .map(|field| {
-                let field_name = field.ident.as_ref().unwrap().with_suffix("_dt");
+                let field_name = field.ident.as_ref().unwrap();
                 let field_type = &field.ty;
                 quote! {
-                    #field_name: twine_core::TimeDerivativeOf<#field_type>
+                    #field_name: twine_core::TimeDerivative<#field_type>
                 }
             })
             .collect();
 
         quote! {
-            struct #deriv_struct_name {
+            #[derive(Debug, Clone, PartialEq)]
+            #vis struct #deriv_struct_name #impl_generics #where_clause {
                 #(#derivative_fields),*
             }
         }
     }
 
-    /// Generates the `Div<Time>` implementation for the original struct.
-    fn generate_div_impl(&self) -> TokenStream {
-        let struct_name = &self.ident;
-        let deriv_struct_name = self.ident.with_suffix("Dt");
-
-        let derivative_assignments: Vec<_> = self
-            .fields
-            .named
-            .iter()
-            .map(|field| {
-                let field_name = field.ident.as_ref().unwrap();
-                let derivative_name = field_name.with_suffix("_dt");
-                quote! {
-                    #derivative_name: self.#field_name / rhs
-                }
-            })
-            .collect();
-
-        quote! {
-            impl std::ops::Div<uom::si::f64::Time> for #struct_name {
-                type Output = #deriv_struct_name;
-
-                fn div(self, rhs: uom::si::f64::Time) -> Self::Output {
-                    Self::Output {
-                        #(#derivative_assignments),*
-                    }
-                }
-            }
-        }
-    }
-
-    /// Generates the `TimeIntegrable` implementation for the original struct.
+    /// Generates the `TimeIntegrable` implementation.
     fn generate_time_integrable_impl(&self) -> TokenStream {
         let struct_name = &self.ident;
-        let deriv_struct_name = self.ident.with_suffix("Dt");
+        let deriv_struct_name = self.ident.with_suffix("TimeDerivative");
+        let (impl_generics, ty_generics, where_clause) = self.generics.split_for_impl();
 
         let step_assignments: Vec<_> = self
             .fields
@@ -121,16 +94,17 @@ impl Parsed {
             .iter()
             .map(|field| {
                 let field_name = field.ident.as_ref().unwrap();
-                let derivative_name = field_name.with_suffix("_dt");
                 quote! {
-                    #field_name: self.#field_name + derivative.#derivative_name * dt
+                    #field_name: self.#field_name.step(derivative.#field_name, dt)
                 }
             })
             .collect();
 
         quote! {
-            impl twine_core::TimeIntegrable for #struct_name {
-                fn step_by_time(self, derivative: #deriv_struct_name, dt: uom::si::f64::Time) -> Self {
+            impl #impl_generics twine_core::TimeIntegrable for #struct_name #ty_generics #where_clause {
+                type Derivative = #deriv_struct_name #ty_generics;
+
+                fn step(self, derivative: Self::Derivative, dt: uom::si::f64::Time) -> Self {
                     Self {
                         #(#step_assignments),*
                     }
@@ -148,7 +122,7 @@ mod tests {
     #[test]
     fn generates_correct_code() {
         let input = "
-            struct StateVariables {
+            pub struct StateVariables {
                 t_first_tank: ThermodynamicTemperature,
                 t_second_tank: ThermodynamicTemperature,
             }
@@ -158,27 +132,19 @@ mod tests {
         let generated_code = parsed.expand();
 
         let expected_code = quote! {
-            struct StateVariablesDt {
-                t_first_tank_dt: twine_core::TimeDerivativeOf<ThermodynamicTemperature>,
-                t_second_tank_dt: twine_core::TimeDerivativeOf<ThermodynamicTemperature>
-            }
-
-            impl std::ops::Div<uom::si::f64::Time> for StateVariables {
-                type Output = StateVariablesDt;
-
-                fn div(self, rhs: uom::si::f64::Time) -> Self::Output {
-                    Self::Output {
-                        t_first_tank_dt: self.t_first_tank / rhs,
-                        t_second_tank_dt: self.t_second_tank / rhs
-                    }
-                }
+            #[derive(Debug, Clone, PartialEq)]
+            pub struct StateVariablesTimeDerivative {
+                t_first_tank: twine_core::TimeDerivative<ThermodynamicTemperature>,
+                t_second_tank: twine_core::TimeDerivative<ThermodynamicTemperature>
             }
 
             impl twine_core::TimeIntegrable for StateVariables {
-                fn step_by_time(self, derivative: StateVariablesDt, dt: uom::si::f64::Time) -> Self {
+                type Derivative = StateVariablesTimeDerivative;
+
+                fn step(self, derivative: Self::Derivative, dt: uom::si::f64::Time) -> Self {
                     Self {
-                        t_first_tank: self.t_first_tank + derivative.t_first_tank_dt * dt,
-                        t_second_tank: self.t_second_tank + derivative.t_second_tank_dt * dt
+                        t_first_tank: self.t_first_tank.step(derivative.t_first_tank, dt),
+                        t_second_tank: self.t_second_tank.step(derivative.t_second_tank, dt)
                     }
                 }
             }
@@ -188,19 +154,40 @@ mod tests {
     }
 
     #[test]
-    fn error_if_generics_are_present() {
-        let error_message = parse_str::<Parsed>(
-            "struct StateWithGenerics<T> {
-                value: T,
-            }",
-        )
-        .unwrap_err()
-        .to_string();
+    fn supports_generics() {
+        let input = "
+            pub(crate) struct State<Fluid: TimeIntegrable> {
+                temperature: ThermodynamicTemperature,
+                density: MassDensity,
+                fluid: Fluid,
+            }
+        ";
 
-        assert_eq!(
-            error_message,
-            "Generic parameters are not allowed. Remove them to use this macro."
-        );
+        let parsed = parse_str::<Parsed>(input).expect("Parsing should succeed");
+        let generated_code = parsed.expand();
+
+        let expected_code = quote! {
+            #[derive(Debug, Clone, PartialEq)]
+            pub(crate) struct StateTimeDerivative<Fluid: TimeIntegrable> {
+                temperature: twine_core::TimeDerivative<ThermodynamicTemperature>,
+                density: twine_core::TimeDerivative<MassDensity>,
+                fluid: twine_core::TimeDerivative<Fluid>
+            }
+
+            impl<Fluid: TimeIntegrable> twine_core::TimeIntegrable for State<Fluid> {
+                type Derivative = StateTimeDerivative<Fluid>;
+
+                fn step(self, derivative: Self::Derivative, dt: uom::si::f64::Time) -> Self {
+                    Self {
+                        temperature: self.temperature.step(derivative.temperature, dt),
+                        density: self.density.step(derivative.density, dt),
+                        fluid: self.fluid.step(derivative.fluid, dt)
+                    }
+                }
+            }
+        };
+
+        assert_eq!(generated_code.to_string(), expected_code.to_string());
     }
 
     #[test]

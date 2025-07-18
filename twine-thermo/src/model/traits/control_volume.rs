@@ -36,7 +36,7 @@
 //! system's physical assumptions and requirements.
 
 use twine_core::{
-    TimeDifferentiable,
+    TimeIntegrable,
     constraint::{Constrained, NonNegative, StrictlyPositive},
 };
 use uom::si::f64::{MassRate, Power, Volume};
@@ -47,7 +47,7 @@ use crate::{Flow, PropertyError, State, StateDerivative};
 ///
 /// This trait applies to scenarios where all mass flow rates into and out of
 /// the control volume are known.
-pub trait ControlVolumeFixedFlow<Fluid: TimeDifferentiable> {
+pub trait ControlVolumeFixedFlow<Fluid: TimeIntegrable> {
     /// Returns the time derivative of the state.
     ///
     /// # Parameters
@@ -77,7 +77,7 @@ pub trait ControlVolumeFixedFlow<Fluid: TimeDifferentiable> {
 ///
 /// This trait applies to scenarios where system variables are adjusted as
 /// needed to maintain constant pressure in the control volume.
-pub trait ControlVolumeConstantPressure<Fluid: TimeDifferentiable> {
+pub trait ControlVolumeConstantPressure<Fluid: TimeIntegrable> {
     /// Returns the time derivative of the state and the required outflow mass rate.
     ///
     /// # Parameters
