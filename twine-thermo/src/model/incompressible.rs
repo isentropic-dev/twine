@@ -130,9 +130,7 @@ impl<F: IncompressibleFluid> ThermodynamicProperties<F> for Incompressible {
 /// Enables state creation from temperature alone for any [`Stateless`] fluid.
 ///
 /// The returned state uses the fluid's reference density.
-impl<F: IncompressibleFluid + Stateless> StateFrom<F, ThermodynamicTemperature>
-    for Incompressible
-{
+impl<F: IncompressibleFluid + Stateless> StateFrom<F, ThermodynamicTemperature> for Incompressible {
     type Error = Infallible;
 
     fn state_from(&self, temperature: ThermodynamicTemperature) -> Result<State<F>, Self::Error> {
@@ -212,9 +210,8 @@ mod tests {
             ))
             .unwrap();
 
-        let state_b = state_a
-            .clone()
-            .with_temperature(ThermodynamicTemperature::new::<degree_celsius>(60.0));
+        let state_b =
+            state_a.with_temperature(ThermodynamicTemperature::new::<degree_celsius>(60.0));
 
         // Check that enthalpy increases with temperature using `h = h₀ + c·(T - T₀)`.
         let h_a = Incompressible.enthalpy(&state_a)?;

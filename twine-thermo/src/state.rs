@@ -1,5 +1,5 @@
 use twine_core::{TimeDerivative, TimeIntegrable};
-use uom::si::f64::{MassDensity, ThermodynamicTemperature};
+use uom::si::f64::{MassDensity, ThermodynamicTemperature, Time};
 
 /// The thermodynamic state of a fluid.
 ///
@@ -29,23 +29,11 @@ use uom::si::f64::{MassDensity, ThermodynamicTemperature};
 ///     fluid: Air,
 /// };
 /// ```
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct State<Fluid> {
     pub temperature: ThermodynamicTemperature,
     pub density: MassDensity,
     pub fluid: Fluid,
-}
-
-/// The time derivative of a fluid's thermodynamic state.
-///
-/// A `StateDerivative<Fluid>` represents the instantaneous rate of change of a
-/// thermodynamic state, including the time derivatives of temperature, density,
-/// and any fluid-specific data that varies over time.
-#[derive(Debug, Clone, PartialEq)]
-pub struct StateDerivative<Fluid: TimeIntegrable> {
-    pub temperature: TimeDerivative<ThermodynamicTemperature>,
-    pub density: TimeDerivative<MassDensity>,
-    pub fluid: TimeDerivative<Fluid>,
 }
 
 impl<Fluid> State<Fluid> {
@@ -78,5 +66,29 @@ impl<Fluid> State<Fluid> {
     #[must_use]
     pub fn with_fluid(self, fluid: Fluid) -> Self {
         Self { fluid, ..self }
+    }
+}
+
+/// The time derivative of a fluid's thermodynamic state.
+///
+/// A `StateDerivative<Fluid>` represents the instantaneous rate of change of a
+/// thermodynamic state, including the time derivatives of temperature, density,
+/// and any fluid-specific data that varies over time.
+#[derive(Debug, Clone, PartialEq)]
+pub struct StateDerivative<Fluid: TimeIntegrable> {
+    pub temperature: TimeDerivative<ThermodynamicTemperature>,
+    pub density: TimeDerivative<MassDensity>,
+    pub fluid: TimeDerivative<Fluid>,
+}
+
+impl<Fluid: TimeIntegrable> TimeIntegrable for State<Fluid> {
+    type Derivative = StateDerivative<Fluid>;
+
+    fn step(self, derivative: Self::Derivative, dt: Time) -> Self {
+        Self {
+            temperature: self.temperature.step(derivative.temperature, dt),
+            density: self.density.step(derivative.density, dt),
+            fluid: self.fluid.step(derivative.fluid, dt),
+        }
     }
 }
