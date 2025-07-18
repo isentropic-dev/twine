@@ -35,8 +35,9 @@ mod non_zero;
 mod strictly_negative;
 mod strictly_positive;
 
-use std::marker::PhantomData;
+use std::{iter::Sum, marker::PhantomData, ops::Add};
 
+use num_traits::Zero;
 use thiserror::Error;
 
 pub use non_negative::NonNegative;
@@ -119,8 +120,22 @@ impl<T, C: Constraint<T>> Constrained<T, C> {
     }
 }
 
+/// Returns a reference to the inner unconstrained value.
 impl<T, C: Constraint<T>> AsRef<T> for Constrained<T, C> {
     fn as_ref(&self) -> &T {
         &self.value
+    }
+}
+
+/// Sums constrained values for which addition is valid.
+///
+/// Applies to all constraints that are preserved under addition.
+impl<T, C> Sum for Constrained<T, C>
+where
+    C: Constraint<T>,
+    Constrained<T, C>: Add<Output = Self> + Zero,
+{
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.fold(Self::zero(), |a, b| a + b)
     }
 }
