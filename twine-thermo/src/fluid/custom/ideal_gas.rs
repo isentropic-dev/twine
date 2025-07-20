@@ -1,4 +1,5 @@
-use uom::si::f64::{Pressure, SpecificHeatCapacity, ThermodynamicTemperature};
+use twine_core::TimeIntegrable;
+use uom::si::f64::{Pressure, SpecificHeatCapacity, ThermodynamicTemperature, Time};
 
 use crate::{model::ideal_gas::IdealGasFluid, units::SpecificGasConstant};
 
@@ -34,5 +35,13 @@ impl IdealGasFluid for IdealGasCustom {
     }
     fn reference_pressure(&self) -> Pressure {
         self.reference_pressure
+    }
+}
+
+impl TimeIntegrable for IdealGasCustom {
+    type Derivative = ();
+
+    fn step(self, _derivative: Self::Derivative, _dt: Time) -> Self {
+        self
     }
 }

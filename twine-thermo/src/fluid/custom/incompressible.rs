@@ -1,4 +1,5 @@
-use uom::si::f64::{MassDensity, SpecificHeatCapacity, ThermodynamicTemperature};
+use twine_core::TimeIntegrable;
+use uom::si::f64::{MassDensity, SpecificHeatCapacity, ThermodynamicTemperature, Time};
 
 use crate::model::incompressible::IncompressibleFluid;
 
@@ -30,5 +31,13 @@ impl IncompressibleFluid for IncompressibleCustom {
 
     fn reference_density(&self) -> MassDensity {
         self.reference_density
+    }
+}
+
+impl TimeIntegrable for IncompressibleCustom {
+    type Derivative = ();
+
+    fn step(self, _derivative: Self::Derivative, _dt: Time) -> Self {
+        self
     }
 }

@@ -1,5 +1,6 @@
+use twine_core::TimeIntegrable;
 use uom::si::{
-    f64::{MassDensity, SpecificHeatCapacity, ThermodynamicTemperature},
+    f64::{MassDensity, SpecificHeatCapacity, ThermodynamicTemperature, Time},
     mass_density::kilogram_per_cubic_meter,
     specific_heat_capacity::kilojoule_per_kilogram_kelvin,
     thermodynamic_temperature::degree_celsius,
@@ -11,6 +12,14 @@ use super::Stateless;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Water;
+
+impl TimeIntegrable for Water {
+    type Derivative = ();
+
+    fn step(self, _derivative: Self::Derivative, _dt: Time) -> Self {
+        self
+    }
+}
 
 impl Stateless for Water {}
 
