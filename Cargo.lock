@@ -3355,6 +3355,7 @@ dependencies = [
  "serde",
  "thiserror 2.0.12",
  "twine-core",
+ "twine-thermo",
  "uom",
 ]
 
@@ -3389,6 +3390,7 @@ dependencies = [
  "twine-dev",
  "twine-macros",
  "twine-plot",
+ "twine-thermo",
  "uom",
 ]
 

@@ -41,7 +41,7 @@ use twine_core::{
 };
 use uom::si::f64::{MassRate, Power, Volume};
 
-use crate::{Flow, PropertyError, State, StateDerivative};
+use crate::{FluidFlow, PropertyError, State, StateDerivative};
 
 /// A control volume with all flow rates externally specified.
 ///
@@ -66,7 +66,7 @@ pub trait ControlVolumeFixedFlow<Fluid: TimeIntegrable> {
         &self,
         volume: Constrained<Volume, StrictlyPositive>,
         state: &State<Fluid>,
-        inflows: &[Flow<Fluid>],
+        inflows: &[FluidFlow<Fluid>],
         outflow: Constrained<MassRate, NonNegative>,
         heat_input: Power,
         power_output: Power,
@@ -95,7 +95,7 @@ pub trait ControlVolumeConstantPressure<Fluid: TimeIntegrable> {
         &self,
         volume: Constrained<Volume, StrictlyPositive>,
         state: &State<Fluid>,
-        inflows: &[Flow<Fluid>],
+        inflows: &[FluidFlow<Fluid>],
         heat_input: Power,
         power_output: Power,
     ) -> Result<(StateDerivative<Fluid>, Constrained<MassRate, NonNegative>), PropertyError>;

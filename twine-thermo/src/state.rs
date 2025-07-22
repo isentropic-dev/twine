@@ -81,6 +81,13 @@ pub struct StateDerivative<Fluid: TimeIntegrable> {
     pub fluid: TimeDerivative<Fluid>,
 }
 
+impl<Fluid> Copy for StateDerivative<Fluid>
+where
+    Fluid: TimeIntegrable,
+    TimeDerivative<Fluid>: Copy,
+{
+}
+
 impl<Fluid: TimeIntegrable> TimeIntegrable for State<Fluid> {
     type Derivative = StateDerivative<Fluid>;
 
