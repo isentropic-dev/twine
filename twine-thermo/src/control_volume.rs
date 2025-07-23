@@ -1,7 +1,6 @@
 use twine_core::{
     TimeDerivative, TimeIntegrable,
     constraint::{Constrained, ConstraintError, StrictlyPositive},
-    thermo::units::SpecificEnthalpy,
 };
 use uom::{
     ConstZero,
@@ -80,26 +79,28 @@ impl<Fluid> ControlVolume<Fluid> {
     ///
     /// - `flows`: Iterator over boundary flows.
     /// - `model`: Thermodynamic model used to compute inflow enthalpy.
-    /// - `internal_enthalpy`: Specific enthalpy of the internal state (used for outflow).
     ///
     /// # Errors
     ///
     /// Returns a [`PropertyError`] if enthalpy evaluation fails for a [`MassFlow::In`] flow.
     pub fn net_energy_flow<'a, I, Model>(
+        &self,
         flows: I,
         model: &Model,
-        internal_enthalpy: SpecificEnthalpy,
     ) -> Result<Power, PropertyError>
     where
         Model: ThermodynamicProperties<Fluid>,
         I: IntoIterator<Item = &'a BoundaryFlow<Fluid>>,
         Fluid: 'a,
     {
+        let h_cv = model.enthalpy(&self.state)?;
         flows.into_iter().try_fold(Power::ZERO, |q_dot_net, flow| {
             let q_dot_flow = match flow {
-                BoundaryFlow::Mass(mass_flow) => {
-                    mass_flow.signed_enthalpy_rate(model, internal_enthalpy)?
+                BoundaryFlow::Mass(MassFlow::In(m_dot, state)) => {
+                    m_dot.into_inner() * model.enthalpy(state)?
                 }
+                BoundaryFlow::Mass(MassFlow::Out(m_dot)) => -m_dot.into_inner() * h_cv,
+                BoundaryFlow::Mass(MassFlow::None) => Power::ZERO,
                 BoundaryFlow::Heat(heat_flow) => heat_flow.signed(),
                 BoundaryFlow::Work(work_flow) => work_flow.signed(),
             };
@@ -182,10 +183,9 @@ where
     {
         let volume = self.volume.into_inner();
         let heat_capacity = volume * self.state.density * model.cv(&self.state)?;
-        let h = model.enthalpy(&self.state)?;
 
         let m_dot_net = Self::net_mass_flow(flows);
-        let q_dot_net = Self::net_energy_flow(flows, model, h)?;
+        let q_dot_net = self.net_energy_flow(flows, model)?;
 
         let (rho_dt, temp_dt) = if m_dot_net.is_zero() {
             (

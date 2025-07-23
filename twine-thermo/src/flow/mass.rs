@@ -1,10 +1,7 @@
 use twine_core::constraint::{Constrained, ConstraintError, StrictlyPositive};
-use uom::{
-    ConstZero,
-    si::f64::{MassRate, Power},
-};
+use uom::{ConstZero, si::f64::MassRate};
 
-use crate::{PropertyError, State, model::ThermodynamicProperties, units::SpecificEnthalpy};
+use crate::State;
 
 /// Represents mass flow across a system boundary.
 ///
@@ -59,35 +56,6 @@ impl<Fluid> MassFlow<Fluid> {
             Self::None => MassRate::ZERO,
         }
     }
-
-    /// Returns the signed enthalpy flow rate associated with this mass flow.
-    ///
-    /// - Positive for enthalpy carried into the system.
-    /// - Negative for enthalpy carried out of the system.
-    /// - Zero if no flow.
-    ///
-    /// # Parameters
-    ///
-    /// - `model`: The thermodynamic model used to evaluate specific enthalpy.
-    /// - `internal_enthalpy`: The enthalpy of the system's internal state (used for outflow).
-    ///
-    /// # Errors
-    ///
-    /// Returns a [`PropertyError`] if the model fails to compute enthalpy for an inflow.
-    pub fn signed_enthalpy_rate<Model>(
-        &self,
-        model: &Model,
-        internal_enthalpy: SpecificEnthalpy,
-    ) -> Result<Power, PropertyError>
-    where
-        Model: ThermodynamicProperties<Fluid>,
-    {
-        match self {
-            Self::In(mass_rate, state) => Ok(mass_rate.into_inner() * model.enthalpy(state)?),
-            Self::Out(mass_rate) => Ok(-mass_rate.into_inner() * internal_enthalpy),
-            Self::None => Ok(Power::ZERO),
-        }
-    }
 }
 
 #[cfg(test)]
@@ -96,17 +64,13 @@ mod tests {
 
     use approx::assert_relative_eq;
     use uom::si::{
-        f64::{MassDensity, MassRate, Power, ThermodynamicTemperature},
+        f64::{MassDensity, MassRate, ThermodynamicTemperature},
         mass_density::kilogram_per_cubic_meter,
         mass_rate::kilogram_per_second,
         thermodynamic_temperature::kelvin,
     };
 
-    use crate::{
-        State,
-        fluid::Air,
-        model::{ThermodynamicProperties, ideal_gas::IdealGas},
-    };
+    use crate::{State, fluid::Air};
 
     fn default_state() -> State<Air> {
         State {
@@ -136,25 +100,6 @@ mod tests {
     fn none_mass_is_zero() {
         let flow: MassFlow<Air> = MassFlow::None;
         assert_relative_eq!(flow.signed_mass_rate().get::<kilogram_per_second>(), 0.0);
-    }
-
-    #[test]
-    fn enthalpy_rate_in_and_out() {
-        let state_cv = State {
-            temperature: ThermodynamicTemperature::new::<kelvin>(400.0),
-            ..default_state()
-        };
-        let h_cv = IdealGas.enthalpy(&state_cv).unwrap();
-
-        let m_dot = MassRate::new::<kilogram_per_second>(2.0);
-        let inflow = MassFlow::incoming(m_dot, default_state()).unwrap();
-        let outflow: MassFlow<Air> = MassFlow::outgoing(m_dot).unwrap();
-
-        let h_dot_in = inflow.signed_enthalpy_rate(&IdealGas, h_cv).unwrap();
-        let h_dot_out = outflow.signed_enthalpy_rate(&IdealGas, h_cv).unwrap();
-        assert!(h_dot_in > Power::ZERO);
-        assert!(h_dot_out < Power::ZERO);
-        assert!(h_dot_out.abs() > h_dot_in.abs());
     }
 
     #[test]
