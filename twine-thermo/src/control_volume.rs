@@ -82,7 +82,7 @@ impl<Fluid> ControlVolume<Fluid> {
     ///
     /// # Errors
     ///
-    /// Returns a [`PropertyError`] if state or inflow enthalpy cannot be computed.
+    /// Returns a [`PropertyError`] if any required enthalpy cannot be computed.
     pub fn net_energy_flow<'a, I, Model>(
         &self,
         flows: I,
