@@ -26,12 +26,6 @@ pub struct ControlVolume<Fluid> {
 }
 
 /// Represents mass, heat, or work flow across the boundary of a control volume.
-///
-/// This type is used to evaluate net mass and energy transfers.
-/// All flow directions follow the convention:
-///
-/// - Positive = into the control volume
-/// - Negative = out of the control volume
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BoundaryFlow<Fluid> {
     Mass(MassFlow<Fluid>),
