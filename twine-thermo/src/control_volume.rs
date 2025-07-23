@@ -78,11 +78,11 @@ impl<Fluid> ControlVolume<Fluid> {
     /// # Parameters
     ///
     /// - `flows`: Iterator over boundary flows.
-    /// - `model`: Thermodynamic model used to compute inflow enthalpy.
+    /// - `model`: Model used to compute thermodynamic properties.
     ///
     /// # Errors
     ///
-    /// Returns a [`PropertyError`] if enthalpy evaluation fails for a [`MassFlow::In`] flow.
+    /// Returns a [`PropertyError`] if state or inflow enthalpy cannot be computed.
     pub fn net_energy_flow<'a, I, Model>(
         &self,
         flows: I,
@@ -168,7 +168,7 @@ where
     /// # Parameters
     ///
     /// - `flows`: Boundary flows affecting the control volume.
-    /// - `model`: Model used to compute thermodynamic property values.
+    /// - `model`: Model used to compute thermodynamic properties.
     ///
     /// # Errors
     ///
