@@ -21,19 +21,27 @@
 
 use std::{convert::Infallible, time::Duration};
 
-use twine_components::{
-    fluid::IncompressibleLiquid,
-    thermal::tank::{Tank, TankConfig, TankInput, TankOutput},
-};
+use twine_components::thermal::tank2::{Tank, TankConfig, TankInput, TankOutput};
 use twine_core::{
-    Component, DurationExt, Simulation, State, TimeIntegrable, thermo::units::PositiveMassRate,
+    Component, DurationExt, Simulation, State, TimeIntegrable,
+    constraint::{Constrained, StrictlyPositive},
 };
 use twine_plot::PlotApp;
+use twine_thermo::{
+    HeatFlow, Stream,
+    fluid::Water,
+    model::{
+        StateFrom,
+        incompressible::{Incompressible, IncompressibleFluid},
+    },
+};
 use uom::{
     ConstZero,
     si::{
         area::square_foot,
-        f64::{Area, HeatTransfer, Power, ThermodynamicTemperature, Time, Volume, VolumeRate},
+        f64::{
+            Area, HeatTransfer, MassRate, Power, ThermodynamicTemperature, Time, Volume, VolumeRate,
+        },
         heat_transfer::watt_per_square_meter_kelvin,
         power::watt,
         thermodynamic_temperature::degree_celsius,
@@ -55,77 +63,10 @@ use uom::{
 /// The schedule determines how much fluid is drawn during each hour of the day,
 /// enabling simulation of usage patterns such as residential hot water demand.
 #[derive(Debug)]
-struct TanksInRoom {
-    fluid: IncompressibleLiquid,
-    first_tank: Tank<IncompressibleLiquid>,
-    second_tank: Tank<IncompressibleLiquid>,
+struct TanksInRoom<'a> {
+    first_tank: Tank<'a, Water, Incompressible>,
+    second_tank: Tank<'a, Water, Incompressible>,
     draw_schedule: [VolumeRate; 24],
-}
-
-impl TanksInRoom {
-    /// Creates a new two-tank system using the provided fluid and tank configurations.
-    ///
-    /// The two tanks are connected in series and share the same fluid model.
-    fn new(
-        fluid: IncompressibleLiquid,
-        first_tank_config: TankConfig,
-        second_tank_config: TankConfig,
-    ) -> Self {
-        Self {
-            fluid,
-            first_tank: Tank::new(fluid, first_tank_config),
-            second_tank: Tank::new(fluid, second_tank_config),
-            draw_schedule: [VolumeRate::ZERO; 24],
-        }
-    }
-
-    /// Prepares the input for the first tank based on current simulation state.
-    fn prepare_first_tank_input(&self, input: &Input) -> TankInput<IncompressibleLiquid> {
-        TankInput {
-            ambient_temperature: input.t_room,
-            heat_input: input.q_dot_first_tank,
-            inlet_state: input.t_ground,
-            mass_flow_rate: self.draw_at_time(input.time),
-            tank_state: input.t_first_tank,
-        }
-    }
-
-    /// Prepares the input for the second tank based on current simulation state.
-    fn prepare_second_tank_input(&self, input: &Input) -> TankInput<IncompressibleLiquid> {
-        TankInput {
-            ambient_temperature: input.t_room,
-            heat_input: Power::ZERO,
-            inlet_state: input.t_first_tank,
-            mass_flow_rate: self.draw_at_time(input.time),
-            tank_state: input.t_second_tank,
-        }
-    }
-
-    /// Returns the mass flow rate through the tanks at a given time.
-    ///
-    /// Flow is looked up from the draw schedule using the current hour of day,
-    /// then converted from volumetric to mass flow using the fluid's density.
-    fn draw_at_time(&self, time: Time) -> PositiveMassRate {
-        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-        let hour_of_day = time.get::<hour>().floor() as usize % 24;
-
-        let draw = self.draw_schedule[hour_of_day];
-
-        (draw * self.fluid.density)
-            .try_into()
-            .expect("Draw cannot be negative")
-    }
-
-    /// Sets the volumetric draw rate for a specific hour of the day.
-    ///
-    /// Accepts a value in units of flow (e.g., gallons per minute) and the
-    /// corresponding hour index (0–23).
-    ///
-    /// Returns the updated model.
-    fn set_draw_for_hour(mut self, draw: VolumeRate, hour_index: usize) -> Self {
-        self.draw_schedule[hour_index] = draw;
-        self
-    }
 }
 
 /// Model input at each simulation step.
@@ -142,27 +83,88 @@ struct Input {
 /// Model output at each simulation step.
 #[derive(Debug, Clone)]
 struct Output {
-    first_tank: TankOutput,
-    second_tank: TankOutput,
+    first_tank: TankOutput<Water>,
+    second_tank: TankOutput<Water>,
 }
 
-impl Component for TanksInRoom {
+impl TanksInRoom<'_> {
+    /// Creates a new two-tank system using the provided fluid and tank configurations.
+    ///
+    /// The two tanks are connected in series and share the same fluid model.
+    fn new(first_tank_config: TankConfig, second_tank_config: TankConfig) -> Self {
+        Self {
+            first_tank: Tank::new(first_tank_config, &Incompressible).unwrap(),
+            second_tank: Tank::new(second_tank_config, &Incompressible).unwrap(),
+            draw_schedule: [VolumeRate::ZERO; 24],
+        }
+    }
+
+    /// Prepares the input for the first tank based on current simulation state.
+    fn prepare_first_tank_input(&self, input: &Input) -> TankInput<Water> {
+        TankInput {
+            ambient_temperature: input.t_room,
+            aux_heat_flow: HeatFlow::from_signed(input.q_dot_first_tank).unwrap(),
+            inflow: self.draw_at_time(input.time).map(|m_dot| {
+                let state = Incompressible.state_from(input.t_ground).unwrap();
+                Stream::from_constrained(m_dot, state)
+            }),
+            state: Incompressible.state_from(input.t_first_tank).unwrap(),
+        }
+    }
+
+    /// Prepares the input for the second tank based on current simulation state.
+    fn prepare_second_tank_input(&self, input: &Input) -> TankInput<Water> {
+        TankInput {
+            ambient_temperature: input.t_room,
+            aux_heat_flow: HeatFlow::None,
+            inflow: self.draw_at_time(input.time).map(|m_dot| {
+                let state = Incompressible.state_from(input.t_first_tank).unwrap();
+                Stream::from_constrained(m_dot, state)
+            }),
+            state: Incompressible.state_from(input.t_second_tank).unwrap(),
+        }
+    }
+
+    /// Returns the mass flow rate through the tanks at a given time.
+    ///
+    /// Flow is looked up from the draw schedule using the current hour of day,
+    /// then converted from volumetric to mass flow using the water's default density.
+    fn draw_at_time(&self, time: Time) -> Option<Constrained<MassRate, StrictlyPositive>> {
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+        let hour_of_day = time.get::<hour>().floor() as usize % 24;
+
+        let draw = self.draw_schedule[hour_of_day];
+        if draw > VolumeRate::ZERO {
+            let m_dot = draw * Water.reference_density();
+            Some(Constrained::new(m_dot).unwrap())
+        } else {
+            None
+        }
+    }
+
+    /// Sets the volumetric draw rate for a specific hour of the day.
+    ///
+    /// Accepts a value in units of flow (e.g., gallons per minute) and the
+    /// corresponding hour index (0–23).
+    ///
+    /// Returns the updated model.
+    fn set_draw_for_hour(mut self, draw: VolumeRate, hour_index: usize) -> Self {
+        self.draw_schedule[hour_index] = draw;
+        self
+    }
+}
+
+impl Component for TanksInRoom<'_> {
     type Input = Input;
     type Output = Output;
     type Error = Infallible;
 
     fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
         let first_tank_input = self.prepare_first_tank_input(&input);
-        let first_tank_output = self
-            .first_tank
-            .call(first_tank_input)
-            .expect("Call cannot fail with the `IncompressibleLiquid` model");
+        let first_tank_output = self.first_tank.call(first_tank_input).unwrap();
 
         let second_tank_input = self.prepare_second_tank_input(&input);
-        let second_tank_output = self
-            .second_tank
-            .call(second_tank_input)
-            .expect("Call cannot fail with the `IncompressibleLiquid` model");
+        let second_tank_output = self.second_tank.call(second_tank_input).unwrap();
 
         Ok(Output {
             first_tank: first_tank_output,
@@ -173,12 +175,12 @@ impl Component for TanksInRoom {
 
 /// A simulation of the `TanksInRoom` model using forward Euler integration.
 #[derive(Debug)]
-struct TanksInRoomSim {
-    model: TanksInRoom,
+struct TanksInRoomSim<'a> {
+    model: TanksInRoom<'a>,
 }
 
-impl Simulation for TanksInRoomSim {
-    type Model = TanksInRoom;
+impl<'a> Simulation for TanksInRoomSim<'a> {
+    type Model = TanksInRoom<'a>;
     type StepError = Infallible;
 
     fn model(&self) -> &Self::Model {
@@ -197,10 +199,10 @@ impl Simulation for TanksInRoomSim {
             time: input.time + dt_time,
             t_first_tank: input
                 .t_first_tank
-                .step(output.first_tank.tank_temperature_derivative, dt_time),
+                .step(output.first_tank.state_derivative.temperature, dt_time),
             t_second_tank: input
                 .t_second_tank
-                .step(output.second_tank.tank_temperature_derivative, dt_time),
+                .step(output.second_tank.state_derivative.temperature, dt_time),
             ..input.clone()
         })
     }
@@ -212,8 +214,8 @@ impl Simulation for TanksInRoomSim {
 /// formatted for plotting.
 /// Each series contains `(time, temperature)` pairs where:
 ///
-/// - Time is in hours.
-/// - Temperature is in degrees Celsius.
+/// - Time is in hours
+/// - Temperature is in celsius
 #[derive(Debug, Default)]
 struct PlotSeries {
     ground: Vec<[f64; 2]>,
@@ -244,7 +246,6 @@ impl PlotSeries {
 fn main() {
     // Set the model parameters.
     let model = TanksInRoom::new(
-        IncompressibleLiquid::water(),
         TankConfig {
             volume: Volume::new::<gallon>(80.0),
             area: Area::new::<square_foot>(15.0),

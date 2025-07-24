@@ -11,6 +11,7 @@ keywords = ["twine", "framework", "modeling", "components"]
 
 [dependencies]
 twine-core = { version = "0.2.0", path = "../twine-core" }
+twine-thermo = { version = "0.2.0", path = "../twine-thermo" }
 serde = { version = "1.0", features = ["derive"] }
 uom = { workspace = true, features = ["serde"] }
 ndarray = "0.16.1"

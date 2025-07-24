@@ -16,4 +16,5 @@ twine-components = { path = "../twine-components" }
 twine-dev = {path = "../twine-dev"}
 twine-macros = { path = "../twine-macros" }
 twine-plot = { path = "../twine-plot" }
+twine-thermo = { path = "../twine-thermo" }
 uom = { workspace = true }

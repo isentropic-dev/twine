@@ -1,22 +1,15 @@
 use std::convert::Infallible;
 
-use twine_core::{
-    TimeIntegrable,
-    constraint::{Constrained, NonNegative, StrictlyPositive},
-};
 use uom::{
     ConstZero,
     si::{
-        f64::{
-            MassDensity, MassRate, Power, Pressure, SpecificHeatCapacity, ThermodynamicTemperature,
-            Volume,
-        },
+        f64::{MassDensity, Pressure, SpecificHeatCapacity, ThermodynamicTemperature},
         temperature_interval, thermodynamic_temperature,
     },
 };
 
 use crate::{
-    Flow, PropertyError, State, StateDerivative,
+    PropertyError, State,
     fluid::Stateless,
     units::{
         SpecificEnthalpy, SpecificEntropy, SpecificGasConstant, SpecificInternalEnergy,
@@ -24,7 +17,7 @@ use crate::{
     },
 };
 
-use super::{ControlVolumeFixedFlow, StateFrom, ThermodynamicProperties};
+use super::{StateFrom, ThermodynamicProperties};
 
 /// Trait used to define thermodynamic constants for ideal gases.
 ///
@@ -192,56 +185,6 @@ impl<F: IdealGasFluid> ThermodynamicProperties<F> for IdealGas {
     }
 }
 
-/// Implements [`ControlVolumeFixedFlow`] for any [`IdealGasFluid`] with no time-dependent state.
-///
-/// A fluid has no time-dependent state if its `TimeIntegrable::Derivative` type is `()`.
-impl<F> ControlVolumeFixedFlow<F> for IdealGas
-where
-    F: IdealGasFluid + TimeIntegrable<Derivative = ()>,
-{
-    fn state_derivative(
-        &self,
-        volume: Constrained<Volume, StrictlyPositive>,
-        state: &State<F>,
-        inflows: &[Flow<F>],
-        outflow: Constrained<MassRate, NonNegative>,
-        heat_input: Power,
-        power_output: Power,
-    ) -> Result<StateDerivative<F>, PropertyError> {
-        let vol = volume.into_inner();
-        let mass = vol * state.density;
-        let cv = self.cv(state)?;
-
-        // Incoming flow
-        let (m_dot_in, q_dot_in) = inflows.iter().fold(
-            (MassRate::ZERO, Power::ZERO),
-            |(m_dot_total, q_dot_total), flow| {
-                let m_dot_flow = flow.mass_rate.into_inner();
-                let h_flow = self.enthalpy(&flow.state).expect("Infallible for IdealGas");
-
-                (m_dot_total + m_dot_flow, q_dot_total + m_dot_flow * h_flow)
-            },
-        );
-
-        // Outgoing flow
-        let m_dot_out = outflow.into_inner();
-        let q_dot_out = m_dot_out * self.enthalpy(state)?;
-
-        // Mass balance
-        let dens_dt = (m_dot_in - m_dot_out) / vol;
-
-        // Energy balance
-        let q_dot_net = q_dot_in - q_dot_out + heat_input - power_output;
-        let temp_dt = q_dot_net / (mass * cv);
-
-        Ok(StateDerivative::<F> {
-            temperature: temp_dt,
-            density: dens_dt,
-            fluid: (),
-        })
-    }
-}
-
 /// Enables state creation from temperature and pressure for any [`Stateless`] fluid.
 impl<F: IdealGasFluid + Stateless> StateFrom<F, (ThermodynamicTemperature, Pressure)> for IdealGas {
     type Error = Infallible;
@@ -286,28 +229,16 @@ mod tests {
 
     use approx::assert_relative_eq;
     use uom::si::{
-        f64::{MassRate, Power, Time, Volume},
-        mass_density::{kilogram_per_cubic_meter, pound_per_cubic_foot},
-        mass_rate::kilogram_per_second,
+        mass_density::pound_per_cubic_foot,
         pressure::{atmosphere, kilopascal, pascal, psi},
         specific_heat_capacity::joule_per_kilogram_kelvin,
-        thermodynamic_temperature::{degree_celsius, kelvin},
-        time::second,
-        volume::cubic_meter,
+        thermodynamic_temperature::degree_celsius,
     };
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
     struct MockGas;
 
     impl Stateless for MockGas {}
-
-    impl TimeIntegrable for MockGas {
-        type Derivative = ();
-
-        fn step(self, _derivative: Self::Derivative, _dt: Time) -> Self {
-            self
-        }
-    }
 
     impl IdealGasFluid for MockGas {
         fn gas_constant(&self) -> SpecificGasConstant {
@@ -384,93 +315,5 @@ mod tests {
         assert!(s_b < s_a);
 
         Ok(())
-    }
-
-    #[test]
-    fn control_volume_fixed_flow_conserves_mass_and_energy() {
-        let volume = Constrained::new(Volume::new::<cubic_meter>(2.0)).unwrap();
-
-        let state = State::new(
-            ThermodynamicTemperature::new::<kelvin>(300.0),
-            MassDensity::new::<kilogram_per_cubic_meter>(1.0),
-            MockGas,
-        );
-
-        // Incoming flow is warmer than the state and has the same density.
-        let inflow = Flow::new(
-            Constrained::new(MassRate::new::<kilogram_per_second>(0.3)).unwrap(),
-            state.with_temperature(ThermodynamicTemperature::new::<kelvin>(350.0)),
-        );
-
-        // Outgoing flow has the same mass rate as the incoming flow.
-        let m_dot_out = inflow.mass_rate;
-
-        // No heat or work terms.
-        let heat_input = Power::ZERO;
-        let power_output = Power::ZERO;
-
-        let derivative = IdealGas
-            .state_derivative(
-                volume,
-                &state,
-                &[inflow],
-                m_dot_out,
-                heat_input,
-                power_output,
-            )
-            .unwrap();
-
-        // Density is constant when inflow and outflow rates are equal.
-        assert_relative_eq!(derivative.density.value, 0.0);
-
-        // Hand calculation for the temperature derivative:
-        //   q_dot_net = m_dot * cp * (T_in - T) = 0.3 * 1,000 * (350 - 300) = 15,00
-        //   c = density * volume * cv = 1 * 2 * 600 = 1,200
-        //   dT/dt = q_dot_net / c = 15,000 / 1,200 = 12.5
-        assert_relative_eq!(derivative.temperature.value, 12.5);
-    }
-
-    #[test]
-    fn control_volume_fixed_flow_only_outflow() {
-        let volume = Constrained::new(Volume::new::<cubic_meter>(2.0)).unwrap();
-
-        let state = State::new(
-            ThermodynamicTemperature::new::<kelvin>(300.0),
-            MassDensity::new::<kilogram_per_cubic_meter>(1.0),
-            MockGas,
-        );
-
-        let m_dot_out = Constrained::new(MassRate::new::<kilogram_per_second>(0.2)).unwrap();
-
-        let heat_input = Power::ZERO;
-        let power_output = Power::ZERO;
-
-        let derivative = IdealGas
-            .state_derivative(volume, &state, &[], m_dot_out, heat_input, power_output)
-            .unwrap();
-
-        // Density decreases at rate of outflow over volume.
-        assert_relative_eq!(derivative.density.value, -0.1);
-
-        // Hand calculation for the temperature derivative:
-        //   q_dot_out = m_dot * cp * (T - T_ref) = 0.2 * 1,000 * (300 - 273.15) = 5,370
-        //   c = density * volume * cv = 1 * 2 * 600 = 1,200
-        //   dT/dt = -q_dot_out / c = 5,370 / 1,200 = -4.475
-        assert_relative_eq!(derivative.temperature.value, -4.475, epsilon = 1e-12);
-
-        // Hand calculation for current pressure:
-        //   P = density * R * T = 1.0 * 400 * 300 = 120,000 Pa = 120 kPa
-        let current_pressure = IdealGas.pressure(&state).unwrap();
-        assert_relative_eq!(current_pressure.get::<kilopascal>(), 120.0);
-
-        // Evolve state by 1 second using the computed derivatives.
-        let future_state = state.step(derivative, Time::new::<second>(1.0));
-        assert_relative_eq!(future_state.density.get::<kilogram_per_cubic_meter>(), 0.9);
-        assert_relative_eq!(future_state.temperature.get::<kelvin>(), 295.525);
-
-        // Hand calculation for future pressure:
-        //   P = density * R * T = 0.9 * 400 * 295.525 = 106.389 kPa
-        let future_pressure = IdealGas.pressure(&future_state).unwrap();
-        assert_relative_eq!(future_pressure.get::<kilopascal>(), 106.389);
     }
 }
