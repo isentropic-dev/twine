@@ -28,7 +28,7 @@ use twine_core::{
 };
 use twine_plot::PlotApp;
 use twine_thermo::{
-    HeatFlow,
+    HeatFlow, Stream,
     fluid::Water,
     model::{
         StateFrom,
@@ -104,9 +104,11 @@ impl TanksInRoom<'_> {
         TankInput {
             ambient_temperature: input.t_room,
             aux_heat_flow: HeatFlow::from_signed(input.q_dot_first_tank).unwrap(),
-            inlet_state: Incompressible.state_from(input.t_ground).unwrap(),
-            mass_flow_rate: self.draw_at_time(input.time),
-            tank_state: Incompressible.state_from(input.t_first_tank).unwrap(),
+            inflow: self.draw_at_time(input.time).map(|m_dot| {
+                let state = Incompressible.state_from(input.t_ground).unwrap();
+                Stream::from_constrained(m_dot, state)
+            }),
+            state: Incompressible.state_from(input.t_first_tank).unwrap(),
         }
     }
 
@@ -115,9 +117,11 @@ impl TanksInRoom<'_> {
         TankInput {
             ambient_temperature: input.t_room,
             aux_heat_flow: HeatFlow::None,
-            inlet_state: Incompressible.state_from(input.t_first_tank).unwrap(),
-            mass_flow_rate: self.draw_at_time(input.time),
-            tank_state: Incompressible.state_from(input.t_second_tank).unwrap(),
+            inflow: self.draw_at_time(input.time).map(|m_dot| {
+                let state = Incompressible.state_from(input.t_first_tank).unwrap();
+                Stream::from_constrained(m_dot, state)
+            }),
+            state: Incompressible.state_from(input.t_second_tank).unwrap(),
         }
     }
 

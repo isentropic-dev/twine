@@ -5,8 +5,7 @@ use uom::{ConstZero, si::f64::Power};
 
 /// Represents heat flow across a system boundary.
 ///
-/// This type encodes heat flow direction and magnitude using a sign convention
-/// consistent with energy balances:
+/// This enum represents flow direction relative to the system:
 ///
 /// - `In`: Heat flows into the system (positive contribution).
 /// - `Out`: Heat flows out of the system (negative contribution).

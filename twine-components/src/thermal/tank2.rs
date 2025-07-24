@@ -5,10 +5,10 @@ use twine_core::{
     constraint::{Constrained, ConstraintError, NonNegative, StrictlyPositive},
 };
 use twine_thermo::{
-    BoundaryFlow, ControlVolume, HeatFlow, MassFlow, PropertyError, State, StateDerivative,
+    BoundaryFlow, ControlVolume, HeatFlow, MassFlow, PropertyError, State, StateDerivative, Stream,
     model::ThermodynamicProperties, units::TemperatureDifference,
 };
-use uom::si::f64::{Area, HeatTransfer, MassRate, ThermodynamicTemperature, Volume};
+use uom::si::f64::{Area, HeatTransfer, ThermodynamicTemperature, Volume};
 
 /// A fully mixed thermal energy storage tank.
 ///
@@ -71,17 +71,13 @@ pub struct TankInput<Fluid> {
     /// Auxiliary heat addition or extraction (e.g., from a heater or chiller).
     pub aux_heat_flow: HeatFlow,
 
-    /// Thermodynamic state of the incoming fluid.
-    pub inlet_state: State<Fluid>,
-
-    /// Optional mass flow through the tank.
+    /// Optional fluid inflow to the tank.
     ///
-    /// If present, flow enters at `inlet_state` and exits at `tank_state`.
-    /// Inlet and outlet flow rates are equal, maintaining constant fluid mass.
-    pub mass_flow_rate: Option<Constrained<MassRate, StrictlyPositive>>,
+    /// If present, a matching outflow is assumed to maintain constant mass.
+    pub inflow: Option<Stream<Fluid>>,
 
     /// Thermodynamic state of the fluid in the tank.
-    pub tank_state: State<Fluid>,
+    pub state: State<Fluid>,
 }
 
 /// Outputs describing the tank's instantaneous thermal response.
@@ -111,26 +107,24 @@ where
         let TankInput {
             ambient_temperature,
             aux_heat_flow,
-            inlet_state,
-            mass_flow_rate,
-            tank_state,
+            inflow,
+            state,
         } = input;
 
         // Heat loss to (or gain from) the ambient environment.
         let ambient_heat_flow = HeatFlow::from_signed(
             self.u_value.into_inner()
                 * self.area.into_inner()
-                * ambient_temperature.minus(tank_state.temperature),
+                * ambient_temperature.minus(state.temperature),
         )
         .expect("U·A·ΔT is always finite");
 
-        // Create paired mass flows (if present) to maintain constant mass.
-        let (mass_flow_in, mass_flow_out) = match mass_flow_rate {
-            Some(rate) => (MassFlow::In(rate, inlet_state), MassFlow::Out(rate)),
+        let (mass_flow_in, mass_flow_out) = match inflow {
+            Some(stream) => MassFlow::balanced_pair(stream),
             None => (MassFlow::None, MassFlow::None),
         };
 
-        let state_derivative = ControlVolume::from_constrained(self.volume, tank_state)
+        let state_derivative = ControlVolume::from_constrained(self.volume, state)
             .state_derivative(
                 &[
                     BoundaryFlow::Mass(mass_flow_in),
@@ -190,9 +184,9 @@ mod tests {
     ///
     /// Equilibrium conditions are:
     ///
-    /// - Tank, inlet, and ambient temperatures are 20°C
-    /// - No auxilliary heat input
-    /// - No mass flow
+    /// - Tank and ambient temperatures are 20°C
+    /// - No auxiliary heat input
+    /// - No inflow
     fn equilibrium_input() -> TankInput<Water> {
         let t_ambient = ThermodynamicTemperature::new::<degree_celsius>(20.0);
         let state = Incompressible.state_from(t_ambient).unwrap();
@@ -200,9 +194,8 @@ mod tests {
         TankInput {
             ambient_temperature: t_ambient,
             aux_heat_flow: HeatFlow::None,
-            inlet_state: state,
-            mass_flow_rate: None,
-            tank_state: state,
+            inflow: None,
+            state,
         }
     }
 
@@ -227,7 +220,7 @@ mod tests {
     fn tank_loses_heat_when_hotter_than_ambient() {
         let tank = water_tank();
         let input = TankInput {
-            tank_state: Incompressible
+            state: Incompressible
                 .state_from(ThermodynamicTemperature::new::<degree_celsius>(50.0))
                 .unwrap(),
             ..equilibrium_input()
@@ -250,9 +243,6 @@ mod tests {
         let tank = water_tank();
 
         let input_without_draw = TankInput {
-            tank_state: Incompressible
-                .state_from(ThermodynamicTemperature::new::<degree_celsius>(50.0))
-                .unwrap(),
             aux_heat_flow: HeatFlow::from_signed(Power::new::<kilowatt>(4.5)).unwrap(),
             ..equilibrium_input()
         };
@@ -264,8 +254,14 @@ mod tests {
         );
 
         let input_with_draw = TankInput {
-            mass_flow_rate: Some(
-                Constrained::new(MassRate::new::<kilogram_per_second>(0.4)).unwrap(),
+            inflow: Some(
+                Stream::new(
+                    MassRate::new::<kilogram_per_second>(0.4),
+                    Incompressible
+                        .state_from(ThermodynamicTemperature::new::<degree_celsius>(10.0))
+                        .unwrap(),
+                )
+                .unwrap(),
             ),
             ..input_without_draw
         };
