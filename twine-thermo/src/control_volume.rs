@@ -96,9 +96,7 @@ impl<Fluid> ControlVolume<Fluid> {
         let h_cv = model.enthalpy(&self.state)?;
         flows.into_iter().try_fold(Power::ZERO, |q_dot_net, flow| {
             let q_dot_flow = match flow {
-                BoundaryFlow::Mass(MassFlow::In(m_dot, state)) => {
-                    m_dot.into_inner() * model.enthalpy(state)?
-                }
+                BoundaryFlow::Mass(MassFlow::In(stream)) => stream.enthalpy_flow(model)?,
                 BoundaryFlow::Mass(MassFlow::Out(m_dot)) => -m_dot.into_inner() * h_cv,
                 BoundaryFlow::Mass(MassFlow::None) => Power::ZERO,
                 BoundaryFlow::Heat(heat_flow) => heat_flow.signed(),
@@ -229,7 +227,7 @@ mod tests {
     };
 
     use crate::{
-        BoundaryFlow, ControlVolume, HeatFlow, MassFlow, State, WorkFlow,
+        BoundaryFlow, ControlVolume, HeatFlow, MassFlow, State, Stream, WorkFlow,
         model::ideal_gas::{IdealGas, IdealGasFluid},
         units::SpecificGasConstant,
     };
@@ -273,18 +271,18 @@ mod tests {
             MockGas,
         );
 
-        let m_dot = Constrained::new(MassRate::new::<kilogram_per_second>(0.3)).unwrap();
+        let (inflow, outflow) = MassFlow::balanced_pair(
+            Stream::new(
+                MassRate::new::<kilogram_per_second>(0.3),
+                state.with_temperature(ThermodynamicTemperature::new::<kelvin>(350.0)),
+            )
+            .unwrap(),
+        );
 
         let derivative = ControlVolume::new(volume, state)
             .unwrap()
             .state_derivative(
-                &[
-                    BoundaryFlow::Mass(MassFlow::In(
-                        m_dot,
-                        state.with_temperature(ThermodynamicTemperature::new::<kelvin>(350.0)),
-                    )),
-                    BoundaryFlow::Mass(MassFlow::Out(m_dot)),
-                ],
+                &[BoundaryFlow::Mass(inflow), BoundaryFlow::Mass(outflow)],
                 &IdealGas,
             )
             .unwrap();

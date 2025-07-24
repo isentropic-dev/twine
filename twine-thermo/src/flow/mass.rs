@@ -1,23 +1,22 @@
 use twine_core::constraint::{Constrained, ConstraintError, StrictlyPositive};
 use uom::{ConstZero, si::f64::MassRate};
 
-use crate::State;
+use crate::{State, Stream};
 
 /// Represents mass flow across a system boundary.
 ///
-/// This type encodes mass flow direction and magnitude using a sign convention
-/// consistent with energy balances:
+/// This enum represents flow direction relative to the system:
 ///
-/// - `In`: Mass flows into the system (positive contribution, includes inflow state).
-/// - `Out`: Mass flows out of the system (negative contribution, uses current system state).
+/// - `In`: Mass flows into the system (positive contribution).
+/// - `Out`: Mass flows out of the system (negative contribution).
 /// - `None`: No mass flow occurs.
 ///
-/// Inflow includes a thermodynamic [`State`] used to evaluate properties like enthalpy.
-/// Outflow assumes the flow exits at the control volume's internal state.
+/// The `In` variant holds a [`Stream`] with a thermodynamic [`State`].
+/// The `Out` variant assumes mass exits at the system's current state.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum MassFlow<Fluid> {
-    /// Mass flowing into the system with a defined thermodynamic state.
-    In(Constrained<MassRate, StrictlyPositive>, State<Fluid>),
+    /// Mass flowing into the system.
+    In(Stream<Fluid>),
     /// Mass flowing out of the system.
     Out(Constrained<MassRate, StrictlyPositive>),
     /// No mass flow occurs.
@@ -31,7 +30,7 @@ impl<Fluid> MassFlow<Fluid> {
     ///
     /// Returns a [`ConstraintError`] if `mass_rate` is not strictly positive.
     pub fn incoming(mass_rate: MassRate, state: State<Fluid>) -> Result<Self, ConstraintError> {
-        Ok(Self::In(Constrained::new(mass_rate)?, state))
+        Ok(Self::In(Stream::new(mass_rate, state)?))
     }
 
     /// Creates a [`MassFlow::Out`] representing mass flowing out of the system.
@@ -43,6 +42,15 @@ impl<Fluid> MassFlow<Fluid> {
         Ok(Self::Out(Constrained::new(mass_rate)?))
     }
 
+    /// Creates a mass flow pair with equal inflow and outflow rates.
+    ///
+    /// Useful for modeling constant-mass systems where inflow is balanced by an
+    /// equal outflow at the system's current state.
+    pub fn balanced_pair(stream: Stream<Fluid>) -> (Self, Self) {
+        let m_dot = stream.rate;
+        (Self::In(stream), Self::Out(m_dot))
+    }
+
     /// Returns the signed mass flow rate.
     ///
     /// - Positive for mass flowing into the system.
@@ -51,8 +59,8 @@ impl<Fluid> MassFlow<Fluid> {
     #[must_use]
     pub fn signed_mass_rate(&self) -> MassRate {
         match self {
-            Self::In(mass_rate, _) => mass_rate.into_inner(),
-            Self::Out(mass_rate) => -mass_rate.into_inner(),
+            Self::In(Stream { rate, .. }) => rate.into_inner(),
+            Self::Out(rate) => -rate.into_inner(),
             Self::None => MassRate::ZERO,
         }
     }
@@ -84,7 +92,7 @@ mod tests {
     fn incoming_mass_is_positive() {
         let m_dot = MassRate::new::<kilogram_per_second>(1.5);
         let flow = MassFlow::incoming(m_dot, default_state()).unwrap();
-        assert!(matches!(flow, MassFlow::In(_, _)));
+        assert!(matches!(flow, MassFlow::In(_)));
         assert_relative_eq!(flow.signed_mass_rate().get::<kilogram_per_second>(), 1.5);
     }
 
@@ -124,5 +132,22 @@ mod tests {
     fn rejects_zero_outgoing() {
         let m_dot = MassRate::new::<kilogram_per_second>(0.0);
         assert!(MassFlow::<Air>::outgoing(m_dot).is_err());
+    }
+
+    #[test]
+    fn balanced_pair_produces_equal_and_opposite_flows() {
+        let (mass_flow_in, mass_flow_out) = MassFlow::balanced_pair(
+            Stream::new(MassRate::new::<kilogram_per_second>(2.0), default_state()).unwrap(),
+        );
+
+        assert!(matches!(mass_flow_in, MassFlow::In(_)));
+        assert!(matches!(mass_flow_out, MassFlow::Out(_)));
+
+        let m_dot_in = mass_flow_in.signed_mass_rate();
+        let m_dot_out = mass_flow_out.signed_mass_rate();
+
+        assert_relative_eq!(m_dot_in.get::<kilogram_per_second>(), 2.0);
+        assert_relative_eq!(m_dot_out.get::<kilogram_per_second>(), -2.0);
+        assert_eq!(m_dot_in + m_dot_out, MassRate::ZERO);
     }
 }

@@ -5,8 +5,7 @@ use uom::{ConstZero, si::f64::Power};
 
 /// Represents work flow across a system boundary.
 ///
-/// This type encodes work flow direction and magnitude using a sign convention
-/// consistent with energy balances:
+/// This enum represents flow direction relative to the system:
 ///
 /// - `In`: Work flows into the system (positive contribution, work done on the system).
 /// - `Out`: Work flows out of the system (negative contribution, work done by the system).
