@@ -89,14 +89,16 @@ struct Output {
 }
 
 impl TanksInRoom<'_> {
-    /// Creates a new two-tank system using the provided fluid and tank configurations.
-    ///
-    /// The two tanks are connected in series and share the same fluid model.
-    fn new(first_tank_config: TankConfig, second_tank_config: TankConfig) -> Self {
+    /// Creates a new two-tank system.
+    fn new(
+        first_tank_config: TankConfig,
+        second_tank_config: TankConfig,
+        daily_draw_schedule: StepSchedule<Time, VolumeRate>,
+    ) -> Self {
         Self {
             first_tank: Tank::new(first_tank_config, &Incompressible).unwrap(),
             second_tank: Tank::new(second_tank_config, &Incompressible).unwrap(),
-            daily_draw_schedule: StepSchedule::default(),
+            daily_draw_schedule,
         }
     }
 
@@ -135,17 +137,6 @@ impl TanksInRoom<'_> {
             let m_dot = draw * Water.reference_density();
             Constrained::new(m_dot).unwrap()
         })
-    }
-
-    /// Sets the volumetric draw rate for a given time range.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `range` is invalid or overlaps an existing step.
-    fn set_draw(&mut self, start: Time, end: Time, draw: VolumeRate) {
-        self.daily_draw_schedule
-            .try_push((start..end, draw).try_into().expect("Range is empty"))
-            .expect("Range overlaps an existing step");
     }
 }
 
@@ -240,7 +231,7 @@ impl PlotSeries {
 /// Runs the two-tank simulation and displays a temperature plot over time.
 fn main() {
     // Set the model parameters.
-    let mut model = TanksInRoom::new(
+    let model = TanksInRoom::new(
         TankConfig {
             volume: Volume::new::<gallon>(80.0),
             area: Area::new::<square_foot>(15.0),
@@ -251,12 +242,23 @@ fn main() {
             area: Area::new::<square_foot>(25.0),
             u_value: HeatTransfer::new::<watt_per_square_meter_kelvin>(0.5),
         },
-    );
-
-    model.set_draw(
-        "09:00".parse().unwrap(),
-        "10:00".parse().unwrap(),
-        VolumeRate::new::<gallon_per_minute>(0.2),
+        StepSchedule::new([
+            // From 9 to 10 am there is a steady 0.2 GPM draw.
+            (
+                Time::constant(9, 0, 0, 0)..Time::constant(10, 0, 0, 0),
+                VolumeRate::new::<gallon_per_minute>(0.2),
+            )
+                .try_into()
+                .unwrap(),
+            // At 6 pm there is a 5 minute draw at 2.5 GPM.
+            (
+                Time::constant(18, 0, 0, 0)..Time::constant(18, 5, 0, 0),
+                VolumeRate::new::<gallon_per_minute>(2.5),
+            )
+                .try_into()
+                .unwrap(),
+        ])
+        .unwrap(),
     );
 
     // Create the simulation.
@@ -272,10 +274,12 @@ fn main() {
         q_dot_first_tank: Power::new::<watt>(10.0),
     };
 
-    // Run the simulation with a 5 minute time step, storing values for plotting.
-    let dt = Duration::from_secs(300);
+    // Run the simulation for 4 days with a 5 minute time step, storing values for plotting.
     let mut series = PlotSeries::default();
-    for step_result in sim.step_iter(initial_conditions, dt).take(2000) {
+    for step_result in sim
+        .step_iter(initial_conditions, Duration::from_secs(300))
+        .take(1152)
+    {
         let state = step_result.expect("Step should succeed");
         series.push(&state);
     }
