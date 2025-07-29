@@ -3426,6 +3426,7 @@ dependencies = [
 name = "twine-examples"
 version = "0.2.0"
 dependencies = [
+ "jiff",
  "serde",
  "twine-components",
  "twine-core",

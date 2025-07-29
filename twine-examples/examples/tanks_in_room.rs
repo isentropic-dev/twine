@@ -21,7 +21,11 @@
 
 use std::{convert::Infallible, time::Duration};
 
-use twine_components::thermal::tank2::{Tank, TankConfig, TankInput, TankOutput};
+use jiff::civil::{DateTime, Time};
+use twine_components::{
+    schedule::step_schedule::StepSchedule,
+    thermal::tank2::{Tank, TankConfig, TankInput, TankOutput},
+};
 use twine_core::{
     Component, DurationExt, Simulation, State, TimeIntegrable,
     constraint::{Constrained, StrictlyPositive},
@@ -39,13 +43,10 @@ use uom::{
     ConstZero,
     si::{
         area::square_foot,
-        f64::{
-            Area, HeatTransfer, MassRate, Power, ThermodynamicTemperature, Time, Volume, VolumeRate,
-        },
+        f64::{Area, HeatTransfer, MassRate, Power, ThermodynamicTemperature, Volume, VolumeRate},
         heat_transfer::watt_per_square_meter_kelvin,
         power::watt,
         thermodynamic_temperature::degree_celsius,
-        time::{hour, second},
         volume::gallon,
         volume_rate::gallon_per_minute,
     },
@@ -66,13 +67,13 @@ use uom::{
 struct TanksInRoom<'a> {
     first_tank: Tank<'a, Water, Incompressible>,
     second_tank: Tank<'a, Water, Incompressible>,
-    draw_schedule: [VolumeRate; 24],
+    daily_draw_schedule: StepSchedule<Time, VolumeRate>,
 }
 
 /// Model input at each simulation step.
 #[derive(Debug, Clone)]
 struct Input {
-    time: Time,
+    time: DateTime,
     t_ground: ThermodynamicTemperature,
     t_room: ThermodynamicTemperature,
     t_first_tank: ThermodynamicTemperature,
@@ -95,7 +96,7 @@ impl TanksInRoom<'_> {
         Self {
             first_tank: Tank::new(first_tank_config, &Incompressible).unwrap(),
             second_tank: Tank::new(second_tank_config, &Incompressible).unwrap(),
-            draw_schedule: [VolumeRate::ZERO; 24],
+            daily_draw_schedule: StepSchedule::default(),
         }
     }
 
@@ -104,7 +105,7 @@ impl TanksInRoom<'_> {
         TankInput {
             ambient_temperature: input.t_room,
             aux_heat_flow: HeatFlow::from_signed(input.q_dot_first_tank).unwrap(),
-            inflow: self.draw_at_time(input.time).map(|m_dot| {
+            inflow: self.draw_at_time(input.time.time()).map(|m_dot| {
                 let state = Incompressible.state_from(input.t_ground).unwrap();
                 Stream::from_constrained(m_dot, state)
             }),
@@ -117,7 +118,7 @@ impl TanksInRoom<'_> {
         TankInput {
             ambient_temperature: input.t_room,
             aux_heat_flow: HeatFlow::None,
-            inflow: self.draw_at_time(input.time).map(|m_dot| {
+            inflow: self.draw_at_time(input.time.time()).map(|m_dot| {
                 let state = Incompressible.state_from(input.t_first_tank).unwrap();
                 Stream::from_constrained(m_dot, state)
             }),
@@ -127,30 +128,24 @@ impl TanksInRoom<'_> {
 
     /// Returns the mass flow rate through the tanks at a given time.
     ///
-    /// Flow is looked up from the draw schedule using the current hour of day,
-    /// then converted from volumetric to mass flow using the water's default density.
+    /// Flow is looked up from the draw schedule using the current time,
+    /// then converted from volumetric to mass rate using water's default density.
     fn draw_at_time(&self, time: Time) -> Option<Constrained<MassRate, StrictlyPositive>> {
-        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-        let hour_of_day = time.get::<hour>().floor() as usize % 24;
-
-        let draw = self.draw_schedule[hour_of_day];
-        if draw > VolumeRate::ZERO {
+        self.daily_draw_schedule.call(time).unwrap().map(|draw| {
             let m_dot = draw * Water.reference_density();
-            Some(Constrained::new(m_dot).unwrap())
-        } else {
-            None
-        }
+            Constrained::new(m_dot).unwrap()
+        })
     }
 
-    /// Sets the volumetric draw rate for a specific hour of the day.
+    /// Sets the volumetric draw rate for a given time range.
     ///
-    /// Accepts a value in units of flow (e.g., gallons per minute) and the
-    /// corresponding hour index (0–23).
+    /// # Panics
     ///
-    /// Returns the updated model.
-    fn set_draw_for_hour(mut self, draw: VolumeRate, hour_index: usize) -> Self {
-        self.draw_schedule[hour_index] = draw;
-        self
+    /// Panics if `range` is invalid or overlaps an existing step.
+    fn set_draw(&mut self, start: Time, end: Time, draw: VolumeRate) {
+        self.daily_draw_schedule
+            .try_push((start..end, draw).try_into().expect("Range is empty"))
+            .expect("Range overlaps an existing step");
     }
 }
 
@@ -193,16 +188,16 @@ impl<'a> Simulation for TanksInRoomSim<'a> {
         dt: Duration,
     ) -> Result<<Self::Model as Component>::Input, Self::StepError> {
         let State { input, output } = state;
-        let dt_time = dt.as_time();
 
         Ok(Input {
-            time: input.time + dt_time,
+            time: input.time + dt,
             t_first_tank: input
                 .t_first_tank
-                .step(output.first_tank.state_derivative.temperature, dt_time),
-            t_second_tank: input
-                .t_second_tank
-                .step(output.second_tank.state_derivative.temperature, dt_time),
+                .step(output.first_tank.state_derivative.temperature, dt.as_time()),
+            t_second_tank: input.t_second_tank.step(
+                output.second_tank.state_derivative.temperature,
+                dt.as_time(),
+            ),
             ..input.clone()
         })
     }
@@ -231,8 +226,8 @@ impl PlotSeries {
     /// given simulation state and pushes them to the corresponding series.
     fn push(&mut self, state: &State<TanksInRoom>) {
         let push_temp = |vec: &mut Vec<[f64; 2]>, temp: ThermodynamicTemperature| {
-            let time = state.input.time.get::<hour>();
-            vec.push([time, temp.get::<degree_celsius>()]);
+            let elapsed = state.input.time.duration_since(DateTime::default());
+            vec.push([elapsed.as_secs_f64() / 3600.0, temp.get::<degree_celsius>()]);
         };
 
         push_temp(&mut self.ground, state.input.t_ground);
@@ -245,7 +240,7 @@ impl PlotSeries {
 /// Runs the two-tank simulation and displays a temperature plot over time.
 fn main() {
     // Set the model parameters.
-    let model = TanksInRoom::new(
+    let mut model = TanksInRoom::new(
         TankConfig {
             volume: Volume::new::<gallon>(80.0),
             area: Area::new::<square_foot>(15.0),
@@ -256,15 +251,20 @@ fn main() {
             area: Area::new::<square_foot>(25.0),
             u_value: HeatTransfer::new::<watt_per_square_meter_kelvin>(0.5),
         },
-    )
-    .set_draw_for_hour(VolumeRate::new::<gallon_per_minute>(0.2), 11);
+    );
+
+    model.set_draw(
+        "09:00".parse().unwrap(),
+        "10:00".parse().unwrap(),
+        VolumeRate::new::<gallon_per_minute>(0.2),
+    );
 
     // Create the simulation.
     let sim = TanksInRoomSim { model };
 
     // Specify the initial conditions.
     let initial_conditions = Input {
-        time: Time::new::<second>(0.0),
+        time: DateTime::default(),
         t_ground: ThermodynamicTemperature::new::<degree_celsius>(10.0),
         t_room: ThermodynamicTemperature::new::<degree_celsius>(20.0),
         t_first_tank: ThermodynamicTemperature::new::<degree_celsius>(70.0),

@@ -18,3 +18,4 @@ twine-macros = { path = "../twine-macros" }
 twine-plot = { path = "../twine-plot" }
 twine-thermo = { path = "../twine-thermo" }
 uom = { workspace = true }
+jiff = "0.2.15"
