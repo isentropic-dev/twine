@@ -73,7 +73,7 @@ struct TanksInRoom<'a> {
 /// Model input at each simulation step.
 #[derive(Debug, Clone)]
 struct Input {
-    time: DateTime,
+    datetime: DateTime,
     t_ground: ThermodynamicTemperature,
     t_room: ThermodynamicTemperature,
     t_first_tank: ThermodynamicTemperature,
@@ -105,7 +105,7 @@ impl TanksInRoom<'_> {
         TankInput {
             ambient_temperature: input.t_room,
             aux_heat_flow: HeatFlow::from_signed(input.q_dot_first_tank).unwrap(),
-            inflow: self.draw_at_time(input.time.time()).map(|m_dot| {
+            inflow: self.draw_at_time(input.datetime.time()).map(|m_dot| {
                 let state = Incompressible.state_from(input.t_ground).unwrap();
                 Stream::from_constrained(m_dot, state)
             }),
@@ -118,7 +118,7 @@ impl TanksInRoom<'_> {
         TankInput {
             ambient_temperature: input.t_room,
             aux_heat_flow: HeatFlow::None,
-            inflow: self.draw_at_time(input.time.time()).map(|m_dot| {
+            inflow: self.draw_at_time(input.datetime.time()).map(|m_dot| {
                 let state = Incompressible.state_from(input.t_first_tank).unwrap();
                 Stream::from_constrained(m_dot, state)
             }),
@@ -190,7 +190,7 @@ impl<'a> Simulation for TanksInRoomSim<'a> {
         let State { input, output } = state;
 
         Ok(Input {
-            time: input.time + dt,
+            datetime: input.datetime + dt,
             t_first_tank: input
                 .t_first_tank
                 .step(output.first_tank.state_derivative.temperature, dt.as_time()),
@@ -226,7 +226,7 @@ impl PlotSeries {
     /// given simulation state and pushes them to the corresponding series.
     fn push(&mut self, state: &State<TanksInRoom>) {
         let push_temp = |vec: &mut Vec<[f64; 2]>, temp: ThermodynamicTemperature| {
-            let elapsed = state.input.time.duration_since(DateTime::default());
+            let elapsed = state.input.datetime.duration_since(DateTime::default());
             vec.push([elapsed.as_secs_f64() / 3600.0, temp.get::<degree_celsius>()]);
         };
 
@@ -264,7 +264,7 @@ fn main() {
 
     // Specify the initial conditions.
     let initial_conditions = Input {
-        time: DateTime::default(),
+        datetime: DateTime::default(),
         t_ground: ThermodynamicTemperature::new::<degree_celsius>(10.0),
         t_room: ThermodynamicTemperature::new::<degree_celsius>(20.0),
         t_first_tank: ThermodynamicTemperature::new::<degree_celsius>(70.0),
