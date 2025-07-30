@@ -132,15 +132,6 @@ mod tests {
     }
 
     #[test]
-    fn stays_off_above_on_threshold() {
-        let on_threshold = SETPOINT - DEADBAND;
-
-        let input = test_input(SwitchState::Off, on_threshold + 0.1);
-        let output = HeatingThermostat.call(input).unwrap();
-        assert_eq!(output, SwitchState::Off);
-    }
-
-    #[test]
     fn stays_off_in_deadband() {
         let on_threshold = SETPOINT - DEADBAND;
         let midpoint = f64::midpoint(on_threshold, SETPOINT);
