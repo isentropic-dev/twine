@@ -47,14 +47,14 @@ pub struct StepSchedule<T, V> {
 ///
 /// This error can occur when creating a [`StepSchedule`] with overlapping steps,
 /// or when pushing a new step into an existing schedule.
-/// It contains the ranges of the two conflicting steps.
+///
+/// The `existing` field refers to a step already in the schedule,
+/// and `incoming` is the step that overlaps it.
 #[derive(Debug, Error)]
-#[error("steps overlap: {first:?} and {second:?}")]
+#[error("steps overlap: {existing:?} and {incoming:?}")]
 pub struct OverlappingStepsError<T: Debug + Ord> {
-    /// The range of the existing step.
-    pub first: Range<T>,
-    /// The range of the conflicting step.
-    pub second: Range<T>,
+    pub existing: Range<T>,
+    pub incoming: Range<T>,
 }
 
 impl<T: Debug + Clone + Ord, V> StepSchedule<T, V> {
@@ -66,6 +66,8 @@ impl<T: Debug + Clone + Ord, V> StepSchedule<T, V> {
     /// # Errors
     ///
     /// Returns an [`OverlappingStepsError`] if any steps have overlapping ranges.
+    /// Steps are sorted by start time before validation, so the `existing` step
+    /// will always have an earlier start than the `incoming` one in the error.
     pub fn new<I>(steps: I) -> Result<Self, OverlappingStepsError<T>>
     where
         I: IntoIterator<Item = Step<T, V>>,
@@ -74,9 +76,10 @@ impl<T: Debug + Clone + Ord, V> StepSchedule<T, V> {
         steps.sort_by(|a, b| a.start().cmp(b.start()));
 
         if let Some(index) = steps.windows(2).position(|pair| pair[0].overlaps(&pair[1])) {
-            let first = steps[index].range().clone();
-            let second = steps[index + 1].range().clone();
-            return Err(OverlappingStepsError { first, second });
+            return Err(OverlappingStepsError {
+                existing: steps[index].range().clone(),
+                incoming: steps[index + 1].range().clone(),
+            });
         }
 
         Ok(StepSchedule { steps })
@@ -91,17 +94,17 @@ impl<T: Debug + Clone + Ord, V> StepSchedule<T, V> {
     pub fn try_push(&mut self, step: Step<T, V>) -> Result<(), OverlappingStepsError<T>> {
         let index = self.steps.partition_point(|s| s.start() < step.start());
 
-        if index > 0 && self.steps[index - 1].overlaps(&step) {
-            return Err(OverlappingStepsError {
-                first: self.steps[index - 1].range().clone(),
-                second: step.range().clone(),
-            });
-        }
+        let overlaps_left = index.checked_sub(1).and_then(|i| {
+            let left = &self.steps[i];
+            left.overlaps(&step).then_some(left)
+        });
 
-        if index < self.steps.len() && self.steps[index].overlaps(&step) {
+        let overlaps_right = self.steps.get(index).filter(|s| s.overlaps(&step));
+
+        if let Some(existing_step) = overlaps_left.or(overlaps_right) {
             return Err(OverlappingStepsError {
-                first: self.steps[index].range().clone(),
-                second: step.range().clone(),
+                existing: existing_step.range().clone(),
+                incoming: step.range().clone(),
             });
         }
 
@@ -168,8 +171,6 @@ impl<T: Debug + Clone + Ord, V: Clone> Component for StepSchedule<T, V> {
 mod tests {
     use super::*;
 
-    use std::iter;
-
     #[test]
     fn new_succeeds_with_non_overlapping_steps() {
         let schedule = StepSchedule::new([
@@ -194,21 +195,6 @@ mod tests {
     }
 
     #[test]
-    fn try_push_adds_step_successfully() {
-        let mut schedule = StepSchedule::new([
-            Step::new(-10..0, "a").unwrap(),
-            Step::new(0..10, "b").unwrap(),
-        ])
-        .unwrap();
-
-        let new_step = Step::new(10..20, "c").unwrap();
-
-        assert!(schedule.try_push(new_step).is_ok());
-        assert_eq!(schedule.steps().len(), 3);
-        assert_eq!(schedule.value_at(&15), Some(&"c"));
-    }
-
-    #[test]
     fn steps_are_sorted_by_start_time() {
         let schedule = StepSchedule::new([
             Step::new(20..30, "later").unwrap(),
@@ -222,6 +208,74 @@ mod tests {
     }
 
     #[test]
+    fn try_push_inserts_steps_correctly() {
+        let starts = |s: &StepSchedule<_, _>| {
+            s.steps()
+                .iter()
+                .map(Step::start)
+                .copied()
+                .collect::<Vec<_>>()
+        };
+
+        let mut schedule = StepSchedule::new([
+            Step::new(0..10, "a").unwrap(),
+            Step::new(20..30, "c").unwrap(),
+        ])
+        .unwrap();
+
+        schedule.try_push(Step::new(10..20, "b").unwrap()).unwrap();
+        assert_eq!(starts(&schedule), vec![0, 10, 20]);
+        assert_eq!(schedule.value_at(&15), Some(&"b"));
+
+        schedule
+            .try_push(Step::new(-10..-5, "start").unwrap())
+            .unwrap();
+        assert_eq!(starts(&schedule), vec![-10, 0, 10, 20]);
+
+        schedule
+            .try_push(Step::new(30..40, "end").unwrap())
+            .unwrap();
+        assert_eq!(starts(&schedule), vec![-10, 0, 10, 20, 30]);
+
+        assert_eq!(
+            schedule
+                .steps()
+                .iter()
+                .map(Step::value)
+                .copied()
+                .collect::<Vec<_>>(),
+            vec!["start", "a", "b", "c", "end"],
+        );
+    }
+
+    #[test]
+    fn try_push_rejects_overlapping_step() {
+        let mut schedule = StepSchedule::new([
+            (0..10, "a").try_into().unwrap(),
+            (20..30, "b").try_into().unwrap(),
+        ])
+        .unwrap();
+
+        assert!(
+            schedule
+                .try_push((5..15, "overlaps a").try_into().unwrap())
+                .is_err()
+        );
+
+        assert!(
+            schedule
+                .try_push((25..35, "overlaps b").try_into().unwrap())
+                .is_err()
+        );
+
+        assert!(
+            schedule
+                .try_push((5..25, "overlaps both").try_into().unwrap())
+                .is_err()
+        );
+    }
+
+    #[test]
     fn value_at_handles_empty_schedule() {
         let schedule: StepSchedule<i32, &str> = StepSchedule::default();
         assert_eq!(schedule.value_at(&5), None);
@@ -230,7 +284,7 @@ mod tests {
     #[test]
     fn value_at_handles_exact_start_and_end_bounds() {
         let step = Step::new(5..10, "only").unwrap();
-        let schedule = StepSchedule::new(iter::once(step)).unwrap();
+        let schedule = StepSchedule::new(std::iter::once(step)).unwrap();
 
         assert_eq!(schedule.value_at(&4), None);
         assert_eq!(schedule.value_at(&5), Some(&"only"));
