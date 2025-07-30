@@ -6,6 +6,41 @@ use crate::controller::SwitchState;
 
 use super::ThermostatInput;
 
+/// A heating thermostat with hysteresis (deadband).
+///
+/// This controller switches heating `On` at or below `setpoint - deadband`,
+/// and switches it `Off` at or above the setpoint.
+/// This one-sided deadband prevents rapid cycling near the setpoint.
+///
+/// More specifically:
+/// - If currently `Off` and `temperature <= setpoint - deadband`, returns `On`.
+/// - If currently `On` and `temperature >= setpoint`, returns `Off`.
+/// - Otherwise, the current [`SwitchState`] is returned unchanged.
+///
+/// # Example
+///
+/// ```
+///  use twine_core::Component;
+///  use twine_components::controller::{
+///      SwitchState,
+///      thermostat::{HeatingThermostat, ThermostatInput},
+///  };
+///  use uom::si::{
+///      f64::{TemperatureInterval, ThermodynamicTemperature},
+///      temperature_interval::degree_celsius as delta_celsius,
+///      thermodynamic_temperature::degree_celsius,
+///  };
+///
+/// let input = ThermostatInput {
+///     state: SwitchState::Off,
+///     temperature: ThermodynamicTemperature::new::<degree_celsius>(15.0),
+///     setpoint: ThermodynamicTemperature::new::<degree_celsius>(20.0),
+///     deadband: TemperatureInterval::new::<delta_celsius>(2.0),
+/// };
+/// let output = HeatingThermostat.call(input).unwrap();
+/// assert_eq!(output, SwitchState::On);
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HeatingThermostat;
 
 impl Component for HeatingThermostat {
@@ -22,18 +57,18 @@ impl Component for HeatingThermostat {
         } = input;
 
         Ok(match state {
+            SwitchState::Off => {
+                if temperature <= setpoint - deadband {
+                    SwitchState::On
+                } else {
+                    SwitchState::Off
+                }
+            }
             SwitchState::On => {
                 if temperature >= setpoint {
                     SwitchState::Off
                 } else {
                     SwitchState::On
-                }
-            }
-            SwitchState::Off => {
-                if temperature < setpoint - deadband {
-                    SwitchState::On
-                } else {
-                    SwitchState::Off
                 }
             }
         })
@@ -43,6 +78,7 @@ impl Component for HeatingThermostat {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     use uom::si::{
         f64::{TemperatureInterval, ThermodynamicTemperature},
         temperature_interval,
@@ -65,8 +101,13 @@ mod tests {
     }
 
     #[test]
-    fn turns_on_below_on_threshold() {
+    fn turns_on_at_or_below_on_threshold() {
         let on_threshold = SETPOINT - DEADBAND;
+
+        let input = test_input(SwitchState::Off, on_threshold);
+        let output = HeatingThermostat.call(input).unwrap();
+        assert_eq!(output, SwitchState::On);
+
         let input = test_input(SwitchState::Off, on_threshold - 0.1);
         let output = HeatingThermostat.call(input).unwrap();
         assert_eq!(output, SwitchState::On);
@@ -80,15 +121,12 @@ mod tests {
     }
 
     #[test]
-    fn turns_off_at_setpoint() {
+    fn turns_off_at_or_above_setpoint() {
         let input = test_input(SwitchState::On, SETPOINT);
         let output = HeatingThermostat.call(input).unwrap();
         assert_eq!(output, SwitchState::Off);
-    }
 
-    #[test]
-    fn turns_off_above_setpoint() {
-        let input = test_input(SwitchState::On, SETPOINT + 1.0);
+        let input = test_input(SwitchState::On, SETPOINT + 0.1);
         let output = HeatingThermostat.call(input).unwrap();
         assert_eq!(output, SwitchState::Off);
     }
@@ -96,15 +134,18 @@ mod tests {
     #[test]
     fn stays_off_above_on_threshold() {
         let on_threshold = SETPOINT - DEADBAND;
+
         let input = test_input(SwitchState::Off, on_threshold + 0.1);
         let output = HeatingThermostat.call(input).unwrap();
         assert_eq!(output, SwitchState::Off);
     }
 
     #[test]
-    fn stays_off_at_on_threshold() {
+    fn stays_off_in_deadband() {
         let on_threshold = SETPOINT - DEADBAND;
-        let input = test_input(SwitchState::Off, on_threshold);
+        let midpoint = f64::midpoint(on_threshold, SETPOINT);
+
+        let input = test_input(SwitchState::Off, midpoint);
         let output = HeatingThermostat.call(input).unwrap();
         assert_eq!(output, SwitchState::Off);
     }
