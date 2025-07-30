@@ -17,6 +17,7 @@ uom = { workspace = true, features = ["serde"] }
 ndarray = "0.16.1"
 ninterp = "0.6.3"
 thiserror = { workspace = true }
+jiff = { version = "0.2.15", features = ["serde"] }
 
 [dev-dependencies]
 approx = { workspace = true }
