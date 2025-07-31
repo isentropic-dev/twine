@@ -20,16 +20,16 @@ use super::ThermostatInput;
 /// # Example
 ///
 /// ```
-///  use twine_core::Component;
-///  use twine_components::controller::{
-///      SwitchState,
-///      thermostat::{HeatingThermostat, ThermostatInput},
-///  };
-///  use uom::si::{
-///      f64::{TemperatureInterval, ThermodynamicTemperature},
-///      temperature_interval::degree_celsius as delta_celsius,
-///      thermodynamic_temperature::degree_celsius,
-///  };
+/// use twine_core::Component;
+/// use twine_components::controller::{
+///     SwitchState,
+///     thermostat::{HeatingThermostat, ThermostatInput},
+/// };
+/// use uom::si::{
+///     f64::{TemperatureInterval, ThermodynamicTemperature},
+///     temperature_interval::degree_celsius as delta_celsius,
+///     thermodynamic_temperature::degree_celsius,
+/// };
 ///
 /// let input = ThermostatInput {
 ///     state: SwitchState::Off,
