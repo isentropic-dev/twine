@@ -1,3 +1,4 @@
+pub mod controller;
 pub mod example;
 pub mod fluid;
 pub mod integrators;
