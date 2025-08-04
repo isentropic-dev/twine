@@ -1,9 +1,8 @@
 mod step;
 
-use std::{convert::Infallible, fmt::Debug, ops::Range};
+use std::{fmt::Debug, ops::Range};
 
 use thiserror::Error;
-use twine_core::Component;
 
 pub use step::{EmptyRangeError, Step};
 
@@ -151,19 +150,6 @@ impl<T: Debug + Clone + Ord, V> StepSchedule<T, V> {
                 .ok()
                 .map(|index| self.steps[index].value())
         }
-    }
-}
-
-impl<T: Debug + Clone + Ord, V: Clone> Component for StepSchedule<T, V> {
-    type Input = T;
-    type Output = Option<V>;
-    type Error = Infallible;
-
-    /// Invokes the schedule with the given input `time`, returning the associated value if any.
-    ///
-    /// Returns `Ok(Some(value))` if a step covers the input, or `Ok(None)` if no step matches.
-    fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
-        Ok(self.value_at(&input).cloned())
     }
 }
 

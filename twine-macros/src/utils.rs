@@ -3,6 +3,7 @@ use quote::format_ident;
 use syn::Ident;
 
 /// Extension trait for `Ident` to simplify common naming transformations.
+#[allow(dead_code)]
 pub(crate) trait IdentExt {
     /// Returns a new identifier in `UpperCamelCase`.
     fn upper_camel_case(&self) -> Ident;

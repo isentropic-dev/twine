@@ -31,10 +31,10 @@ use twine_components::{
         thermostat::{HeatingThermostat, ThermostatInput},
     },
     schedule::step_schedule::StepSchedule,
-    thermal::tank2::{Tank, TankConfig, TankInput, TankOutput},
+    thermal::tank::{Tank, TankConfig, TankInput, TankOutput},
 };
 use twine_core::{
-    Component, DurationExt, Simulation, State, TimeIntegrable,
+    DurationExt, Model, Simulation, State, TimeIntegrable,
     constraint::{Constrained, StrictlyPositive},
 };
 use twine_plot::PlotApp;
@@ -128,7 +128,7 @@ impl TanksInRoom<'_> {
     }
 }
 
-impl Component for TanksInRoom<'_> {
+impl Model for TanksInRoom<'_> {
     type Input = Input;
     type Output = Output;
     type Error = Infallible;
@@ -137,22 +137,19 @@ impl Component for TanksInRoom<'_> {
         // Call the schedule component and convert volumetric draw to a mass flow rate.
         let draw = self
             .daily_draw_schedule
-            .call(input.datetime.time())
-            .unwrap()
-            .map(|draw| {
+            .value_at(&input.datetime.time())
+            .map(|&draw| {
                 let m_dot = draw * Water.reference_density();
                 Constrained::new(m_dot).unwrap()
             });
 
         // Call the thermostat component.
-        let element_state = HeatingThermostat
-            .call(ThermostatInput {
-                state: input.element_state,
-                temperature: input.t_first_tank,
-                setpoint: ThermodynamicTemperature::new::<degree_celsius>(SETPOINT_C),
-                deadband: TemperatureInterval::new::<delta_celsius>(DEADBAND_C),
-            })
-            .unwrap();
+        let element_state = HeatingThermostat.call(ThermostatInput {
+            state: input.element_state,
+            temperature: input.t_first_tank,
+            setpoint: ThermodynamicTemperature::new::<degree_celsius>(SETPOINT_C),
+            deadband: TemperatureInterval::new::<delta_celsius>(DEADBAND_C),
+        });
 
         // Call the first tank component.
         let first_tank = self
@@ -214,7 +211,7 @@ impl<'a> Simulation for TanksInRoomSim<'a> {
         &self,
         state: &State<Self::Model>,
         dt: Duration,
-    ) -> Result<<Self::Model as Component>::Input, Self::StepError> {
+    ) -> Result<<Self::Model as Model>::Input, Self::StepError> {
         let State { input, output } = state;
 
         Ok(Input {

@@ -47,14 +47,14 @@ use uom::si::{f64::Time, time::second};
 /// }
 ///
 /// #[derive(Debug, Clone, PartialEq)]
-/// struct StateDerivative<T: TimeIntegrable> {
+/// struct StateTimeDerivative<T: TimeIntegrable> {
 ///     temperature: TimeDerivative<ThermodynamicTemperature>,
 ///     density: TimeDerivative<MassDensity>,
 ///     other: TimeDerivative<T>,
 /// }
 ///
 /// impl<T: TimeIntegrable> TimeIntegrable for State<T> {
-///     type Derivative = StateDerivative<T>;
+///     type Derivative = StateTimeDerivative<T>;
 ///
 ///     fn step(self, derivative: Self::Derivative, dt: Time) -> Self {
 ///         Self {
@@ -80,7 +80,7 @@ use uom::si::{f64::Time, time::second};
 /// }
 /// ```
 ///
-/// This generates the same `StateDerivative` struct and [`TimeIntegrable`]
+/// This generates the same `StateTimeDerivative` struct and [`TimeIntegrable`]
 /// implementation as shown above.
 pub trait TimeIntegrable: Debug + Clone + PartialEq {
     type Derivative: Debug + Clone + PartialEq;

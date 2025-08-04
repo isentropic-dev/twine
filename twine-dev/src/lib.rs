@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
-use twine_core::Component;
+use twine_core::Model;
 use warp::Filter;
 
 /// Runs a web server for any Component with separate DTO types for serialization.
@@ -92,10 +92,10 @@ where
     /// ```ignore
     /// ComponentServer::<MyInputDto, MyOutputDto>::run(|| MyComponent).await;
     /// ```
-    pub async fn run<F, C, I, O>(component_fn: F)
+    pub async fn run<F, M, I, O>(component_fn: F)
     where
-        F: Fn() -> C + Sync + Send + Clone + 'static,
-        C: Component<Input = I, Output = O>,
+        F: Fn() -> M + Sync + Send + Clone + 'static,
+        M: Model<Input = I, Output = O>,
         I: From<InputDto> + Send + 'static,
         O: Into<OutputDto> + Send + 'static,
     {
@@ -116,7 +116,7 @@ where
 
         let name = warp::path("name")
             .and(warp::get())
-            .map(|| warp::reply::json(&std::any::type_name::<C>()));
+            .map(|| warp::reply::json(&std::any::type_name::<M>()));
 
         let static_dir = std::env::var("CARGO_MANIFEST_DIR").map_or_else(
             |_| PathBuf::from("static"),
@@ -158,10 +158,10 @@ where
     /// ```ignore
     /// ComponentServer::<MyInputDto, MyOutputDto>::run_blocking(|| MyComponent);
     /// ```
-    pub fn run_blocking<F, C, I, O>(component_fn: F)
+    pub fn run_blocking<F, M, I, O>(component_fn: F)
     where
-        F: Fn() -> C + Sync + Send + Clone + 'static,
-        C: Component<Input = I, Output = O>,
+        F: Fn() -> M + Sync + Send + Clone + 'static,
+        M: Model<Input = I, Output = O>,
         I: From<InputDto> + Send + 'static,
         O: Into<OutputDto> + Send + 'static,
     {

@@ -1,11 +1,26 @@
 use std::{iter::FusedIterator, time::Duration};
 
-use crate::Component;
-
-/// Trait for simulating the time evolution of a [`Component`].
+/// Trait for defining a system model in Twine.
 ///
-/// A `Simulation` advances a component forward in time by computing its next
-/// input with [`advance_time`] and then calling the component to produce a new
+/// Models must be deterministic, always producing the same result for a given input.
+pub trait Model {
+    type Input;
+    type Output;
+    type Error: std::error::Error + Send + Sync + 'static;
+
+    /// Calls the model with the given input and returns a result.
+    ///
+    /// # Errors
+    ///
+    /// Each model defines its own `Error` type, allowing it to determine what
+    /// constitutes a failure within its domain.
+    fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error>;
+}
+
+/// Trait for simulating the time evolution of a [`Model`].
+///
+/// A `Simulation` advances a model forward in time by computing its next
+/// input with [`advance_time`] and then calling the model to produce a new
 /// [`State`] representing the system at the corresponding future moment.
 ///
 /// # Stepping Methods
@@ -18,23 +33,19 @@ use crate::Component;
 /// - [`Simulation::step_many`]: Takes multiple steps and collects all resulting states.
 /// - [`Simulation::step_iter`]: Returns an iterator over simulation steps.
 pub trait Simulation: Sized {
-    /// The [`Component`] being simulated.
-    type Model: Component;
+    /// The [`Model`] being simulated.
+    type Model: Model;
 
     /// The error type returned if a simulation step fails.
-    type StepError: std::error::Error
-        + From<<Self::Model as Component>::Error>
-        + Send
-        + Sync
-        + 'static;
+    type StepError: std::error::Error + From<<Self::Model as Model>::Error> + Send + Sync + 'static;
 
-    /// Provides a reference to the component being simulated.
+    /// Provides a reference to the model being simulated.
     fn model(&self) -> &Self::Model;
 
-    /// Computes the next input for the component, advancing the simulation in time.
+    /// Computes the next input for the model, advancing the simulation in time.
     ///
     /// Given the current [`State`] and a proposed time step `dt`, this method
-    /// generates the next [`Component::Input`] to drive the simulation forward.
+    /// generates the next [`Model::Input`] to drive the simulation forward.
     ///
     /// This method is the primary customization point for incrementing time,
     /// integrating state variables, enforcing constraints, applying control
@@ -60,32 +71,32 @@ pub trait Simulation: Sized {
         &self,
         state: &State<Self::Model>,
         dt: Duration,
-    ) -> Result<<Self::Model as Component>::Input, Self::StepError>;
+    ) -> Result<<Self::Model as Model>::Input, Self::StepError>;
 
     /// Advances the simulation by one step, starting from an initial input.
     ///
-    /// This method first calls the component with the given input to compute
+    /// This method first calls the model with the given input to compute
     /// the initial output, forming a complete [`State`].
     /// It then delegates to [`step_from_state`] to compute the next state.
-    /// As a result, the component is called twice: once to initialize the
+    /// As a result, the model is called twice: once to initialize the
     /// state, and once after advancing.
     ///
     /// # Parameters
     ///
-    /// - `input`: The component input at the start of the step.
+    /// - `input`: The model input at the start of the step.
     /// - `dt`: The proposed time step.
     ///
     /// # Errors
     ///
     /// Returns a [`StepError`] if computing the next input or calling the
-    /// component fails.
+    /// model fails.
     fn step(
         &self,
-        input: <Self::Model as Component>::Input,
+        input: <Self::Model as Model>::Input,
         dt: Duration,
     ) -> Result<State<Self::Model>, Self::StepError>
     where
-        <Self::Model as Component>::Input: Clone,
+        <Self::Model as Model>::Input: Clone,
     {
         let output = self.model().call(input.clone())?;
         let state = State::new(input, output);
@@ -96,7 +107,7 @@ pub trait Simulation: Sized {
     /// Advances the simulation by one step from a known [`State`].
     ///
     /// This method computes the next input using [`advance_time`],
-    /// then calls the component to produce the resulting [`State`].
+    /// then calls the model to produce the resulting [`State`].
     ///
     /// # Parameters
     ///
@@ -106,14 +117,14 @@ pub trait Simulation: Sized {
     /// # Errors
     ///
     /// Returns a [`StepError`] if computing the next input or calling the
-    /// component fails.
+    /// model fails.
     fn step_from_state(
         &self,
         state: &State<Self::Model>,
         dt: Duration,
     ) -> Result<State<Self::Model>, Self::StepError>
     where
-        <Self::Model as Component>::Input: Clone,
+        <Self::Model as Model>::Input: Clone,
     {
         let input = self.advance_time(state, dt)?;
         let output = self.model().call(input.clone())?;
@@ -133,7 +144,7 @@ pub trait Simulation: Sized {
     ///
     /// # Parameters
     ///
-    /// - `initial_input`: The component input at the start of the simulation.
+    /// - `initial_input`: The model input at the start of the simulation.
     /// - `dt`: The proposed time step for each iteration.
     ///
     /// # Returns
@@ -141,12 +152,12 @@ pub trait Simulation: Sized {
     /// An iterator over `Result<State<Model>, StepError>`.
     fn step_iter(
         &self,
-        initial_input: <Self::Model as Component>::Input,
+        initial_input: <Self::Model as Model>::Input,
         dt: Duration,
     ) -> impl Iterator<Item = Result<State<Self::Model>, Self::StepError>>
     where
-        <Self::Model as Component>::Input: Clone,
-        <Self::Model as Component>::Output: Clone,
+        <Self::Model as Model>::Input: Clone,
+        <Self::Model as Model>::Output: Clone,
     {
         StepIter {
             dt,
@@ -162,7 +173,7 @@ pub trait Simulation: Sized {
     ///
     /// # Parameters
     ///
-    /// - `initial_input`: The component input at the start of the simulation.
+    /// - `initial_input`: The model input at the start of the simulation.
     /// - `steps`: The number of steps to run.
     /// - `dt`: The proposed time step for each iteration.
     ///
@@ -177,13 +188,13 @@ pub trait Simulation: Sized {
     /// No further steps are taken after an error.
     fn step_many(
         &self,
-        initial_input: <Self::Model as Component>::Input,
+        initial_input: <Self::Model as Model>::Input,
         steps: usize,
         dt: Duration,
     ) -> Result<Vec<State<Self::Model>>, Self::StepError>
     where
-        <Self::Model as Component>::Input: Clone,
-        <Self::Model as Component>::Output: Clone,
+        <Self::Model as Model>::Input: Clone,
+        <Self::Model as Model>::Output: Clone,
     {
         self.step_iter(initial_input, dt).take(steps + 1).collect()
     }
@@ -193,16 +204,16 @@ pub trait Simulation: Sized {
 ///
 /// A [`State`] pairs:
 /// - `input`: The independent variables, typically user-controlled or time-evolving.
-/// - `output`: The dependent variables, computed by the component.
+/// - `output`: The dependent variables, computed by the model.
 ///
 /// Together, these describe the full state of the system at a given instant.
 #[derive(Debug, Clone, Copy, Default, PartialEq, PartialOrd)]
-pub struct State<C: Component> {
+pub struct State<C: Model> {
     pub input: C::Input,
     pub output: C::Output,
 }
 
-impl<C: Component> State<C> {
+impl<C: Model> State<C> {
     /// Creates a [`State`] from the provided input and output.
     pub fn new(input: C::Input, output: C::Output) -> Self {
         Self { input, output }
@@ -224,7 +235,7 @@ struct StepIter<'a, S: Simulation> {
 /// Internal state held by the [`StepIter`] iterator.
 enum Known<S: Simulation> {
     /// The simulation has only been initialized with an input.
-    Input(<S::Model as Component>::Input),
+    Input(<S::Model as Model>::Input),
     /// The full simulation state is available.
     State(State<S::Model>),
 }
@@ -232,14 +243,14 @@ enum Known<S: Simulation> {
 impl<S> Iterator for StepIter<'_, S>
 where
     S: Simulation,
-    <S::Model as Component>::Input: Clone,
-    <S::Model as Component>::Output: Clone,
+    <S::Model as Model>::Input: Clone,
+    <S::Model as Model>::Output: Clone,
 {
     type Item = Result<State<S::Model>, S::StepError>;
 
     /// Advances the simulation by one step.
     ///
-    /// - If starting from an input, calls the component to produce the first state.
+    /// - If starting from an input, calls the model to produce the first state.
     /// - If continuing from a full state, steps the simulation forward.
     /// - On success, yields a new [`State`].
     /// - On error, yields a [`StepError`] and ends the iteration.
@@ -262,7 +273,7 @@ where
                 }
             },
 
-            // Only the input is known - call the component and yield the first state.
+            // Only the input is known - call the model and yield the first state.
             Known::Input(input) => match self.sim.model().call(input.clone()) {
                 Ok(output) => {
                     self.known = Some(Known::State(State::new(input.clone(), output.clone())));
@@ -282,8 +293,8 @@ where
 impl<S> FusedIterator for StepIter<'_, S>
 where
     S: Simulation,
-    <S::Model as Component>::Input: Clone,
-    <S::Model as Component>::Output: Clone,
+    <S::Model as Model>::Input: Clone,
+    <S::Model as Model>::Output: Clone,
 {
 }
 
@@ -315,7 +326,7 @@ mod tests {
         acceleration: f64,
     }
 
-    impl Component for Spring {
+    impl Model for Spring {
         type Input = Input;
         type Output = Output;
         type Error = Infallible;
@@ -348,7 +359,7 @@ mod tests {
             &self,
             state: &State<Self::Model>,
             dt: Duration,
-        ) -> Result<<Self::Model as Component>::Input, Self::StepError> {
+        ) -> Result<<Self::Model as Model>::Input, Self::StepError> {
             let seconds = dt.as_secs_f64();
             let time_in_minutes = state.input.time_in_minutes + seconds / 60.0;
 
@@ -471,7 +482,7 @@ mod tests {
         max_value: usize,
     }
 
-    impl Component for CheckInput {
+    impl Model for CheckInput {
         type Input = usize;
         type Output = ();
         type Error = CheckInputError;
@@ -508,7 +519,7 @@ mod tests {
             &self,
             state: &State<Self::Model>,
             _dt: Duration,
-        ) -> Result<<Self::Model as Component>::Input, Self::StepError> {
+        ) -> Result<<Self::Model as Model>::Input, Self::StepError> {
             Ok(state.input + 1)
         }
     }

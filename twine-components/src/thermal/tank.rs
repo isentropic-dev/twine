@@ -1,67 +1,60 @@
-use thiserror::Error;
+use std::marker::PhantomData;
+
 use twine_core::{
-    Component, TimeDerivative,
-    thermo::{
-        fluid::{
-            FluidPropertyError, FluidPropertyModel, ProvidesCv, ProvidesDensity, ProvidesEnthalpy,
-            ProvidesTemperature,
-        },
-        units::{PositiveMassRate, TemperatureDifference},
-    },
+    TimeIntegrable,
+    constraint::{Constrained, ConstraintError, NonNegative, StrictlyPositive},
 };
-use uom::si::f64::{Area, HeatTransfer, Power, ThermodynamicTemperature, Volume};
+use twine_thermo::{
+    BoundaryFlow, ControlVolume, HeatFlow, MassFlow, PropertyError, State, StateDerivative, Stream,
+    model::ThermodynamicProperties, units::TemperatureDifference,
+};
+use uom::si::f64::{Area, HeatTransfer, ThermodynamicTemperature, Volume};
 
 /// A fully mixed thermal energy storage tank.
 ///
-/// Represents a single, spatially uniform control volume of fluid that
-/// exchanges heat with its environment and allows mass flow through it.
-/// The mass flow rates at the inlet and outlet are assumed to be equal,
-/// ensuring constant fluid mass during the energy balance. An external
-/// heat input can also be specified, representing energy added directly
-/// to the tank contents.
+/// Represents a spatially uniform control volume of fluid with thermal capacity,
+/// which exchanges heat with its environment and supports mass flow.
+/// Inlet and outlet mass flow rates are equal, keeping the fluid mass constant.
+/// The tank's volume and heat transfer area are fixed.
 ///
-/// The model solves the transient energy balance:
+/// Energy is gained or lost through:
 ///
-/// ```text
-/// dT/dt = (m_dot · (h_in - h_out) + Q_dot_in - Q_dot_loss) / (m · cv)
-/// ```
-///
-/// where (shown in SI units for clarity):
-/// - `dT/dt`      = rate of change of the tank fluid temperature (K/s)
-/// - `m_dot`      = mass flow rate through the tank (kg/s)
-/// - `h_in`       = specific enthalpy of the incoming fluid (J/kg)
-/// - `h_out`      = specific enthalpy of the fluid leaving the tank (J/kg)
-/// - `Q_dot_in`   = external heat input rate (W)
-/// - `Q_dot_loss` = heat loss rate to the environment (W)
-/// - `m`          = total mass of fluid inside the tank (kg)
-/// - `cv`         = specific heat at constant volume of the fluid (J/kg·K)
-///
-/// The energy balance accounts for three contributions:
-/// - Enthalpy change due to mass flow through the tank.
-/// - External heating applied directly to the fluid.
-/// - Heat losses to the ambient environment through the tank walls.
-///
-/// The tank volume and heat transfer area are treated as constant.
-/// The fluid mass is determined from the fluid density at the current tank
-/// state and is treated as constant during evaluation of the instantaneous
-/// temperature derivative.
-///
-/// Note that the SI units shown above are for illustration purposes only.
-/// Units for all input and output values are automatically enforced and
-/// converted as necessary by the `uom` type system.
+/// - Fluid flow
+/// - Auxiliary heat addition or extraction (e.g., via a heater or chiller)
+/// - Heat loss (or gain) with ambient via a U·A·ΔT model
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Tank<F: FluidPropertyModel> {
-    /// Physical and thermal configuration of the tank.
-    ///
-    /// Includes the internal volume, external surface area,
-    /// and heat transfer characteristics (e.g., insulation).
-    pub config: TankConfig,
-
-    /// Fluid property model used to evaluate thermodynamic properties.
-    pub fluid: F,
+pub struct Tank<'a, Fluid, Model: ThermodynamicProperties<Fluid>> {
+    pub area: Constrained<Area, StrictlyPositive>,
+    pub u_value: Constrained<HeatTransfer, NonNegative>,
+    pub volume: Constrained<Volume, StrictlyPositive>,
+    pub model: &'a Model,
+    _marker: PhantomData<Fluid>,
 }
 
-/// Describes the tank's size and thermal loss characteristics.
+impl<'a, Fluid, Model: ThermodynamicProperties<Fluid>> Tank<'a, Fluid, Model> {
+    /// Creates a new `Tank` from configuration and a model.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`ConstraintError`] if any configuration parameter is invalid.
+    pub fn new(config: TankConfig, model: &'a Model) -> Result<Self, ConstraintError> {
+        let TankConfig {
+            area,
+            u_value,
+            volume,
+        } = config;
+
+        Ok(Self {
+            area: Constrained::new(area)?,
+            u_value: Constrained::new(u_value)?,
+            volume: Constrained::new(volume)?,
+            model,
+            _marker: PhantomData,
+        })
+    }
+}
+
+/// Geometry and heat transfer characteristics of the tank.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TankConfig {
     pub area: Area,
@@ -69,110 +62,87 @@ pub struct TankConfig {
     pub volume: Volume,
 }
 
-impl<F: FluidPropertyModel> Tank<F> {
-    /// Creates a new tank from the given fluid and configuration.
-    pub fn new(fluid: F, config: TankConfig) -> Self {
-        Self { config, fluid }
-    }
-}
-
-/// Inputs required to evaluate the tank's energy balance.
-///
-/// Specifies the ambient conditions, the inlet fluid state, and the current
-/// tank fluid state.
+/// Inputs required to evaluate the tank's thermal response.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct TankInput<F: FluidPropertyModel> {
-    /// Ambient temperature surrounding the tank, used to calculate heat loss.
+pub struct TankInput<Fluid> {
+    /// Ambient temperature surrounding the tank.
     pub ambient_temperature: ThermodynamicTemperature,
 
-    /// External heat input applied to the tank (positive values add energy).
-    pub heat_input: Power,
+    /// Auxiliary heat addition or extraction (e.g., from a heater or chiller).
+    pub aux_heat_flow: HeatFlow,
 
-    /// Thermodynamic state of the incoming fluid stream.
-    pub inlet_state: F::State,
-
-    /// Mass flow rate of fluid through the tank.
+    /// Optional fluid inflow to the tank.
     ///
-    /// Assumed equal at inlet and outlet to maintain constant tank mass.
-    pub mass_flow_rate: PositiveMassRate,
+    /// If present, a matching outflow is assumed to maintain constant mass.
+    pub inflow: Option<Stream<Fluid>>,
 
-    /// Current thermodynamic state of the fluid contained within the tank.
-    pub tank_state: F::State,
+    /// Thermodynamic state of the fluid in the tank.
+    pub state: State<Fluid>,
 }
 
-/// Outputs representing the tank's thermal response at a given instant.
-///
-/// Provides the computed heat loss to the environment and the temperature
-/// rate of change based on the current energy balance.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct TankOutput {
-    /// Rate of heat loss from the tank to the ambient environment.
+/// Outputs describing the tank's instantaneous thermal response.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TankOutput<Fluid: TimeIntegrable> {
+    /// Heat exchange with the ambient environment.
     ///
-    /// Positive if heat is leaving the tank.
-    pub heat_loss: Power,
+    /// - [`HeatFlow::In`] if heat flows into the tank (ambient is warmer)
+    /// - [`HeatFlow::Out`] if heat flows out of the tank (tank is warmer)
+    /// - [`HeatFlow::None`] if no heat transfer occurs
+    pub ambient_heat_flow: HeatFlow,
 
-    /// Rate of change of the tank fluid temperature.
-    ///
-    /// Positive for heating, negative for cooling.
-    pub tank_temperature_derivative: TimeDerivative<ThermodynamicTemperature>,
+    /// Time derivative of the tank's internal fluid state.
+    pub state_derivative: StateDerivative<Fluid>,
 }
 
-/// Errors that can occur while evaluating the tank's energy balance.
-#[derive(Debug, Clone, PartialEq, Error)]
-pub enum TankError {
-    /// Failed to evaluate fluid properties at the current tank state.
-    #[error("Fluid property evaluation failed: {0}")]
-    Fluid(#[from] FluidPropertyError),
-}
-
-impl<F> Component for Tank<F>
+impl<Fluid, Model> Tank<'_, Fluid, Model>
 where
-    F: FluidPropertyModel + ProvidesTemperature + ProvidesDensity + ProvidesEnthalpy + ProvidesCv,
+    Model: ThermodynamicProperties<Fluid>,
+    Fluid: TimeIntegrable<Derivative = ()>,
 {
-    type Input = TankInput<F>;
-    type Output = TankOutput;
-    type Error = TankError;
-
-    /// Solves the transient energy balance for the tank based on the provided input.
-    ///
-    /// # Parameters
-    ///
-    /// - `input`: [`TankInput`] describing the current conditions and tank state.
-    ///
-    /// # Returns
-    ///
-    /// A [`TankOutput`] containing the heat loss and tank fluid temperature derivative.
+    /// Call the tank component.
     ///
     /// # Errors
     ///
-    /// Returns a [`TankError`] if evaluation of the specific heat capacity fails at
-    /// the current tank state.
-    fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
-        let TankConfig {
-            area,
-            u_value,
-            volume,
-        } = self.config;
+    /// Returns a [`PropertyError`] if a required thermodynamic property cannot be computed.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `U·A·ΔT` is not finite.
+    pub fn call(&self, input: TankInput<Fluid>) -> Result<TankOutput<Fluid>, PropertyError> {
+        let TankInput {
+            ambient_temperature,
+            aux_heat_flow,
+            inflow,
+            state,
+        } = input;
 
-        // Rate of heat transfer from the tank fluid to the environment.
-        let t_tank = self.fluid.temperature(&input.tank_state);
-        let delta_t = t_tank.minus(input.ambient_temperature);
-        let heat_loss = u_value * area * delta_t;
+        // Heat loss to (or gain from) the ambient environment.
+        let ambient_heat_flow = HeatFlow::from_signed(
+            self.u_value.into_inner()
+                * self.area.into_inner()
+                * ambient_temperature.minus(state.temperature),
+        )
+        .expect("U·A·ΔT is always finite");
 
-        // Net rate of heat transfer into the tank fluid.
-        let m_dot = input.mass_flow_rate.into_inner();
-        let h_in = self.fluid.enthalpy(&input.inlet_state);
-        let h_out = self.fluid.enthalpy(&input.tank_state);
-        let q_dot_net = m_dot * (h_in - h_out) + input.heat_input - heat_loss;
+        let (mass_flow_in, mass_flow_out) = match inflow {
+            Some(stream) => MassFlow::balanced_pair(stream),
+            None => (MassFlow::None, MassFlow::None),
+        };
 
-        // Rate of temperature change, derived from the net energy balance.
-        let m = volume * self.fluid.density(&input.tank_state);
-        let cv = self.fluid.cv(&input.tank_state)?;
-        let tank_temperature_derivative = q_dot_net / (m * cv);
+        let state_derivative = ControlVolume::from_constrained(self.volume, state)
+            .state_derivative(
+                &[
+                    BoundaryFlow::Mass(mass_flow_in),
+                    BoundaryFlow::Mass(mass_flow_out),
+                    BoundaryFlow::Heat(aux_heat_flow),
+                    BoundaryFlow::Heat(ambient_heat_flow),
+                ],
+                self.model,
+            )?;
 
         Ok(TankOutput {
-            heat_loss,
-            tank_temperature_derivative,
+            ambient_heat_flow,
+            state_derivative,
         })
     }
 }
@@ -182,47 +152,55 @@ mod tests {
     use super::*;
 
     use approx::assert_relative_eq;
-    use uom::si::{
-        area::square_foot,
-        heat_transfer::watt_per_square_meter_kelvin,
-        mass_rate::kilogram_per_second,
-        power::{kilowatt, watt},
-        thermodynamic_temperature::degree_celsius,
-        volume::gallon,
+    use twine_core::TimeDerivative;
+    use twine_thermo::{
+        fluid::Water,
+        model::{StateFrom, incompressible::Incompressible},
+    };
+    use uom::{
+        ConstZero,
+        si::{
+            area::square_foot,
+            f64::{MassDensity, MassRate, Power},
+            heat_transfer::watt_per_square_meter_kelvin,
+            mass_rate::kilogram_per_second,
+            power::{kilowatt, watt},
+            thermodynamic_temperature::degree_celsius,
+            volume::gallon,
+        },
     };
 
-    use crate::fluid::IncompressibleLiquid;
-
-    /// Returns a default test tank filled with water.
+    /// Returns a default tank filled with water.
     ///
-    /// Configured with a fixed volume, surface area, and U-value typical of a
-    /// residential water heater.
-    fn water_tank() -> Tank<IncompressibleLiquid> {
+    /// Uses volume, surface area, and U-value typical of a residential water heater.
+    fn water_tank() -> Tank<'static, Water, Incompressible> {
         Tank::new(
-            IncompressibleLiquid::water(),
             TankConfig {
                 volume: Volume::new::<gallon>(80.0),
                 area: Area::new::<square_foot>(9.0),
                 u_value: HeatTransfer::new::<watt_per_square_meter_kelvin>(0.1),
             },
+            &Incompressible,
         )
+        .unwrap()
     }
 
     /// Returns a baseline [`TankInput`] at equilibrium conditions.
     ///
-    /// - Tank, inlet, and ambient temperatures all set to 20°C.
-    /// - No external heat input.
-    /// - Zero mass flow rate.
+    /// Equilibrium conditions are:
     ///
-    /// Useful as a starting point for test cases.
-    fn equilibrium_input() -> TankInput<IncompressibleLiquid> {
+    /// - Tank and ambient temperatures are 20°C
+    /// - No auxiliary heat input
+    /// - No inflow
+    fn equilibrium_input() -> TankInput<Water> {
         let t_ambient = ThermodynamicTemperature::new::<degree_celsius>(20.0);
+        let state = Incompressible.state_from(t_ambient).unwrap();
+
         TankInput {
             ambient_temperature: t_ambient,
-            inlet_state: t_ambient,
-            tank_state: t_ambient,
-            heat_input: Power::default(),
-            mass_flow_rate: PositiveMassRate::default(),
+            aux_heat_flow: HeatFlow::None,
+            inflow: None,
+            state,
         }
     }
 
@@ -232,48 +210,70 @@ mod tests {
         let input = equilibrium_input();
         let output = tank.call(input).unwrap();
 
-        assert_relative_eq!(output.heat_loss.value, 0.0);
-        assert_relative_eq!(output.tank_temperature_derivative.value, 0.0);
+        assert_eq!(output.ambient_heat_flow.signed(), Power::ZERO);
+        assert_eq!(
+            output.state_derivative,
+            StateDerivative {
+                temperature: TimeDerivative::<ThermodynamicTemperature>::ZERO,
+                density: TimeDerivative::<MassDensity>::ZERO,
+                fluid: (),
+            }
+        );
     }
 
     #[test]
-    fn tank_cools_when_temp_above_ambient() {
+    fn tank_loses_heat_when_hotter_than_ambient() {
         let tank = water_tank();
         let input = TankInput {
-            tank_state: ThermodynamicTemperature::new::<degree_celsius>(50.0),
+            state: Incompressible
+                .state_from(ThermodynamicTemperature::new::<degree_celsius>(50.0))
+                .unwrap(),
             ..equilibrium_input()
         };
         let output = tank.call(input).unwrap();
 
-        assert_relative_eq!(output.heat_loss.get::<watt>(), 2.5084, epsilon = 1e-4);
+        assert_relative_eq!(
+            output.ambient_heat_flow.signed().get::<watt>(),
+            -2.5084,
+            epsilon = 1e-4
+        );
         assert!(
-            output.tank_temperature_derivative.value < 0.0,
+            output.state_derivative.temperature.value < 0.0,
             "Expected tank to be cooling"
         );
     }
 
     #[test]
-    fn tank_heats_without_draw_and_cools_with_draw() {
+    fn tank_with_aux_heating_heats_without_flow_and_cools_with_flow() {
         let tank = water_tank();
 
         let input_without_draw = TankInput {
-            tank_state: ThermodynamicTemperature::new::<degree_celsius>(50.0),
-            heat_input: Power::new::<kilowatt>(4.5),
+            aux_heat_flow: HeatFlow::from_signed(Power::new::<kilowatt>(4.5)).unwrap(),
             ..equilibrium_input()
         };
+
         let output = tank.call(input_without_draw).unwrap();
         assert!(
-            output.tank_temperature_derivative.value > 0.0,
+            output.state_derivative.temperature.value > 0.0,
             "Expected tank to be heating"
         );
 
         let input_with_draw = TankInput {
-            mass_flow_rate: PositiveMassRate::new::<kilogram_per_second>(0.4).unwrap(),
+            inflow: Some(
+                Stream::new(
+                    MassRate::new::<kilogram_per_second>(0.4),
+                    Incompressible
+                        .state_from(ThermodynamicTemperature::new::<degree_celsius>(10.0))
+                        .unwrap(),
+                )
+                .unwrap(),
+            ),
             ..input_without_draw
         };
+
         let output = tank.call(input_with_draw).unwrap();
         assert!(
-            output.tank_temperature_derivative.value < 0.0,
+            output.state_derivative.temperature.value < 0.0,
             "Expected tank to be cooling"
         );
     }

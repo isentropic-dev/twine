@@ -1,7 +1,3 @@
-use std::convert::Infallible;
-
-use twine_core::Component;
-
 use crate::controller::SwitchState;
 
 use super::ThermostatInput;
@@ -20,7 +16,6 @@ use super::ThermostatInput;
 /// # Example
 ///
 /// ```
-/// use twine_core::Component;
 /// use twine_components::controller::{
 ///     SwitchState,
 ///     thermostat::{CoolingThermostat, ThermostatInput},
@@ -37,18 +32,15 @@ use super::ThermostatInput;
 ///     setpoint: ThermodynamicTemperature::new::<degree_celsius>(20.0),
 ///     deadband: TemperatureInterval::new::<delta_celsius>(2.0),
 /// };
-/// let output = CoolingThermostat.call(input).unwrap();
+/// let output = CoolingThermostat.call(input);
 /// assert_eq!(output, SwitchState::On);
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CoolingThermostat;
 
-impl Component for CoolingThermostat {
-    type Input = ThermostatInput;
-    type Output = SwitchState;
-    type Error = Infallible;
-
-    fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
+impl CoolingThermostat {
+    #[must_use]
+    pub fn call(&self, input: ThermostatInput) -> SwitchState {
         let ThermostatInput {
             state,
             temperature,
@@ -56,7 +48,7 @@ impl Component for CoolingThermostat {
             deadband,
         } = input;
 
-        Ok(match state {
+        match state {
             SwitchState::Off => {
                 if temperature >= setpoint + deadband {
                     SwitchState::On
@@ -71,7 +63,7 @@ impl Component for CoolingThermostat {
                     SwitchState::On
                 }
             }
-        })
+        }
     }
 }
 
@@ -105,29 +97,29 @@ mod tests {
         let on_threshold = SETPOINT + DEADBAND;
 
         let input = test_input(SwitchState::Off, on_threshold);
-        let output = CoolingThermostat.call(input).unwrap();
+        let output = CoolingThermostat.call(input);
         assert_eq!(output, SwitchState::On);
 
         let input = test_input(SwitchState::Off, on_threshold + 0.1);
-        let output = CoolingThermostat.call(input).unwrap();
+        let output = CoolingThermostat.call(input);
         assert_eq!(output, SwitchState::On);
     }
 
     #[test]
     fn stays_on_above_setpoint() {
         let input = test_input(SwitchState::On, SETPOINT + 0.1);
-        let output = CoolingThermostat.call(input).unwrap();
+        let output = CoolingThermostat.call(input);
         assert_eq!(output, SwitchState::On);
     }
 
     #[test]
     fn turns_off_at_or_below_setpoint() {
         let input = test_input(SwitchState::On, SETPOINT);
-        let output = CoolingThermostat.call(input).unwrap();
+        let output = CoolingThermostat.call(input);
         assert_eq!(output, SwitchState::Off);
 
         let input = test_input(SwitchState::On, SETPOINT - 0.1);
-        let output = CoolingThermostat.call(input).unwrap();
+        let output = CoolingThermostat.call(input);
         assert_eq!(output, SwitchState::Off);
     }
 
@@ -137,7 +129,7 @@ mod tests {
         let midpoint = f64::midpoint(SETPOINT, on_threshold);
 
         let input = test_input(SwitchState::Off, midpoint);
-        let output = CoolingThermostat.call(input).unwrap();
+        let output = CoolingThermostat.call(input);
         assert_eq!(output, SwitchState::Off);
     }
 }
