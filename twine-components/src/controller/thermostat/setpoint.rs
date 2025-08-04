@@ -185,7 +185,7 @@ mod tests {
 
         #[test]
         fn turns_on_at_or_below_threshold() {
-            let on_threshold = SETPOINT - DEADBAND; // 18°C
+            let on_threshold = SETPOINT - DEADBAND;
 
             let input = test_input(SwitchState::Off, on_threshold);
             let output = SetpointThermostat::heating(input);
@@ -217,7 +217,7 @@ mod tests {
         #[test]
         fn stays_off_in_deadband() {
             let on_threshold = SETPOINT - DEADBAND;
-            let midpoint = (SETPOINT + on_threshold) / 2.0; // 19°C
+            let midpoint = f64::midpoint(SETPOINT, on_threshold);
 
             let input = test_input(SwitchState::Off, midpoint);
             let output = SetpointThermostat::heating(input);
@@ -230,7 +230,7 @@ mod tests {
 
         #[test]
         fn turns_on_at_or_above_threshold() {
-            let on_threshold = SETPOINT + DEADBAND; // 22°C
+            let on_threshold = SETPOINT + DEADBAND;
 
             let input = test_input(SwitchState::Off, on_threshold);
             let output = SetpointThermostat::cooling(input);
@@ -262,7 +262,7 @@ mod tests {
         #[test]
         fn stays_off_in_deadband() {
             let on_threshold = SETPOINT + DEADBAND;
-            let midpoint = (SETPOINT + on_threshold) / 2.0; // 21°C
+            let midpoint = f64::midpoint(SETPOINT, on_threshold);
 
             let input = test_input(SwitchState::Off, midpoint);
             let output = SetpointThermostat::cooling(input);
