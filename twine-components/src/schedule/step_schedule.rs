@@ -111,7 +111,7 @@ impl<T: Debug + Clone + Ord, V> StepSchedule<T, V> {
         Ok(())
     }
 
-    /// Returns a slice of all steps in this schedule, in order of increasing start time.
+    /// Returns a slice of the steps in this schedule.
     #[must_use]
     pub fn steps(&self) -> &[Step<T, V>] {
         &self.steps

@@ -2,7 +2,9 @@ use std::{iter::FusedIterator, time::Duration};
 
 /// Trait for defining a system model in Twine.
 ///
-/// Models must be deterministic, always producing the same result for a given input.
+/// Models represent systems with clear boundaries defined by typed inputs and outputs.
+/// They must be deterministic, always producing the same result for a given input,
+/// which enables time evolution using a [`Simulation`].
 pub trait Model {
     type Input;
     type Output;
@@ -17,9 +19,9 @@ pub trait Model {
     fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error>;
 }
 
-/// Trait for simulating the time evolution of a [`Model`].
+/// Trait for defining a transient simulation in Twine.
 ///
-/// A `Simulation` advances a model forward in time by computing its next
+/// A `Simulation` advances a [`Model`] forward in time by computing its next
 /// input with [`advance_time`] and then calling the model to produce a new
 /// [`State`] representing the system at the corresponding future moment.
 ///

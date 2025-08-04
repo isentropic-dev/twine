@@ -1,7 +1,3 @@
-mod cooling;
-mod heating;
-mod types;
+mod setpoint;
 
-pub use cooling::CoolingThermostat;
-pub use heating::HeatingThermostat;
-pub use types::ThermostatInput;
+pub use setpoint::{SetpointThermostat, SetpointThermostatInput};

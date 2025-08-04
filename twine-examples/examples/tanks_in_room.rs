@@ -28,7 +28,7 @@ use jiff::civil::{DateTime, Time};
 use twine_components::{
     controller::{
         SwitchState,
-        thermostat::{HeatingThermostat, ThermostatInput},
+        thermostat::{SetpointThermostat, SetpointThermostatInput},
     },
     schedule::step_schedule::StepSchedule,
     thermal::tank::{Tank, TankConfig, TankInput, TankOutput},
@@ -73,7 +73,7 @@ const DEADBAND_C: f64 = 8.0;
 /// Rated power of the first tank's electric heating element, in kW.
 const ELEMENT_KW: f64 = 4.5;
 
-/// A pair of tanks connected in series, modeled as a single thermal component.
+/// A pair of tanks connected in series.
 ///
 /// The first tank receives fluid from a cold source (e.g., ground water),
 /// optional external heating from an element controlled by a thermostat,
@@ -144,7 +144,7 @@ impl Model for TanksInRoom<'_> {
             });
 
         // Call the thermostat component.
-        let element_state = HeatingThermostat.call(ThermostatInput {
+        let element_state = SetpointThermostat::heating(SetpointThermostatInput {
             state: input.element_state,
             temperature: input.t_first_tank,
             setpoint: ThermodynamicTemperature::new::<degree_celsius>(SETPOINT_C),
