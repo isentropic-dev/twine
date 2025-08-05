@@ -199,19 +199,18 @@ struct TanksInRoomSim<'a> {
     model: TanksInRoom<'a>,
 }
 
-impl<'a> Simulation for TanksInRoomSim<'a> {
-    type Model = TanksInRoom<'a>;
+impl<'a> Simulation<TanksInRoom<'a>> for TanksInRoomSim<'a> {
     type StepError = Infallible;
 
-    fn model(&self) -> &Self::Model {
+    fn model(&self) -> &TanksInRoom<'a> {
         &self.model
     }
 
     fn advance_time(
-        &self,
-        state: &State<Self::Model>,
+        &mut self,
+        state: &State<TanksInRoom<'a>>,
         dt: Duration,
-    ) -> Result<<Self::Model as Model>::Input, Self::StepError> {
+    ) -> Result<Input, Self::StepError> {
         let State { input, output } = state;
 
         Ok(Input {
@@ -323,7 +322,7 @@ fn main() {
     // Run the simulation for five days with a one minute time step.
     let mut series = PlotSeries::default();
     for step_result in sim
-        .step_iter(initial_conditions, Duration::from_secs(60))
+        .into_step_iter(initial_conditions, Duration::from_secs(60))
         .take(7500)
     {
         let state = step_result.expect("Step should succeed");
