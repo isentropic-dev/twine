@@ -2,64 +2,24 @@ use uom::si::f64::{TemperatureInterval, ThermodynamicTemperature};
 
 use crate::controller::SwitchState;
 
-/// Input to a setpoint thermostat controller.
+/// A thermostat controller that regulates temperature relative to a setpoint.
 ///
-/// Used for both heating and cooling thermostats with hysteresis (deadband).
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct SetpointThermostatInput {
-    pub state: SwitchState,
-    pub temperature: ThermodynamicTemperature,
-    pub setpoint: ThermodynamicTemperature,
-    pub deadband: TemperatureInterval,
-}
-
-impl SetpointThermostatInput {
-    /// Returns `self` with the given state, keeping other fields unchanged.
-    #[must_use]
-    pub fn with_state(self, state: SwitchState) -> Self {
-        Self { state, ..self }
-    }
-
-    /// Returns `self` with the given temperature, keeping other fields unchanged.
-    #[must_use]
-    pub fn with_temperature(self, temperature: ThermodynamicTemperature) -> Self {
-        Self {
-            temperature,
-            ..self
-        }
-    }
-
-    /// Returns `self` with the given setpoint, keeping other fields unchanged.
-    #[must_use]
-    pub fn with_setpoint(self, setpoint: ThermodynamicTemperature) -> Self {
-        Self { setpoint, ..self }
-    }
-
-    /// Returns `self` with the given deadband, keeping other fields unchanged.
-    #[must_use]
-    pub fn with_deadband(self, deadband: TemperatureInterval) -> Self {
-        Self { deadband, ..self }
-    }
-}
-
-/// A thermostat controller that maintains temperature relative to a setpoint.
-///
-/// Provides heating and cooling control logic with hysteresis (deadband) to prevent
-/// rapid cycling between on/off states.
+/// Provides heating and cooling control logic using hysteresis (deadband) to
+/// prevent rapid cycling between on/off states.
+/// The controller does not store any mode internally; behavior is selected by
+/// calling [`SetpointThermostat::heating`] or [`SetpointThermostat::cooling`].
 ///
 /// # Heating Mode
 ///
 /// In heating mode, the thermostat:
-/// - Turns **on** when temperature falls to `setpoint - deadband` or below.
-/// - Turns **off** when temperature reaches the setpoint or above.
-/// - Uses hysteresis to prevent rapid switching.
+/// - Turns **on** when the temperature falls to `setpoint - deadband` or below.
+/// - Turns **off** when the temperature reaches the setpoint or higher.
 ///
 /// # Cooling Mode
 ///
 /// In cooling mode, the thermostat:
-/// - Turns **on** when temperature rises to `setpoint + deadband` or above.  
-/// - Turns **off** when temperature reaches the setpoint or below.
-/// - Uses hysteresis to prevent rapid switching.
+/// - Turns **on** when the temperature rises to `setpoint + deadband` or above.
+/// - Turns **off** when the temperature reaches the setpoint or lower.
 ///
 /// # Examples
 ///
@@ -78,14 +38,14 @@ impl SetpointThermostatInput {
 ///     state: SwitchState::Off,
 ///     temperature: ThermodynamicTemperature::new::<degree_celsius>(18.0),
 ///     setpoint: ThermodynamicTemperature::new::<degree_celsius>(20.0),
-///     deadband: TemperatureInterval::new::<delta_celsius>(2.0),
+///     deadband: TemperatureInterval::new::<delta_celsius>(1.0),
 /// };
 ///
-/// // Heating: turns on when temp <= setpoint - deadband (18°C)
+/// // Heating: turns on at or below 19°C
 /// let output = SetpointThermostat::heating(input);
 /// assert_eq!(output, SwitchState::On);
 ///
-/// // Cooling: stays off when temp < setpoint + deadband (22°C)  
+/// // Cooling: remains off below 21°C
 /// let output = SetpointThermostat::cooling(input);
 /// assert_eq!(output, SwitchState::Off);
 /// ```
@@ -153,6 +113,51 @@ impl SetpointThermostat {
                 }
             }
         }
+    }
+}
+
+/// Input to the [`SetpointThermostat`] controller.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SetpointThermostatInput {
+    /// The current on/off state of the controlled system (e.g., heater or cooler).
+    pub state: SwitchState,
+
+    /// The current measured temperature.
+    pub temperature: ThermodynamicTemperature,
+
+    /// The desired setpoint temperature to maintain.
+    pub setpoint: ThermodynamicTemperature,
+
+    /// The deadband around the setpoint to avoid rapid cycling.
+    pub deadband: TemperatureInterval,
+}
+
+impl SetpointThermostatInput {
+    /// Returns `self` with the given state, keeping other fields unchanged.
+    #[must_use]
+    pub fn with_state(self, state: SwitchState) -> Self {
+        Self { state, ..self }
+    }
+
+    /// Returns `self` with the given temperature, keeping other fields unchanged.
+    #[must_use]
+    pub fn with_temperature(self, temperature: ThermodynamicTemperature) -> Self {
+        Self {
+            temperature,
+            ..self
+        }
+    }
+
+    /// Returns `self` with the given setpoint, keeping other fields unchanged.
+    #[must_use]
+    pub fn with_setpoint(self, setpoint: ThermodynamicTemperature) -> Self {
+        Self { setpoint, ..self }
+    }
+
+    /// Returns `self` with the given deadband, keeping other fields unchanged.
+    #[must_use]
+    pub fn with_deadband(self, deadband: TemperatureInterval) -> Self {
+        Self { deadband, ..self }
     }
 }
 
