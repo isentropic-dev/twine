@@ -10,7 +10,7 @@ description = "Macros for Twine, a Rust framework for functional and composable 
 keywords = ["twine", "framework", "macros", "proc-macro"]
 
 [dependencies]
-twine-core = { version = "0.2.0", path = "../twine-core" }
+twine-core = { version = "0.3.0", path = "../twine-core" }
 proc-macro2 = "1.0"
 quote = "1.0"
 syn = { version = "2.0", features = [
