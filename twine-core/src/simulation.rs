@@ -196,7 +196,7 @@ pub trait Simulation<M: Model>: Sized {
     ///
     /// # Returns
     ///
-    /// An iterator over `Result<State<M>, StepError>`.
+    /// An iterator over `Result<State<M>, StepError>` steps.
     fn into_step_iter(
         self,
         initial_input: M::Input,
