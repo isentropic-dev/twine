@@ -1,5 +1,7 @@
 # Twine
 
+⚠️ **Disclaimer**: Twine is in early development and subject to frequent breaking changes.
+
 ## What is Twine?
 
 Twine is an open-source Rust framework for functional and composable system modeling.
@@ -8,7 +10,7 @@ By emphasizing functional purity and strong typing, Twine makes models more reli
 
 ## A Functional Approach to System Modeling
 
-Twine models systems as compositions of functions with strongly-typed inputs and outputs that are deterministic, always returning the same output for the same input.
+Twine models systems as compositions of functions with strongly typed inputs and outputs that are deterministic, always returning the same output for the same input.
 This functional approach allows users to build and understand larger systems from simple, reusable parts by ensuring:
 
 - **Testability:** Deterministic functions are easier to test in isolation since they have no hidden state or side effects.
@@ -24,9 +26,11 @@ enabling seamless simulation of dynamic systems while preserving functional puri
 
 ## Built-in Components
 
-Twine includes a library of ready-to-use components for common system modeling tasks, including:
+Though still early in development, Twine’s component library is designed to support a broad range of common system modeling needs, including:
+
 - **Controllers:** Thermostats, PID controllers, etc.
 - **Schedules:** Weekly and daily schedules, time-based control, etc.  
 - **Thermal:** Storage tanks, heat exchangers, mixing valves, etc.
 
-Twine also provides a consistent API for thermodynamic and fluid property modeling, including interfaces to libraries like REFPROP and CoolProp.
+Twine also provides a consistent API for thermodynamic and fluid property modeling, designed to integrate with libraries such as REFPROP, CoolProp, and FIT.
+Support for these integrations is coming soon.
