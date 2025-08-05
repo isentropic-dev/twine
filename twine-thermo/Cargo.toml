@@ -10,7 +10,7 @@ description = "Thermodynamic and fluid property modeling for the Twine framework
 keywords = ["twine", "framework", "modeling", "thermodynamics", "fluid"]
 
 [dependencies]
-twine-core = { version = "0.2.0", path = "../twine-core" }
+twine-core = { version = "0.3.0", path = "../twine-core" }
 thiserror = { workspace = true }
 uom = { workspace = true }
 
