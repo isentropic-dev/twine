@@ -28,13 +28,13 @@ use jiff::civil::{DateTime, Time};
 use twine_components::{
     controller::{
         SwitchState,
-        thermostat::{HeatingThermostat, ThermostatInput},
+        thermostat::{SetpointThermostat, SetpointThermostatInput},
     },
     schedule::step_schedule::StepSchedule,
-    thermal::tank2::{Tank, TankConfig, TankInput, TankOutput},
+    thermal::tank::{Tank, TankConfig, TankInput, TankOutput},
 };
 use twine_core::{
-    Component, DurationExt, Simulation, State, TimeIntegrable,
+    DurationExt, Model, Simulation, State, TimeIntegrable,
     constraint::{Constrained, StrictlyPositive},
 };
 use twine_plot::PlotApp;
@@ -73,7 +73,7 @@ const DEADBAND_C: f64 = 8.0;
 /// Rated power of the first tank's electric heating element, in kW.
 const ELEMENT_KW: f64 = 4.5;
 
-/// A pair of tanks connected in series, modeled as a single thermal component.
+/// A pair of tanks connected in series.
 ///
 /// The first tank receives fluid from a cold source (e.g., ground water),
 /// optional external heating from an element controlled by a thermostat,
@@ -128,7 +128,7 @@ impl TanksInRoom<'_> {
     }
 }
 
-impl Component for TanksInRoom<'_> {
+impl Model for TanksInRoom<'_> {
     type Input = Input;
     type Output = Output;
     type Error = Infallible;
@@ -137,22 +137,19 @@ impl Component for TanksInRoom<'_> {
         // Call the schedule component and convert volumetric draw to a mass flow rate.
         let draw = self
             .daily_draw_schedule
-            .call(input.datetime.time())
-            .unwrap()
-            .map(|draw| {
+            .value_at(&input.datetime.time())
+            .map(|&draw| {
                 let m_dot = draw * Water.reference_density();
                 Constrained::new(m_dot).unwrap()
             });
 
         // Call the thermostat component.
-        let element_state = HeatingThermostat
-            .call(ThermostatInput {
-                state: input.element_state,
-                temperature: input.t_first_tank,
-                setpoint: ThermodynamicTemperature::new::<degree_celsius>(SETPOINT_C),
-                deadband: TemperatureInterval::new::<delta_celsius>(DEADBAND_C),
-            })
-            .unwrap();
+        let element_state = SetpointThermostat::heating(SetpointThermostatInput {
+            state: input.element_state,
+            temperature: input.t_first_tank,
+            setpoint: ThermodynamicTemperature::new::<degree_celsius>(SETPOINT_C),
+            deadband: TemperatureInterval::new::<delta_celsius>(DEADBAND_C),
+        });
 
         // Call the first tank component.
         let first_tank = self
@@ -202,19 +199,18 @@ struct TanksInRoomSim<'a> {
     model: TanksInRoom<'a>,
 }
 
-impl<'a> Simulation for TanksInRoomSim<'a> {
-    type Model = TanksInRoom<'a>;
+impl<'a> Simulation<TanksInRoom<'a>> for TanksInRoomSim<'a> {
     type StepError = Infallible;
 
-    fn model(&self) -> &Self::Model {
+    fn model(&self) -> &TanksInRoom<'a> {
         &self.model
     }
 
     fn advance_time(
-        &self,
-        state: &State<Self::Model>,
+        &mut self,
+        state: &State<TanksInRoom<'a>>,
         dt: Duration,
-    ) -> Result<<Self::Model as Component>::Input, Self::StepError> {
+    ) -> Result<Input, Self::StepError> {
         let State { input, output } = state;
 
         Ok(Input {
@@ -326,7 +322,7 @@ fn main() {
     // Run the simulation for five days with a one minute time step.
     let mut series = PlotSeries::default();
     for step_result in sim
-        .step_iter(initial_conditions, Duration::from_secs(60))
+        .into_step_iter(initial_conditions, Duration::from_secs(60))
         .take(7500)
     {
         let state = step_result.expect("Step should succeed");

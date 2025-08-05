@@ -4,7 +4,6 @@ resolver = "2"
 members = [
   "twine-components",
   "twine-core",
-  "twine-dev",
   "twine-examples",
   "twine-macros",
   "twine-plot",
