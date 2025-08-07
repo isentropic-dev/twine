@@ -22,7 +22,7 @@ fn apply_buoyancy<const N: usize>(layers: [Layer; N]) -> [ThermodynamicTemperatu
     let mut stack: [Block; N] = array::from_fn(|_| Block::default());
     let mut stack_index = 0;
 
-    for (i, layer) in layers.iter().copied().enumerate() {
+    for (i, layer) in layers.into_iter().enumerate() {
         let mut block = Block::new(i, layer);
 
         // Merge downward until the block below is not warmer.
