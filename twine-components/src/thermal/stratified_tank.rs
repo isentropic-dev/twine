@@ -6,6 +6,7 @@
 
 #![allow(dead_code)]
 
+mod buoyancy;
 mod environment;
 mod port_flow;
 
