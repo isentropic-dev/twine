@@ -1,4 +1,5 @@
-use std::{convert::TryFrom, ops::Mul};
+use std::{cmp::Ordering, convert::TryFrom, ops::Mul};
+
 use thiserror::Error;
 
 /// A bounded scalar in `[0.0, 1.0]`.
@@ -6,7 +7,8 @@ use thiserror::Error;
 /// Useful for proportions, shares, and probabilities.
 ///
 /// This type internally wraps an `f64` and guarantees the value is within `[0, 1]`.
-/// Because of this invariant, `Fraction` implements `Eq` even though raw `f64` does not.
+/// Because of this invariant, `Fraction` implements [`Eq`] and [`Ord`] even
+/// though raw `f64` does not.
 ///
 /// # Examples
 /// ```
@@ -25,11 +27,8 @@ use thiserror::Error;
 /// assert_eq!(f1 * value, 50.0);
 /// assert_eq!(value * f1, 50.0);
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Fraction(f64);
-
-// Safe because `Fraction::new`/`TryFrom` forbid NaN and infinity.
-impl Eq for Fraction {}
 
 impl Fraction {
     /// Creates a `Fraction` if `value` is within `[0, 1]`.
@@ -96,6 +95,27 @@ impl Mul<Fraction> for f64 {
     type Output = f64;
     fn mul(self, rhs: Fraction) -> Self::Output {
         self * rhs.0
+    }
+}
+
+// Safe because `Fraction::new`/`TryFrom` forbid NaN and infinity.
+impl Eq for Fraction {}
+
+impl Ord for Fraction {
+    /// Compares two `Fraction`s.
+    ///
+    /// Uses the underlying `f64`'s `partial_cmp` and unwraps the result.
+    /// The unwrap is safe because `Fraction` guarantees values are finite
+    /// and within `[0, 1]`, so `partial_cmp` always returns `Some(_)`.
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.0.partial_cmp(&other.0).unwrap()
+    }
+}
+
+impl PartialOrd for Fraction {
+    /// Delegates to [`Ord::cmp`] to ensure a total, consistent ordering.
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
