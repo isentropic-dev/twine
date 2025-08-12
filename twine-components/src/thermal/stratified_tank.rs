@@ -8,6 +8,7 @@
 
 mod buoyancy;
 mod environment;
+mod node;
 mod port_flow;
 
 use twine_core::TimeDerivative;
