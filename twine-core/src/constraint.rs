@@ -34,6 +34,7 @@ mod non_positive;
 mod non_zero;
 mod strictly_negative;
 mod strictly_positive;
+mod unit_interval;
 
 use std::{iter::Sum, marker::PhantomData, ops::Add};
 
@@ -45,6 +46,7 @@ pub use non_positive::NonPositive;
 pub use non_zero::NonZero;
 pub use strictly_negative::StrictlyNegative;
 pub use strictly_positive::StrictlyPositive;
+pub use unit_interval::UnitInterval;
 
 /// A trait for enforcing numeric invariants at construction time.
 ///
@@ -68,15 +70,16 @@ pub trait Constraint<T> {
 pub enum ConstraintError {
     #[error("value must not be negative")]
     Negative,
-
     #[error("value must not be positive")]
     Positive,
-
     #[error("value must not be zero")]
     Zero,
-
     #[error("value is not a number")]
     NotANumber,
+    #[error("value is below the minimum allowed")]
+    BelowMinimum,
+    #[error("value is above the maximum allowed")]
+    AboveMaximum,
 }
 
 /// A wrapper enforcing a numeric constraint at construction time.
