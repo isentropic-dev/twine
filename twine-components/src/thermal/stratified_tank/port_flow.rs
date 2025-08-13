@@ -1,67 +1,49 @@
 use twine_core::constraint::{Constrained, ConstraintError, NonNegative};
-use twine_thermo::model::incompressible::IncompressibleFluid;
-use uom::si::f64::{MassRate, ThermodynamicTemperature, VolumeRate};
+use uom::si::f64::{ThermodynamicTemperature, VolumeRate};
 
-/// Fluid flow into the tank through a configured inlet port.
+/// Inlet conditions for a port pair.
 ///
-/// Represents fluid entering a specific layer in the tank at a known
-/// temperature and volume flow rate.
-/// A corresponding outflow occurs elsewhere in the tank.
-///
-/// The volume flow rate is guaranteed to be non-negative and is validated at construction.
+/// See [`StratifiedTank`] for how port pairs are placed and distributed across layers.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PortFlow {
-    rate: VolumeRate,
-    temperature: ThermodynamicTemperature,
+    /// Common volumetric flow for the port pair (inlet and outlet).
+    pub rate: Constrained<VolumeRate, NonNegative>,
+
+    /// Inlet fluid temperature.
+    ///
+    /// The outlet temperature is determined by the layer assocated with the outflow.
+    pub inlet_temperature: ThermodynamicTemperature,
 }
 
 impl PortFlow {
-    /// Creates a new [`PortFlow`] with the given volume rate and temperature.
+    /// Creates a `PortFlow` from an unconstrained rate.
     ///
     /// # Errors
     ///
-    /// Returns a [`ConstraintError`] if `rate` is negative or not finite.
+    /// Returns a [`ConstraintError`] if `rate` is negative.
     pub fn new(
         rate: VolumeRate,
-        temperature: ThermodynamicTemperature,
+        inlet_temperature: ThermodynamicTemperature,
     ) -> Result<Self, ConstraintError> {
-        Constrained::<VolumeRate, NonNegative>::new(rate)?;
-        Ok(Self { rate, temperature })
+        let rate = Constrained::new(rate)?;
+        Ok(Self::from_constrained(rate, inlet_temperature))
     }
 
-    /// Creates a [`PortFlow`] from a pre-validated constrained volume rate.
-    ///
-    /// Useful when working with existing [`Constrained`] values.
+    /// Creates a `PortFlow` from a constrained rate.
     #[must_use]
     pub fn from_constrained(
         rate: Constrained<VolumeRate, NonNegative>,
-        temperature: ThermodynamicTemperature,
+        inlet_temperature: ThermodynamicTemperature,
     ) -> Self {
         Self {
-            rate: rate.into_inner(),
-            temperature,
+            rate,
+            inlet_temperature,
         }
     }
 
-    /// Returns the volume flow rate.
-    ///
-    /// Guaranteed to be non-negative.
+    /// Returns the volumetric flow shared by the inlet and outlet.
     #[must_use]
     pub fn rate(&self) -> VolumeRate {
-        self.rate
-    }
-
-    /// Returns the temperature of the incoming fluid.
-    #[must_use]
-    pub fn temperature(&self) -> ThermodynamicTemperature {
-        self.temperature
-    }
-
-    /// Returns the mass flow rate using the given fluid's density.
-    ///
-    /// Guaranteed to be non-negative.
-    #[must_use]
-    pub fn mass_rate<F: IncompressibleFluid>(&self, fluid: &F) -> MassRate {
-        self.rate * fluid.reference_density()
+        self.rate.into_inner()
     }
 }

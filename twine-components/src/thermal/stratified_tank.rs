@@ -20,78 +20,76 @@ pub use port_flow::PortFlow;
 /// A stratified thermal energy storage tank.
 ///
 /// Represents a fixed-geometry tank with `N` fully mixed vertical layers.
-/// Supports energy exchange through `P` inlet port pairs and `Q` auxiliary heat sources.
+/// Supports energy exchange through `P` port pairs and `Q` auxiliary heat sources.
 ///
-/// Each port pair models a real-world connection where fluid enters the tank
-/// at a configured location with a known temperature and flow rate, and leaves
-/// from another configured location to preserve mass balance.
+/// A **port pair** models a real-world connection between the tank and an
+/// external hydraulic circuit:
+/// - One end returns fluid to the tank at a known temperature.
+/// - The other end draws fluid out of the tank at the same volumetric rate.
+///
+/// This pairing maintains mass balance in the tank.
+/// The outlet temperature for the port pair comes from the layer(s) where the
+/// outflow is taken.
+///
+/// The location of port pairs and auxiliary heat sources are fixed when the
+/// tank is constructed; each may apply to a single layer or be split across
+/// multiple layers.
 ///
 /// Generic over:
-/// - `F`: Fluid type (must implement [`IncompressibleFluid`])
-/// - `N`: Number of stratified layers
-/// - `P`: Number of port pairs
-/// - `Q`: Number of auxiliary heat sources
+/// - `F`: fluid type (must implement [`IncompressibleFluid`])
+/// - `N`: number of layers
+/// - `P`: number of port pairs
+/// - `Q`: number of auxiliary heat sources
 pub struct StratifiedTank<F: IncompressibleFluid, const N: usize, const P: usize, const Q: usize> {
     fluid: F,
 }
 
 /// Input to the stratified tank component.
 ///
-/// Captures the full runtime state used to evaluate the tank's thermal behavior.
-/// Layer geometry, port positions, and auxiliary heat source locations are
-/// fixed at tank instantiation and not represented here.
+/// Captures the runtime state needed to evaluate the tank's thermal response.
+/// Locations of ports and auxiliary heat sources, and how they are distributed
+/// across layers, are fixed when the tank is constructed.
+/// This struct holds only the values that change at runtime.
 ///
 /// Generic over:
 /// - `N`: Number of stratified layers
-/// - `P`: Number of inlet port pairs
+/// - `P`: Number of port pairs
 /// - `Q`: Number of auxiliary heat sources
 pub struct Input<const N: usize, const P: usize, const Q: usize> {
-    /// Temperatures of the `N` vertical layers, from bottom to top.
+    /// Temperatures of the `N` layers, from bottom to top.
     ///
-    /// Each layer is assumed to be fully mixed.
-    ///
-    /// These values do not need to be stratified.
-    /// If any warmer layers appear below cooler ones, the model will
-    /// immediately mix adjacent layers to restore thermal stability before
-    /// computing mass and energy balances.
+    /// Each layer is fully mixed.
+    /// Values do not need to be stratified; if warmer layers appear below
+    /// cooler ones, the model mixes adjacent layers before computing energy balances.
     pub temperatures: [ThermodynamicTemperature; N],
 
-    /// Inlet conditions for `P` configured port pairs.
-    ///
-    /// Each [`PortFlow`] specifies the volume rate and temperature of inflow to
-    /// a preconfigured layer.
-    ///
-    /// A corresponding outflow at the same rate occurs at another preconfigured layer,
-    /// which may be the same or different from the inflow layer, preserving mass balance
-    /// within the tank.
+    /// Flow rates and temperatures for the `P` port pairs.
     pub port_flows: [PortFlow; P],
 
-    /// Auxiliary heat input or extraction applied to configured layers.
-    ///
-    /// Typical examples include immersion heaters or internal heat exchangers.
+    /// Heat input or extraction for the `Q` auxiliary sources.
     pub aux_heat_flows: [HeatFlow; Q],
 
-    /// Environmental temperatures affecting boundary heat exchange.
-    ///
-    /// Used to model thermal losses or gains to surrounding conditions.
+    /// Ambient temperatures outside the tank.
     pub environment: Environment,
 }
 
 /// Output from the stratified tank component.
 ///
-/// Represents the thermally stable layer temperatures and their time derivatives.
+/// Captures the thermally stable layer temperatures and their time derivatives
+/// after applying mass and energy balances.
 ///
 /// Generic over:
 /// - `N`: Number of stratified layers
 pub struct Output<const N: usize> {
-    /// Resolved temperatures of the `N` vertical layers, from bottom to top.
+    /// Temperatures of the `N` layers, from bottom to top.
     ///
-    /// These values are guaranteed to be thermally stable (i.e., stratified).
+    /// These values are guaranteed to be thermally stable.
     pub temperatures: [ThermodynamicTemperature; N],
 
     /// Time derivatives of temperature in each layer.
     ///
-    /// Includes effects from mass flow, auxiliary heat input, and environmental exchange.
+    /// Includes the effects of mass flow, auxiliary heat input, and
+    /// environmental heat loss or gain.
     pub derivatives: [TimeDerivative<ThermodynamicTemperature>; N],
 }
 
