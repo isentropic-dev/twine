@@ -12,7 +12,7 @@ pub struct PortFlow {
     /// Inlet fluid temperature.
     ///
     /// The outlet temperature is determined by the layer assocated with the outflow.
-    pub temperature: ThermodynamicTemperature,
+    pub inlet_temperature: ThermodynamicTemperature,
 }
 
 impl PortFlow {
@@ -23,19 +23,22 @@ impl PortFlow {
     /// Returns a [`ConstraintError`] if `rate` is negative.
     pub fn new(
         rate: VolumeRate,
-        temperature: ThermodynamicTemperature,
+        inlet_temperature: ThermodynamicTemperature,
     ) -> Result<Self, ConstraintError> {
         let rate = Constrained::new(rate)?;
-        Ok(Self::from_constrained(rate, temperature))
+        Ok(Self::from_constrained(rate, inlet_temperature))
     }
 
     /// Creates a `PortFlow` from a constrained rate.
     #[must_use]
     pub fn from_constrained(
         rate: Constrained<VolumeRate, NonNegative>,
-        temperature: ThermodynamicTemperature,
+        inlet_temperature: ThermodynamicTemperature,
     ) -> Self {
-        Self { rate, temperature }
+        Self {
+            rate,
+            inlet_temperature,
+        }
     }
 
     /// Returns the volumetric flow shared by the inlet and outlet.
