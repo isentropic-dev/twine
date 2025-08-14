@@ -11,15 +11,15 @@ use uom::{ConstZero, si::f64::VolumeRate};
 ///
 /// # Parameters
 ///
+/// - `port_flow_rates`: Flow rate for each port pair.
 /// - `port_inlet_weights`: Fraction of each port pair's inlet flow applied to each node.
 ///   `port_inlet_weights[i][k]` is the fraction of port pair `k`'s inlet flow that enters node `i`.
 /// - `port_outlet_weights`: Fraction of each port pair's outlet flow taken from each node.
 ///   `port_outlet_weights[i][k]` is the fraction of port pair `k`'s outlet flow drawn from node `i`.
-/// - `port_flow_rates`: Flow rate for each port pair.
 pub(super) fn compute_upward_flows<const N: usize, const P: usize>(
+    port_flow_rates: &[VolumeRate; P],
     port_inlet_weights: &[[f64; P]; N],
     port_outlet_weights: &[[f64; P]; N],
-    port_flow_rates: &[VolumeRate; P],
 ) -> [VolumeRate; N] {
     let mut flow_up = VolumeRate::ZERO;
 
@@ -78,7 +78,7 @@ mod tests {
         let inlet: [[f64; P]; N] = [[1.0], [0.0], [0.0]];
         let outlet: [[f64; P]; N] = [[0.0], [0.0], [1.0]];
 
-        let flow_up = compute_upward_flows(&inlet, &outlet, &port_flow_rates);
+        let flow_up = compute_upward_flows(&port_flow_rates, &inlet, &outlet);
 
         assert_relative_eq!(flow_up[0].value, 1.0);
         assert_relative_eq!(flow_up[1].value, 1.0);
@@ -97,7 +97,7 @@ mod tests {
         let inlet: [[f64; P]; N] = [[0.0], [1.0], [0.0]];
         let outlet: [[f64; P]; N] = [[0.0], [1.0], [0.0]];
 
-        let flow_up = compute_upward_flows::<N, P>(&inlet, &outlet, &port_flow_rates);
+        let flow_up = compute_upward_flows::<N, P>(&port_flow_rates, &inlet, &outlet);
 
         // No vertical transport required; cumulative stays zero and residual is zero.
         assert_relative_eq!(flow_up[0].value, 0.0);
@@ -122,7 +122,7 @@ mod tests {
         // s1 = +0.5*0.6 = +0.3
         // s2 = +0.5*0.4 - 0.3 = -0.1
         // cumulative: [-0.2, +0.1, 0.0]
-        let flow_up = compute_upward_flows::<N, P>(&inlet, &outlet, &port_flow_rates);
+        let flow_up = compute_upward_flows::<N, P>(&port_flow_rates, &inlet, &outlet);
 
         assert_relative_eq!(flow_up[0].value, -0.2);
         assert_relative_eq!(flow_up[1].value, 0.1);
