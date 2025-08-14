@@ -8,6 +8,7 @@
 
 mod buoyancy;
 mod environment;
+mod mass_balance;
 mod node;
 mod port_flow;
 
