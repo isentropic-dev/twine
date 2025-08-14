@@ -294,6 +294,10 @@ mod tests {
         .unwrap()
     }
 
+    fn zero_port_flows<const P: usize>() -> [PortFlow; P] {
+        [port_flow(0.0, 25.0); P]
+    }
+
     #[test]
     fn at_equilibrium_all_zero_derivatives() {
         let tank = test_tank();
@@ -301,7 +305,7 @@ mod tests {
 
         let input = Input {
             temperatures: [t; 3],
-            port_flows: [port_flow(0.0, 25.0)], // no mass flow
+            port_flows: zero_port_flows(),
             aux_heat_flows: [HeatFlow::None],
             environment: Environment {
                 bottom: t,
@@ -328,7 +332,7 @@ mod tests {
 
         let input = Input {
             temperatures: [t; 3],
-            port_flows: [port_flow(0.0, 25.0)], // no mass flow
+            port_flows: zero_port_flows(),
             aux_heat_flows: [HeatFlow::from_signed(Power::new::<kilowatt>(20.0)).unwrap()],
             environment: Environment {
                 bottom: t,
