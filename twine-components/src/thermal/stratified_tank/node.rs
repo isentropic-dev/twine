@@ -13,7 +13,7 @@ use uom::si::f64::{
 /// and conduction `UA` terms to its surrounding temperatures (bottom/side/top).
 #[derive(Debug, Clone, Copy)]
 pub(super) struct Node {
-    inv_volume: InverseVolume,
+    pub(super) volume: Volume,
     inv_heat_capacity: InverseHeatCapacity,
     ua_bottom: ThermalConductance,
     ua_side: ThermalConductance,
@@ -29,7 +29,7 @@ impl Node {
         ua_top: ThermalConductance,
     ) -> Self {
         Self {
-            inv_volume: volume.recip(),
+            volume,
             inv_heat_capacity: heat_capacity.recip(),
             ua_bottom,
             ua_side,
@@ -55,7 +55,7 @@ impl Node {
             .into_iter()
             .map(|(v_dot_in, t_in)| v_dot_in * t_in.minus(t_node))
             .sum::<TemperatureFlow>()
-            * self.inv_volume
+            / self.volume
     }
 
     /// Returns `dT/dt` due to auxiliary heat sources.
@@ -103,13 +103,13 @@ impl Node {
 #[derive(Debug, Clone, Copy)]
 pub(super) struct NodeTemperatures {
     /// The node's own temperature (center point).
-    center: ThermodynamicTemperature,
+    pub(super) center: ThermodynamicTemperature,
     /// Temperature adjacent to the bottom face.
-    bottom: ThermodynamicTemperature,
+    pub(super) bottom: ThermodynamicTemperature,
     /// Temperature adjacent to the side surface.
-    side: ThermodynamicTemperature,
+    pub(super) side: ThermodynamicTemperature,
     /// Temperature adjacent to the top face.
-    top: ThermodynamicTemperature,
+    pub(super) top: ThermodynamicTemperature,
 }
 
 type InverseVolume = <Ratio as Div<Volume>>::Output;
@@ -149,7 +149,7 @@ mod tests {
 
         pub fn with_volume(self, v: f64) -> Self {
             Self {
-                inv_volume: Volume::new::<m3>(v).recip(),
+                volume: Volume::new::<m3>(v),
                 ..self
             }
         }
