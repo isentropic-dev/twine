@@ -14,6 +14,7 @@ mod port_flow;
 
 use std::array;
 
+use twine_core::TimeDerivative;
 use twine_thermo::{HeatFlow, model::incompressible::IncompressibleFluid};
 use uom::{
     ConstZero,
@@ -23,7 +24,6 @@ use uom::{
 use buoyancy::{Layer, apply_buoyancy};
 use mass_balance::compute_upward_flows;
 use node::{Node, NodeTemperatures};
-use twine_core::TimeDerivative;
 
 pub use environment::Environment;
 pub use port_flow::PortFlow;
@@ -124,7 +124,7 @@ impl<F: IncompressibleFluid, const N: usize, const P: usize, const Q: usize>
         } = input;
 
         // Apply buoyancy-driven mixing.
-        let temperatures: [ThermodynamicTemperature; N] = apply_buoyancy(array::from_fn(|i| {
+        let temperatures = apply_buoyancy(array::from_fn(|i| {
             Layer::new(temperatures[i], self.nodes[i].volume)
         }));
 
@@ -136,7 +136,7 @@ impl<F: IncompressibleFluid, const N: usize, const P: usize, const Q: usize>
         );
 
         // Calculate the total derivative for each node: flows + aux + conduction.
-        let derivatives: [TimeDerivative<ThermodynamicTemperature>; N] = array::from_fn(|i| {
+        let derivatives = array::from_fn(|i| {
             self.deriv_from_flows(i, &temperatures, &upward_flows, port_flows)
                 + self.deriv_from_aux(i, aux_heat_flows)
                 + self.deriv_from_conduction(i, &temperatures, environment)
@@ -213,12 +213,13 @@ impl<F: IncompressibleFluid, const N: usize, const P: usize, const Q: usize>
         env: &Environment,
     ) -> TimeDerivative<ThermodynamicTemperature> {
         let node = self.nodes[i];
+        let t_node = temps[i];
 
         let bottom = if i == 0 { env.bottom } else { temps[i - 1] };
         let top = if i == N - 1 { env.top } else { temps[i + 1] };
 
         node.derivative_from_conduction(NodeTemperatures {
-            center: temps[i],
+            center: t_node,
             bottom,
             side: env.side,
             top,
