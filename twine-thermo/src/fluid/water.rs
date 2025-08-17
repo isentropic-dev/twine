@@ -1,9 +1,9 @@
 use twine_core::TimeIntegrable;
 use uom::si::{
-    f64::{MassDensity, SpecificHeatCapacity, ThermodynamicTemperature, Time},
+    f64::{MassDensity, SpecificHeatCapacity, ThermalConductivity, Time},
     mass_density::kilogram_per_cubic_meter,
     specific_heat_capacity::kilojoule_per_kilogram_kelvin,
-    thermodynamic_temperature::degree_celsius,
+    thermal_conductivity::watt_per_meter_kelvin,
 };
 
 use crate::model::incompressible::IncompressibleFluid;
@@ -27,15 +27,15 @@ impl Stateless for Water {}
 ///
 /// TODO: Find a standard to reference and double check these values.
 impl IncompressibleFluid for Water {
+    fn density(&self) -> MassDensity {
+        MassDensity::new::<kilogram_per_cubic_meter>(997.047)
+    }
+
     fn specific_heat(&self) -> SpecificHeatCapacity {
         SpecificHeatCapacity::new::<kilojoule_per_kilogram_kelvin>(4.184)
     }
 
-    fn reference_temperature(&self) -> ThermodynamicTemperature {
-        ThermodynamicTemperature::new::<degree_celsius>(25.0)
-    }
-
-    fn reference_density(&self) -> MassDensity {
-        MassDensity::new::<kilogram_per_cubic_meter>(997.047)
+    fn thermal_conductivity(&self) -> ThermalConductivity {
+        ThermalConductivity::new::<watt_per_meter_kelvin>(0.606)
     }
 }

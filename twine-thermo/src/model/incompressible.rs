@@ -2,7 +2,13 @@ use std::convert::Infallible;
 
 use uom::{
     ConstZero,
-    si::f64::{MassDensity, Pressure, SpecificHeatCapacity, ThermodynamicTemperature},
+    si::{
+        f64::{
+            MassDensity, Pressure, SpecificHeatCapacity, ThermalConductivity,
+            ThermodynamicTemperature,
+        },
+        thermodynamic_temperature::degree_celsius,
+    },
 };
 
 use crate::{
@@ -16,8 +22,8 @@ use super::{StateFrom, ThermodynamicProperties};
 /// Trait used to define thermodynamic constants for incompressible fluids.
 ///
 /// This trait provides the fixed properties needed to model a fluid under
-/// incompressible assumptions, where density variations are negligible and
-/// specific heat is effectively independent of temperature.
+/// incompressible assumptions, where density, specific heat, and thermal
+/// conductivity are all treated as constant.
 ///
 /// Any type that implements `IncompressibleFluid` can be used with the
 /// [`Incompressible`] model to calculate thermodynamic properties like
@@ -26,24 +32,27 @@ use super::{StateFrom, ThermodynamicProperties};
 /// Typically implemented for liquids like [`Water`] or custom incompressible
 /// fluids where pressure effects on density can be ignored.
 pub trait IncompressibleFluid {
-    /// Returns the specific heat capacity.
+    /// Returns the fluid's constant density.
+    fn density(&self) -> MassDensity;
+
+    /// Returns the fluid's constant specific heat capacity.
     fn specific_heat(&self) -> SpecificHeatCapacity;
 
-    /// Returns the reference temperature used in enthalpy and entropy calculations.
-    fn reference_temperature(&self) -> ThermodynamicTemperature;
+    /// Returns the fluid's constant thermal conductivity.
+    fn thermal_conductivity(&self) -> ThermalConductivity;
 
-    /// Returns the reference density for this fluid.
+    /// Returns the reference temperature used in enthalpy and entropy calculations.
     ///
-    /// This density typically corresponds to the conditions under which the
-    /// constant specific heat was determined.
-    /// It serves as the default density when creating states from temperature alone,
-    /// though models may override this value in specific contexts.
-    fn reference_density(&self) -> MassDensity;
+    /// Defaults to 25°C (298.15 K), a typical ambient reference temperature.
+    /// Override to use a different reference temperature.
+    fn reference_temperature(&self) -> ThermodynamicTemperature {
+        ThermodynamicTemperature::new::<degree_celsius>(25.0)
+    }
 
     /// Returns the enthalpy at the reference temperature.
     ///
     /// Defaults to zero.
-    /// Override to use a nonzero reference value.
+    /// Override to use a nonzero reference enthalpy.
     fn reference_enthalpy(&self) -> SpecificEnthalpy {
         SpecificEnthalpy::ZERO
     }
@@ -51,7 +60,7 @@ pub trait IncompressibleFluid {
     /// Returns the entropy at the reference temperature.
     ///
     /// Defaults to zero.
-    /// Override to use a nonzero reference value.
+    /// Override to use a nonzero reference entropy.
     fn reference_entropy(&self) -> SpecificEntropy {
         SpecificEntropy::ZERO
     }
@@ -72,7 +81,7 @@ impl Incompressible {
     #[must_use]
     pub fn reference_state<F: IncompressibleFluid>(fluid: F) -> State<F> {
         let temperature = fluid.reference_temperature();
-        let density = fluid.reference_density();
+        let density = fluid.density();
 
         State {
             temperature,
@@ -127,15 +136,13 @@ impl<F: IncompressibleFluid> ThermodynamicProperties<F> for Incompressible {
     }
 }
 
-/// Enables state creation from temperature alone for any [`Stateless`] fluid.
-///
-/// The returned state uses the fluid's reference density.
+/// Enables state creation from temperature alone for any incompressible and [`Stateless`] fluid.
 impl<F: IncompressibleFluid + Stateless> StateFrom<F, ThermodynamicTemperature> for Incompressible {
     type Error = Infallible;
 
     fn state_from(&self, temperature: ThermodynamicTemperature) -> Result<State<F>, Self::Error> {
         let fluid = F::default();
-        let density = fluid.reference_density();
+        let density = fluid.density();
 
         Ok(State {
             temperature,
@@ -165,16 +172,16 @@ mod tests {
     impl Stateless for MockLiquid {}
 
     impl IncompressibleFluid for MockLiquid {
+        fn density(&self) -> MassDensity {
+            MassDensity::new::<kilogram_per_cubic_meter>(1.0)
+        }
+
         fn specific_heat(&self) -> SpecificHeatCapacity {
             SpecificHeatCapacity::new::<kilojoule_per_kilogram_degree_celsius>(10.0)
         }
 
-        fn reference_temperature(&self) -> ThermodynamicTemperature {
-            ThermodynamicTemperature::new::<degree_celsius>(25.0)
-        }
-
-        fn reference_density(&self) -> MassDensity {
-            MassDensity::new::<kilogram_per_cubic_meter>(1.0)
+        fn thermal_conductivity(&self) -> ThermalConductivity {
+            ThermalConductivity::ZERO
         }
     }
 

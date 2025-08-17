@@ -139,7 +139,7 @@ impl Model for TanksInRoom<'_> {
             .daily_draw_schedule
             .value_at(&input.datetime.time())
             .map(|&draw| {
-                let m_dot = draw * Water.reference_density();
+                let m_dot = draw * Water.density();
                 Constrained::new(m_dot).unwrap()
             });
 
