@@ -1,9 +1,10 @@
 use twine_core::TimeIntegrable;
 use uom::si::{
-    f64::{MassDensity, SpecificHeatCapacity, ThermalConductivity, Time},
+    f64::{MassDensity, SpecificHeatCapacity, ThermalConductivity, ThermodynamicTemperature, Time},
     mass_density::kilogram_per_cubic_meter,
     specific_heat_capacity::kilojoule_per_kilogram_kelvin,
     thermal_conductivity::watt_per_meter_kelvin,
+    thermodynamic_temperature::degree_celsius,
 };
 
 use crate::model::incompressible::IncompressibleFluid;
@@ -37,5 +38,9 @@ impl IncompressibleFluid for Water {
 
     fn thermal_conductivity(&self) -> ThermalConductivity {
         ThermalConductivity::new::<watt_per_meter_kelvin>(0.606)
+    }
+
+    fn reference_temperature(&self) -> ThermodynamicTemperature {
+        ThermodynamicTemperature::new::<degree_celsius>(25.0)
     }
 }
