@@ -1,5 +1,5 @@
 use twine_core::TimeIntegrable;
-use uom::si::f64::{MassDensity, SpecificHeatCapacity, ThermodynamicTemperature, Time};
+use uom::si::f64::{MassDensity, SpecificHeatCapacity, ThermalConductivity, Time};
 
 use crate::model::incompressible::IncompressibleFluid;
 
@@ -9,28 +9,22 @@ use crate::model::incompressible::IncompressibleFluid;
 pub struct IncompressibleCustom {
     /// Optional name for identification.
     pub name: Option<String>,
-
-    /// Specific heat capacity.
+    pub density: MassDensity,
     pub specific_heat: SpecificHeatCapacity,
-
-    /// Reference temperature for enthalpy and entropy calculations.
-    pub reference_temperature: ThermodynamicTemperature,
-
-    /// Reference density.
-    pub reference_density: MassDensity,
+    pub thermal_conductivity: ThermalConductivity,
 }
 
 impl IncompressibleFluid for IncompressibleCustom {
+    fn density(&self) -> MassDensity {
+        self.density
+    }
+
     fn specific_heat(&self) -> SpecificHeatCapacity {
         self.specific_heat
     }
 
-    fn reference_temperature(&self) -> ThermodynamicTemperature {
-        self.reference_temperature
-    }
-
-    fn reference_density(&self) -> MassDensity {
-        self.reference_density
+    fn thermal_conductivity(&self) -> ThermalConductivity {
+        self.thermal_conductivity
     }
 }
 
