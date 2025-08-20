@@ -18,7 +18,7 @@ use uom::si::{
 ///
 /// The model does not simulate physical mixing over time, only instantaneous
 /// buoyancy-driven correction at a single point in time.
-fn apply_buoyancy<const N: usize>(layers: [Layer; N]) -> [ThermodynamicTemperature; N] {
+pub(super) fn apply_buoyancy<const N: usize>(layers: [Layer; N]) -> [ThermodynamicTemperature; N] {
     let mut stack: [Block; N] = array::from_fn(|_| Block::default());
     let mut stack_index = 0;
 
@@ -97,13 +97,13 @@ impl Default for Block {
 
 /// A single thermal layer.
 #[derive(Debug, Clone, Copy, Default)]
-struct Layer {
+pub(super) struct Layer {
     temperature: ThermodynamicTemperature,
     volume: Volume,
 }
 
 impl Layer {
-    fn new(temperature: ThermodynamicTemperature, volume: Volume) -> Self {
+    pub(super) fn new(temperature: ThermodynamicTemperature, volume: Volume) -> Self {
         Self {
             temperature,
             volume,
