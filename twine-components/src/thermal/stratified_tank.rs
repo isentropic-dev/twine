@@ -15,7 +15,7 @@ mod port_flow;
 use std::array;
 
 use twine_core::TimeDerivative;
-use twine_thermo::{HeatFlow, model::incompressible::IncompressibleFluid};
+use twine_thermo::HeatFlow;
 use uom::{
     ConstZero,
     si::f64::{ThermodynamicTemperature, VolumeRate},
@@ -47,12 +47,10 @@ pub use port_flow::PortFlow;
 /// multiple layers.
 ///
 /// Generic over:
-/// - `F`: fluid type (must implement [`IncompressibleFluid`])
 /// - `N`: number of layers
 /// - `P`: number of port pairs
 /// - `Q`: number of auxiliary heat sources
-pub struct StratifiedTank<F: IncompressibleFluid, const N: usize, const P: usize, const Q: usize> {
-    fluid: F,
+pub struct StratifiedTank<const N: usize, const P: usize, const Q: usize> {
     nodes: [Node; N],
     aux_heat_weights: [[f64; Q]; N],
     port_inlet_weights: [[f64; P]; N],
@@ -108,13 +106,12 @@ pub struct Output<const N: usize> {
     pub derivatives: [TimeDerivative<ThermodynamicTemperature>; N],
 }
 
-impl<F: IncompressibleFluid, const N: usize, const P: usize, const Q: usize>
-    StratifiedTank<F, N, P, Q>
-{
+impl<const N: usize, const P: usize, const Q: usize> StratifiedTank<N, P, Q> {
     /// Evaluates the tank's thermal response at a single point in time.
     ///
     /// Enforces thermal stability by mixing unstable layers, then applies port
     /// flows, auxiliary heat input, and environmental effects.
+    #[must_use]
     pub fn call(&self, input: &Input<N, P, Q>) -> Output<N> {
         let Input {
             temperatures,
@@ -245,26 +242,15 @@ mod tests {
         volume_rate::gallon_per_minute,
     };
 
-    struct TestFluid;
-    impl IncompressibleFluid for TestFluid {
-        fn specific_heat(&self) -> SpecificHeatCapacity {
-            SpecificHeatCapacity::new::<kilojoule_per_kilogram_kelvin>(4.0)
-        }
-        fn reference_temperature(&self) -> ThermodynamicTemperature {
-            ThermodynamicTemperature::new::<degree_celsius>(25.0)
-        }
-        fn reference_density(&self) -> MassDensity {
-            MassDensity::new::<kilogram_per_cubic_meter>(1000.0)
-        }
-    }
-
     // Test tank:
     // - 3 nodes, each V=1 m³ and UA=0
     // - 1 port: inlet 100% to node 0, outlet 100% from node 2
     // - 1 aux: 100% applied to node 2
-    fn test_tank() -> StratifiedTank<TestFluid, 3, 1, 1> {
+    fn test_tank() -> StratifiedTank<3, 1, 1> {
         let volume = Volume::new::<m3>(1.0);
-        let heat_capacity = volume * TestFluid.reference_density() * TestFluid.specific_heat();
+        let density = MassDensity::new::<kilogram_per_cubic_meter>(1000.0);
+        let c = SpecificHeatCapacity::new::<kilojoule_per_kilogram_kelvin>(4.0);
+        let heat_capacity = volume * density * c;
 
         let nodes = [Node::new(
             volume,
@@ -279,7 +265,6 @@ mod tests {
         let port_outlet_weights = [[0.0], [0.0], [1.0]]; // outlet from top node
 
         StratifiedTank {
-            fluid: TestFluid,
             nodes,
             aux_heat_weights,
             port_inlet_weights,
