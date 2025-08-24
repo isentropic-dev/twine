@@ -18,15 +18,18 @@ use twine_core::TimeDerivative;
 use twine_thermo::HeatFlow;
 use uom::{
     ConstZero,
-    si::f64::{ThermodynamicTemperature, VolumeRate},
+    si::f64::{MassDensity, ThermodynamicTemperature, VolumeRate},
 };
 
-use buoyancy::{Layer, apply_buoyancy};
 use mass_balance::compute_upward_flows;
 use node::{Node, NodeTemperatures};
 
 pub use environment::Environment;
 pub use port_flow::PortFlow;
+
+pub trait DensityModel {
+    fn density(&self, temperature: ThermodynamicTemperature) -> MassDensity;
+}
 
 /// A stratified thermal energy storage tank.
 ///
@@ -47,10 +50,12 @@ pub use port_flow::PortFlow;
 /// multiple layers.
 ///
 /// Generic over:
+/// - `D`: density model that provides `rho = f(T)`
 /// - `N`: number of layers
 /// - `P`: number of port pairs
 /// - `Q`: number of auxiliary heat sources
-pub struct StratifiedTank<const N: usize, const P: usize, const Q: usize> {
+pub struct StratifiedTank<D: DensityModel, const N: usize, const P: usize, const Q: usize> {
+    density: D,
     nodes: [Node; N],
     aux_heat_weights: [[f64; Q]; N],
     port_inlet_weights: [[f64; P]; N],
@@ -106,7 +111,7 @@ pub struct Output<const N: usize> {
     pub derivatives: [TimeDerivative<ThermodynamicTemperature>; N],
 }
 
-impl<const N: usize, const P: usize, const Q: usize> StratifiedTank<N, P, Q> {
+impl<D: DensityModel, const N: usize, const P: usize, const Q: usize> StratifiedTank<D, N, P, Q> {
     /// Evaluates the tank's thermal response at a single point in time.
     ///
     /// Enforces thermal stability by mixing unstable layers, then applies port
@@ -121,9 +126,11 @@ impl<const N: usize, const P: usize, const Q: usize> StratifiedTank<N, P, Q> {
         } = input;
 
         // Apply buoyancy-driven mixing.
-        let temperatures = apply_buoyancy(array::from_fn(|i| {
-            Layer::new(temperatures[i], self.nodes[i].volume)
-        }));
+        let (temperatures, _masses) = buoyancy::stabilize(
+            *temperatures,
+            &temperatures.map(|t| self.density.density(t)),
+            &self.nodes.map(|n| n.volume),
+        );
 
         // Compute node-to-node flow.
         let upward_flows = compute_upward_flows(
@@ -231,30 +238,43 @@ mod tests {
     use approx::assert_relative_eq;
     use uom::si::{
         f64::{
-            MassDensity, Power, SpecificHeatCapacity, ThermalConductance, ThermodynamicTemperature,
-            Volume, VolumeRate,
+            HeatCapacity, MassDensity, Power, ThermalConductance, ThermodynamicTemperature, Volume,
+            VolumeRate,
         },
+        heat_capacity::kilojoule_per_kelvin,
         mass_density::kilogram_per_cubic_meter,
         power::kilowatt,
-        specific_heat_capacity::kilojoule_per_kilogram_kelvin,
         thermodynamic_temperature::degree_celsius,
         volume::cubic_meter as m3,
         volume_rate::gallon_per_minute,
     };
 
+    struct ConstantDensity {
+        density: MassDensity,
+    }
+
+    impl ConstantDensity {
+        fn new(rho_kg_m3: f64) -> Self {
+            Self {
+                density: MassDensity::new::<kilogram_per_cubic_meter>(rho_kg_m3),
+            }
+        }
+    }
+
+    impl DensityModel for ConstantDensity {
+        fn density(&self, _temperature: ThermodynamicTemperature) -> MassDensity {
+            self.density
+        }
+    }
+
     // Test tank:
     // - 3 nodes, each V=1 m³ and UA=0
     // - 1 port: inlet 100% to node 0, outlet 100% from node 2
     // - 1 aux: 100% applied to node 2
-    fn test_tank() -> StratifiedTank<3, 1, 1> {
-        let volume = Volume::new::<m3>(1.0);
-        let density = MassDensity::new::<kilogram_per_cubic_meter>(1000.0);
-        let c = SpecificHeatCapacity::new::<kilojoule_per_kilogram_kelvin>(4.0);
-        let heat_capacity = volume * density * c;
-
+    fn test_tank() -> StratifiedTank<ConstantDensity, 3, 1, 1> {
         let nodes = [Node::new(
-            volume,
-            heat_capacity,
+            Volume::new::<m3>(1.0),
+            HeatCapacity::new::<kilojoule_per_kelvin>(4000.0),
             ThermalConductance::ZERO,
             ThermalConductance::ZERO,
             ThermalConductance::ZERO,
@@ -265,6 +285,7 @@ mod tests {
         let port_outlet_weights = [[0.0], [0.0], [1.0]]; // outlet from top node
 
         StratifiedTank {
+            density: ConstantDensity::new(1000.0),
             nodes,
             aux_heat_weights,
             port_inlet_weights,
