@@ -18,7 +18,7 @@ use twine_core::TimeDerivative;
 use twine_thermo::HeatFlow;
 use uom::{
     ConstZero,
-    si::f64::{MassDensity, ThermodynamicTemperature, VolumeRate},
+    si::f64::{Mass, MassDensity, ThermodynamicTemperature, VolumeRate},
 };
 
 use mass_balance::compute_upward_flows;
@@ -55,7 +55,7 @@ pub trait DensityModel {
 /// - `P`: number of port pairs
 /// - `Q`: number of auxiliary heat sources
 pub struct StratifiedTank<D: DensityModel, const N: usize, const P: usize, const Q: usize> {
-    density: D,
+    dens_model: D,
     nodes: [Node; N],
     aux_heat_weights: [[f64; Q]; N],
     port_inlet_weights: [[f64; P]; N],
@@ -119,18 +119,15 @@ impl<D: DensityModel, const N: usize, const P: usize, const Q: usize> Stratified
     #[must_use]
     pub fn call(&self, input: &Input<N, P, Q>) -> Output<N> {
         let Input {
-            temperatures,
+            temperatures: t_guess,
             port_flows,
             aux_heat_flows,
             environment,
         } = input;
 
-        // Apply buoyancy-driven mixing.
-        let (temperatures, _masses) = buoyancy::stabilize(
-            *temperatures,
-            &temperatures.map(|t| self.density.density(t)),
-            &self.nodes.map(|n| n.volume),
-        );
+        // Compute stabilized layers.
+        let vol = self.nodes.map(|n| n.volume);
+        let layers = buoyancy::stabilize(t_guess, &vol, &self.dens_model);
 
         // Compute node-to-node flow.
         let upward_flows = compute_upward_flows(
@@ -140,6 +137,7 @@ impl<D: DensityModel, const N: usize, const P: usize, const Q: usize> Stratified
         );
 
         // Calculate the total derivative for each node: flows + aux + conduction.
+        let temperatures = layers.map(|layer| layer.temp); // TODO: placeholder...
         let derivatives = array::from_fn(|i| {
             self.deriv_from_flows(i, &temperatures, &upward_flows, port_flows)
                 + self.deriv_from_aux(i, aux_heat_flows)
@@ -231,6 +229,12 @@ impl<D: DensityModel, const N: usize, const P: usize, const Q: usize> Stratified
     }
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+struct Layer {
+    temp: ThermodynamicTemperature,
+    mass: Mass,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -285,7 +289,7 @@ mod tests {
         let port_outlet_weights = [[0.0], [0.0], [1.0]]; // outlet from top node
 
         StratifiedTank {
-            density: ConstantDensity::new(1000.0),
+            dens_model: ConstantDensity::new(1000.0),
             nodes,
             aux_heat_weights,
             port_inlet_weights,
