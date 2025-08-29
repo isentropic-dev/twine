@@ -4,7 +4,7 @@ use uom::si::{
     temperature_interval, thermodynamic_temperature,
 };
 
-use super::{DensityModel, Layer};
+use super::DensityModel;
 
 /// Restores thermal stability in a stack of fluid layers through buoyancy mixing.
 ///
@@ -17,15 +17,15 @@ use super::{DensityModel, Layer};
 pub(super) fn stabilize<const N: usize>(
     temp: &[ThermodynamicTemperature; N],
     vol: &[Volume; N],
-    rho: &impl DensityModel,
-) -> [Layer; N] {
-    let dens = temp.map(|t| rho.density(t));
+    dens_model: &impl DensityModel,
+) -> [(ThermodynamicTemperature, Mass); N] {
+    let dens = temp.map(|t| dens_model.density(t));
 
-    // // Fast path: already stable if every adjacent pair has ρ_below ≥ ρ_above.
-    // let already_stable = dens.windows(2).all(|w| w[0] >= w[1]);
-    // if already_stable {
-    //     return (temp, array::from_fn(|i| dens[i] * vol[i]));
-    // }
+    // Fast path: already stable if every adjacent pair has ρ_below ≥ ρ_above.
+    let already_stable = dens.windows(2).all(|w| w[0] >= w[1]);
+    if already_stable {
+        return array::from_fn(|i| (temp[i], dens[i] * vol[i]));
+    }
 
     // Build a stack of blocks from bottom to top, recursively merging unstable pairs.
     let mut stack: [Block; N] = array::from_fn(|_| Block::default());
@@ -43,16 +43,13 @@ pub(super) fn stabilize<const N: usize>(
         stack_index += 1;
     }
 
-    let mut layers = [Layer::default(); N];
+    let mut layers = [Default::default(); N];
     for block in &stack[..stack_index] {
         let block_temp = block.temp;
-        let block_dens = rho.density(block_temp);
+        let block_dens = dens_model.density(block_temp);
 
         for i in block.range.clone() {
-            layers[i] = Layer {
-                temp: block_temp,
-                mass: block_dens * vol[i],
-            }
+            layers[i] = (block_temp, block_dens * vol[i]);
         }
     }
 
@@ -157,12 +154,12 @@ mod tests {
         vols_m3.map(Volume::new::<cubic_meter>)
     }
 
-    fn layer_temp(layer: Layer) -> f64 {
-        layer.temp.get::<degree_celsius>()
+    fn layer_temp(layers: &[(ThermodynamicTemperature, Mass)], index: usize) -> f64 {
+        layers[index].0.get::<degree_celsius>()
     }
 
-    fn layer_mass(layer: Layer) -> f64 {
-        layer.mass.get::<kilogram>()
+    fn layer_mass(layers: &[(ThermodynamicTemperature, Mass)], index: usize) -> f64 {
+        layers[index].1.get::<kilogram>()
     }
 
     #[test]
@@ -171,7 +168,7 @@ mod tests {
         let temp = ts([30.0, 40.0, 50.0]);
 
         let layers = stabilize(&temp, &vol, &NearlyConstant);
-        assert_eq!(layers.map(|l| l.temp), ts([30.0, 40.0, 50.0]));
+        assert_eq!(layers.map(|l| l.0), ts([30.0, 40.0, 50.0]));
     }
 
     #[test]
@@ -181,13 +178,13 @@ mod tests {
 
         let layers = stabilize(&temp, &vol, &NearlyConstant);
 
-        assert_relative_eq!(layer_temp(layers[0]), 40.0, epsilon = 1e-12);
-        assert_relative_eq!(layer_temp(layers[1]), 40.0, epsilon = 1e-12);
-        assert_relative_eq!(layer_temp(layers[2]), 40.0, epsilon = 1e-12);
+        assert_relative_eq!(layer_temp(&layers, 0), 40.0, epsilon = 1e-12);
+        assert_relative_eq!(layer_temp(&layers, 1), 40.0, epsilon = 1e-12);
+        assert_relative_eq!(layer_temp(&layers, 2), 40.0, epsilon = 1e-12);
 
-        assert_relative_eq!(layer_mass(layers[0]), 1000.0, epsilon = 1e-10);
-        assert_relative_eq!(layer_mass(layers[1]), 1000.0, epsilon = 1e-10);
-        assert_relative_eq!(layer_mass(layers[2]), 1000.0, epsilon = 1e-10);
+        assert_relative_eq!(layer_mass(&layers, 0), 1000.0, epsilon = 1e-10);
+        assert_relative_eq!(layer_mass(&layers, 1), 1000.0, epsilon = 1e-10);
+        assert_relative_eq!(layer_mass(&layers, 2), 1000.0, epsilon = 1e-10);
     }
 
     #[test]
@@ -197,11 +194,11 @@ mod tests {
 
         let layers = stabilize(&temp, &vol, &NearlyConstant);
 
-        assert_relative_eq!(layer_temp(layers[0]), 20.0, epsilon = 1e-12);
-        assert_relative_eq!(layer_temp(layers[1]), 30.0, epsilon = 1e-12);
-        assert_relative_eq!(layer_temp(layers[2]), 44.0, epsilon = 1e-12);
-        assert_relative_eq!(layer_temp(layers[3]), 44.0, epsilon = 1e-12);
-        assert_relative_eq!(layer_temp(layers[4]), 44.0, epsilon = 1e-12);
+        assert_relative_eq!(layer_temp(&layers, 0), 20.0, epsilon = 1e-12);
+        assert_relative_eq!(layer_temp(&layers, 1), 30.0, epsilon = 1e-12);
+        assert_relative_eq!(layer_temp(&layers, 2), 44.0, epsilon = 1e-12);
+        assert_relative_eq!(layer_temp(&layers, 3), 44.0, epsilon = 1e-12);
+        assert_relative_eq!(layer_temp(&layers, 4), 44.0, epsilon = 1e-12);
     }
 
     #[test]
@@ -211,12 +208,12 @@ mod tests {
 
         let layers = stabilize(&temp, &vol, &NearlyConstant);
 
-        assert_relative_eq!(layer_temp(layers[0]), 2.0, epsilon = 1e-12);
-        assert_relative_eq!(layer_temp(layers[1]), 8.0, epsilon = 1e-12);
-        assert_relative_eq!(layer_temp(layers[2]), 8.0, epsilon = 1e-12);
+        assert_relative_eq!(layer_temp(&layers, 0), 2.0, epsilon = 1e-12);
+        assert_relative_eq!(layer_temp(&layers, 1), 8.0, epsilon = 1e-12);
+        assert_relative_eq!(layer_temp(&layers, 2), 8.0, epsilon = 1e-12);
 
-        assert_relative_eq!(layer_mass(layers[0]), 1000.0, epsilon = 1e-10);
-        assert_relative_eq!(layer_mass(layers[1]), 4000.0, epsilon = 1e-10);
-        assert_relative_eq!(layer_mass(layers[2]), 2000.0, epsilon = 1e-10);
+        assert_relative_eq!(layer_mass(&layers, 0), 1000.0, epsilon = 1e-10);
+        assert_relative_eq!(layer_mass(&layers, 1), 4000.0, epsilon = 1e-10);
+        assert_relative_eq!(layer_mass(&layers, 2), 2000.0, epsilon = 1e-10);
     }
 }

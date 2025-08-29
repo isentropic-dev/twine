@@ -11,7 +11,7 @@ pub struct PortFlow {
 
     /// Inlet fluid temperature.
     ///
-    /// The outlet temperature is determined by the layer assocated with the outflow.
+    /// The outlet temperature is determined by the layer(s) assocated with the outflow.
     pub inlet_temperature: ThermodynamicTemperature,
 }
 
@@ -44,6 +44,12 @@ impl PortFlow {
     /// Returns the volumetric flow shared by the inlet and outlet.
     #[must_use]
     pub fn rate(&self) -> VolumeRate {
+        self.rate.into_inner()
+    }
+
+    /// TODO: one line document for this
+    #[must_use]
+    pub fn into_rate(self) -> VolumeRate {
         self.rate.into_inner()
     }
 }
