@@ -55,7 +55,7 @@ pub trait DensityModel {
 ///
 /// Generic over:
 /// - `D`: density model that provides `rho = f(T)`
-/// - `N`: number of layers
+/// - `N`: number of nodes (layers)
 /// - `P`: number of port pairs
 /// - `Q`: number of auxiliary heat sources
 pub struct StratifiedTank<D: DensityModel, const N: usize, const P: usize, const Q: usize> {
@@ -68,11 +68,11 @@ pub struct StratifiedTank<D: DensityModel, const N: usize, const P: usize, const
 ///
 /// Captures the runtime state needed to evaluate the tank's thermal response.
 /// Locations of ports and auxiliary heat sources, and how they are distributed
-/// across layers, are fixed when the tank is constructed.
+/// across nodes, are fixed when the tank is constructed.
 /// This struct holds only the values that change at runtime.
 ///
 /// Generic over:
-/// - `N`: Number of stratified layers
+/// - `N`: Number of nodes (layers)
 /// - `P`: Number of port pairs
 /// - `Q`: Number of auxiliary heat sources
 pub struct Input<const N: usize, const P: usize, const Q: usize> {
@@ -99,7 +99,7 @@ pub struct Input<const N: usize, const P: usize, const Q: usize> {
 /// after applying mass and energy balances.
 ///
 /// Generic over:
-/// - `N`: Number of stratified layers
+/// - `N`: Number of nodes (layers)
 pub struct Output<const N: usize> {
     /// Temperatures of the `N` layers, from bottom to top.
     ///
@@ -253,7 +253,7 @@ struct Node<const P: usize, const Q: usize> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Adjacent, *};
+    use super::*;
 
     use approx::assert_relative_eq;
     use uom::si::{
@@ -285,9 +285,9 @@ mod tests {
     }
 
     // Test tank:
-    // - 3 layers, each V=1 m³ and UA=0
-    // - 1 port: inlet 100% to layer 0, outlet 100% from layer 2
-    // - 1 aux: 100% applied to layer 2
+    // - 3 nodes, each V=1 m³ and UA=0
+    // - 1 port: inlet 100% to node 0, outlet 100% from node 2
+    // - 1 aux: 100% applied to node 2
     fn test_tank() -> StratifiedTank<ConstantDensity, 3, 1, 1> {
         let bottom = Node {
             vol: Volume::new::<m3>(1.0),
