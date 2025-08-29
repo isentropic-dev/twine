@@ -47,7 +47,7 @@ impl PortFlow {
         self.rate.into_inner()
     }
 
-    /// TODO: one line document for this
+    /// Extracts the flow rate from this port flow, consuming self.
     #[must_use]
     pub fn into_rate(self) -> VolumeRate {
         self.rate.into_inner()

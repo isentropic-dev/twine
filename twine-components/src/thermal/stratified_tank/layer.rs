@@ -31,11 +31,11 @@ impl Layer {
     /// Returns `dT/dt` due to fluid flows.
     ///
     /// Mass is conserved under Boussinesq assumptions by matching all inflows with
-    /// an assumed equal outflow at the node temperature.
+    /// an assumed equal outflow at the layer temperature.
     /// Therefore, the temperature derivative due to fluid flow is only a
     /// function of normalized inbound flows and is calculated according to:
     /// ```text
-    /// dT/dt = Σ[m_dot_in · (T_in − T_node)] / m_node
+    /// dT/dt = Σ[m_dot_in · (T_in − T_layer)] / m_layer
     /// ```
     pub(super) fn derivative_from_fluid_flows(
         &self,
@@ -63,7 +63,7 @@ impl Layer {
 
     /// Returns `dT/dt` due to conduction.
     ///
-    /// Conduction through the bottom, side, and top of the node are considered,
+    /// Conduction through the bottom, side, and top of the layer are considered,
     /// with the net conduction loss (or gain) calculated according to:
     /// ```text
     /// Q_dot_cond = UA_bottom · (T_bottom − T_center)
@@ -86,7 +86,7 @@ impl Layer {
         q_dot_net * self.inv_heat_capacity
     }
 
-    /// TODO: a oneline docstring here
+    /// Extracts the temperature from this layer, consuming self.
     pub(super) fn into_temperature(self) -> ThermodynamicTemperature {
         self.temp
     }
