@@ -132,7 +132,7 @@ impl<D: DensityModel, const N: usize, const P: usize, const Q: usize> Stratified
         let layers = buoyancy::stabilize(t_guess, &vol, &self.dens_model)
             .map(|(temp, mass)| Layer::new(temp, mass, self.cp));
 
-        // Compute layer-to-layer flow.
+        // Compute node-to-node flow.
         let upward_flows = mass_balance::compute_upward_flows(
             &port_flows.map(PortFlow::into_rate),
             &array::from_fn(|n| {
