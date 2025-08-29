@@ -135,8 +135,14 @@ impl<D: DensityModel, const N: usize, const P: usize, const Q: usize> Stratified
         // Compute layer-to-layer flow.
         let upward_flows = mass_balance::compute_upward_flows(
             &port_flows.map(PortFlow::into_rate),
-            &array::from_fn(|i| self.nodes[i].port_inlet_weights),
-            &array::from_fn(|i| self.nodes[i].port_outlet_weights),
+            &array::from_fn(|n| {
+                array::from_fn(|p| {
+                    (
+                        self.nodes[n].port_inlet_weights[p],
+                        self.nodes[n].port_outlet_weights[p],
+                    )
+                })
+            }),
         );
 
         // Calculate the total derivative for each layer: flows + aux + conduction.

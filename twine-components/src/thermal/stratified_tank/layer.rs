@@ -17,6 +17,7 @@ pub(super) struct Layer {
 }
 
 impl Layer {
+    /// Creates a new layer with the given temperature, mass, and specific heat capacity.
     pub(super) fn new(
         temp: ThermodynamicTemperature,
         mass: Mass,
@@ -28,6 +29,7 @@ impl Layer {
             inv_heat_capacity: (mass * cp).recip(),
         }
     }
+
     /// Returns `dT/dt` due to fluid flows.
     ///
     /// Mass is conserved under Boussinesq assumptions by matching all inflows with
