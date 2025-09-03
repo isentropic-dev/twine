@@ -9,8 +9,13 @@
 mod adjacent;
 mod buoyancy;
 mod environment;
+mod fluid;
+mod geometry;
+mod insulation;
 mod layer;
+mod location;
 mod mass_balance;
+mod node;
 mod port_flow;
 
 use std::array;
@@ -19,16 +24,18 @@ use twine_core::TimeDerivative;
 use twine_thermo::HeatFlow;
 use uom::{
     ConstZero,
-    si::f64::{
-        MassDensity, SpecificHeatCapacity, ThermalConductance, ThermodynamicTemperature, Volume,
-        VolumeRate,
-    },
+    si::f64::{MassDensity, SpecificHeatCapacity, ThermodynamicTemperature, VolumeRate},
 };
 
 use adjacent::Adjacent;
 use layer::Layer;
+use node::Node;
 
 pub use environment::Environment;
+pub use fluid::Fluid;
+pub use geometry::Geometry;
+pub use insulation::Insulation;
+pub use location::{Location, PortPairLocation};
 pub use port_flow::PortFlow;
 
 pub trait DensityModel {
@@ -114,6 +121,23 @@ pub struct Output<const N: usize> {
 }
 
 impl<D: DensityModel, const N: usize, const P: usize, const Q: usize> StratifiedTank<D, N, P, Q> {
+    /// Creates a new tank.
+    pub fn new(
+        fluid: Fluid<D>,
+        geometry: Geometry,
+        insulation: Insulation,
+        aux_locations: [Location; Q],
+        port_locations: [PortPairLocation; P],
+    ) -> Self {
+        let nodes = geometry.into_node_array(&fluid, insulation, aux_locations, port_locations);
+
+        Self {
+            cp: fluid.specific_heat,
+            dens_model: fluid.density_model,
+            nodes,
+        }
+    }
+
     /// Evaluates the tank's thermal response at a single point in time.
     ///
     /// Enforces thermal stability by mixing unstable layers, then applies port
@@ -241,14 +265,6 @@ impl<D: DensityModel, const N: usize, const P: usize, const Q: usize> Stratified
             },
         )
     }
-}
-
-struct Node<const P: usize, const Q: usize> {
-    vol: Volume,
-    ua: Adjacent<ThermalConductance>,
-    aux_heat_weights: [f64; Q],
-    port_inlet_weights: [f64; P],
-    port_outlet_weights: [f64; P],
 }
 
 #[cfg(test)]

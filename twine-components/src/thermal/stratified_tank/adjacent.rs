@@ -1,4 +1,4 @@
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub(super) struct Adjacent<T> {
     pub(super) bottom: T,
     pub(super) side: T,
