@@ -4,30 +4,27 @@ use uom::si::{
     temperature_interval, thermodynamic_temperature,
 };
 
+use super::DensityModel;
+
 /// Restores thermal stability in a stack of fluid layers through buoyancy mixing.
 ///
 /// This function merges any unstable adjacent layers so that denser fluid is
 /// always below lighter fluid.
-///
-/// Within each merged block:
-/// - temperature becomes uniform (mass-weighted average),
-/// - total mass and volume are conserved, and
-/// - the block's mass is redistributed back to the original layers in
-///   proportion to their volumes (volumes themselves are unchanged).
+/// The temperature of a merged layer is computed using a mass-weighted average.
 ///
 /// This process represents an instantaneous stabilization step;
 /// it does not simulate transient mixing dynamics.
-///
-/// Returns the stabilized temperatures and per-layer masses.
 pub(super) fn stabilize<const N: usize>(
-    mut temp: [ThermodynamicTemperature; N],
-    dens: &[MassDensity; N],
+    temp: &[ThermodynamicTemperature; N],
     vol: &[Volume; N],
-) -> ([ThermodynamicTemperature; N], [Mass; N]) {
+    dens_model: &impl DensityModel,
+) -> [(ThermodynamicTemperature, Mass); N] {
+    let dens = temp.map(|t| dens_model.density(t));
+
     // Fast path: already stable if every adjacent pair has ρ_below ≥ ρ_above.
     let already_stable = dens.windows(2).all(|w| w[0] >= w[1]);
     if already_stable {
-        return (temp, array::from_fn(|i| dens[i] * vol[i]));
+        return array::from_fn(|i| (temp[i], dens[i] * vol[i]));
     }
 
     // Build a stack of blocks from bottom to top, recursively merging unstable pairs.
@@ -46,16 +43,17 @@ pub(super) fn stabilize<const N: usize>(
         stack_index += 1;
     }
 
-    // Assign each layer its block's temperature and proportional share of block mass.
-    let mut mass = [Mass::default(); N];
+    let mut layers = [Default::default(); N];
     for block in &stack[..stack_index] {
+        let block_temp = block.temp;
+        let block_dens = dens_model.density(block_temp);
+
         for i in block.range.clone() {
-            temp[i] = block.temp;
-            mass[i] = block.mass * (vol[i] / block.vol);
+            layers[i] = (block_temp, block_dens * vol[i]);
         }
     }
 
-    (temp, mass)
+    layers
 }
 
 /// A block of adjacent layers with uniform temperature and total mass/volume.
@@ -132,17 +130,20 @@ impl Default for Block {
 mod tests {
     use super::*;
 
-    use approx::{assert_relative_eq, relative_eq};
+    use approx::assert_relative_eq;
     use uom::si::{
         f64::MassDensity, mass::kilogram, mass_density::kilogram_per_cubic_meter,
         thermodynamic_temperature::degree_celsius, volume::cubic_meter,
     };
 
     /// An arbitrary density model that ensures cold is slightly denser than warm.
-    fn rho(temp: ThermodynamicTemperature) -> MassDensity {
-        let t = temp.get::<degree_celsius>();
-        let d = 1000.0 - t * 1e-12;
-        MassDensity::new::<kilogram_per_cubic_meter>(d)
+    struct NearlyConstant;
+    impl DensityModel for NearlyConstant {
+        fn density(&self, temp: ThermodynamicTemperature) -> MassDensity {
+            let t = temp.get::<degree_celsius>();
+            let d = 1000.0 - t * 1e-12;
+            MassDensity::new::<kilogram_per_cubic_meter>(d)
+        }
     }
 
     fn ts<const N: usize>(temps_c: [f64; N]) -> [ThermodynamicTemperature; N] {
@@ -153,75 +154,66 @@ mod tests {
         vols_m3.map(Volume::new::<cubic_meter>)
     }
 
-    fn t_in_c(temp: ThermodynamicTemperature) -> f64 {
-        temp.get::<degree_celsius>()
+    fn layer_temp(layers: &[(ThermodynamicTemperature, Mass)], index: usize) -> f64 {
+        layers[index].0.get::<degree_celsius>()
     }
 
-    fn m_in_kg(mass: Mass) -> f64 {
-        mass.get::<kilogram>()
+    fn layer_mass(layers: &[(ThermodynamicTemperature, Mass)], index: usize) -> f64 {
+        layers[index].1.get::<kilogram>()
     }
 
     #[test]
     fn no_mixing_needed() {
         let vol = vs([1.0; 3]);
         let temp = ts([30.0, 40.0, 50.0]);
-        let dens = temp.map(rho);
 
-        let (temp, _) = stabilize(temp, &dens, &vol);
-        assert_eq!(temp, ts([30.0, 40.0, 50.0]));
+        let layers = stabilize(&temp, &vol, &NearlyConstant);
+        assert_eq!(layers.map(|l| l.0), ts([30.0, 40.0, 50.0]));
     }
 
     #[test]
     fn all_mixed() {
         let vol = vs([1.0; 3]);
         let temp = ts([50.0, 40.0, 30.0]);
-        let dens = temp.map(rho);
 
-        let (temp, mass) = stabilize(temp, &dens, &vol);
+        let layers = stabilize(&temp, &vol, &NearlyConstant);
 
-        assert_relative_eq!(t_in_c(temp[0]), 40.0, epsilon = 1e-12);
-        assert_relative_eq!(t_in_c(temp[1]), 40.0, epsilon = 1e-12);
-        assert_relative_eq!(t_in_c(temp[2]), 40.0, epsilon = 1e-12);
+        assert_relative_eq!(layer_temp(&layers, 0), 40.0, epsilon = 1e-12);
+        assert_relative_eq!(layer_temp(&layers, 1), 40.0, epsilon = 1e-12);
+        assert_relative_eq!(layer_temp(&layers, 2), 40.0, epsilon = 1e-12);
 
-        assert_relative_eq!(m_in_kg(mass[0]), 1000.0, epsilon = 1e-10);
-        assert_relative_eq!(m_in_kg(mass[1]), 1000.0, epsilon = 1e-10);
-        assert_relative_eq!(m_in_kg(mass[2]), 1000.0, epsilon = 1e-10);
+        assert_relative_eq!(layer_mass(&layers, 0), 1000.0, epsilon = 1e-10);
+        assert_relative_eq!(layer_mass(&layers, 1), 1000.0, epsilon = 1e-10);
+        assert_relative_eq!(layer_mass(&layers, 2), 1000.0, epsilon = 1e-10);
     }
 
     #[test]
     fn some_mixing() {
         let vol = vs([1.0; 5]);
         let temp = ts([20.0, 30.0, 50.0, 40.0, 42.0]);
-        let dens = temp.map(rho);
 
-        let (temp, mass) = stabilize(temp, &dens, &vol);
+        let layers = stabilize(&temp, &vol, &NearlyConstant);
 
-        assert_relative_eq!(t_in_c(temp[0]), 20.0, epsilon = 1e-12);
-        assert_relative_eq!(t_in_c(temp[1]), 30.0, epsilon = 1e-12);
-        assert_relative_eq!(t_in_c(temp[2]), 44.0, epsilon = 1e-12);
-        assert_relative_eq!(t_in_c(temp[3]), 44.0, epsilon = 1e-12);
-        assert_relative_eq!(t_in_c(temp[4]), 44.0, epsilon = 1e-12);
-
-        assert!(
-            mass.iter()
-                .all(|m| relative_eq!(m.get::<kilogram>(), 1000.0, epsilon = 1e-10))
-        );
+        assert_relative_eq!(layer_temp(&layers, 0), 20.0, epsilon = 1e-12);
+        assert_relative_eq!(layer_temp(&layers, 1), 30.0, epsilon = 1e-12);
+        assert_relative_eq!(layer_temp(&layers, 2), 44.0, epsilon = 1e-12);
+        assert_relative_eq!(layer_temp(&layers, 3), 44.0, epsilon = 1e-12);
+        assert_relative_eq!(layer_temp(&layers, 4), 44.0, epsilon = 1e-12);
     }
 
     #[test]
     fn some_mixing_uneven_volumes() {
         let vol = vs([1.0, 4.0, 2.0]);
         let temp = ts([2.0, 10.0, 4.0]);
-        let dens = temp.map(rho);
 
-        let (temp, mass) = stabilize(temp, &dens, &vol);
+        let layers = stabilize(&temp, &vol, &NearlyConstant);
 
-        assert_relative_eq!(t_in_c(temp[0]), 2.0, epsilon = 1e-12);
-        assert_relative_eq!(t_in_c(temp[1]), 8.0, epsilon = 1e-12);
-        assert_relative_eq!(t_in_c(temp[2]), 8.0, epsilon = 1e-12);
+        assert_relative_eq!(layer_temp(&layers, 0), 2.0, epsilon = 1e-12);
+        assert_relative_eq!(layer_temp(&layers, 1), 8.0, epsilon = 1e-12);
+        assert_relative_eq!(layer_temp(&layers, 2), 8.0, epsilon = 1e-12);
 
-        assert_relative_eq!(m_in_kg(mass[0]), 1000.0, epsilon = 1e-10);
-        assert_relative_eq!(m_in_kg(mass[1]), 4000.0, epsilon = 1e-10);
-        assert_relative_eq!(m_in_kg(mass[2]), 2000.0, epsilon = 1e-10);
+        assert_relative_eq!(layer_mass(&layers, 0), 1000.0, epsilon = 1e-10);
+        assert_relative_eq!(layer_mass(&layers, 1), 4000.0, epsilon = 1e-10);
+        assert_relative_eq!(layer_mass(&layers, 2), 2000.0, epsilon = 1e-10);
     }
 }

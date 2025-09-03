@@ -12,14 +12,10 @@ use uom::{ConstZero, si::f64::VolumeRate};
 /// # Parameters
 ///
 /// - `port_flow_rates`: Flow rate for each port pair.
-/// - `port_inlet_weights`: Fraction of each port pair's inlet flow applied to each node.
-///   `port_inlet_weights[i][k]` is the fraction of port pair `k`'s inlet flow that enters node `i`.
-/// - `port_outlet_weights`: Fraction of each port pair's outlet flow taken from each node.
-///   `port_outlet_weights[i][k]` is the fraction of port pair `k`'s outlet flow drawn from node `i`.
+/// - `port_flow_weights`: Inlet and outlet weight pairs for each port at each node.
 pub(super) fn compute_upward_flows<const N: usize, const P: usize>(
     port_flow_rates: &[VolumeRate; P],
-    port_inlet_weights: &[[f64; P]; N],
-    port_outlet_weights: &[[f64; P]; N],
+    port_flow_weights: &[[(f64, f64); P]; N],
 ) -> [VolumeRate; N] {
     let mut flow_up = VolumeRate::ZERO;
 
@@ -28,9 +24,8 @@ pub(super) fn compute_upward_flows<const N: usize, const P: usize>(
         // Σ_k[ v_dot_port[k] * (w_in[i][k] - w_out[i][k]) ]
         let net_port_inflow = port_flow_rates
             .iter()
-            .zip(port_inlet_weights[i].iter())
-            .zip(port_outlet_weights[i].iter())
-            .fold(VolumeRate::ZERO, |acc, ((&v_dot_port, &wi), &wo)| {
+            .zip(port_flow_weights[i].iter())
+            .fold(VolumeRate::ZERO, |acc, (&v_dot_port, (wi, wo))| {
                 acc + v_dot_port * (wi - wo)
             });
 
@@ -75,10 +70,13 @@ mod tests {
         let port_flow_rates = [rate(1.0)];
 
         // Inlet all into node 0; outlet all from node 2
-        let inlet: [[f64; P]; N] = [[1.0], [0.0], [0.0]];
-        let outlet: [[f64; P]; N] = [[0.0], [0.0], [1.0]];
+        let weights = [
+            [(1.0, 0.0)], // bottom
+            [(0.0, 0.0)], // middle
+            [(0.0, 1.0)], // top
+        ];
 
-        let flow_up = compute_upward_flows(&port_flow_rates, &inlet, &outlet);
+        let flow_up = compute_upward_flows(&port_flow_rates, &weights);
 
         assert_relative_eq!(flow_up[0].value, 1.0);
         assert_relative_eq!(flow_up[1].value, 1.0);
@@ -94,10 +92,13 @@ mod tests {
         let port_flow_rates = [rate(0.8)];
 
         // Both inlet and outlet entirely at node 1 → no net source anywhere.
-        let inlet: [[f64; P]; N] = [[0.0], [1.0], [0.0]];
-        let outlet: [[f64; P]; N] = [[0.0], [1.0], [0.0]];
+        let weights = [
+            [(0.0, 0.0)], // bottom
+            [(1.0, 1.0)], // middle
+            [(0.0, 0.0)], // top
+        ];
 
-        let flow_up = compute_upward_flows::<N, P>(&port_flow_rates, &inlet, &outlet);
+        let flow_up = compute_upward_flows::<N, P>(&port_flow_rates, &weights);
 
         // No vertical transport required; cumulative stays zero and residual is zero.
         assert_relative_eq!(flow_up[0].value, 0.0);
@@ -113,16 +114,17 @@ mod tests {
 
         let port_flow_rates = [rate(0.3), rate(0.5)];
 
-        // inlet: p0 -> node0; p1 -> 60% node1, 40% node2
-        let inlet: [[f64; P]; N] = [[1.0, 0.0], [0.0, 0.6], [0.0, 0.4]];
-        // outlet: p0 from node2; p1 from node0
-        let outlet: [[f64; P]; N] = [[0.0, 1.0], [0.0, 0.0], [1.0, 0.0]];
+        let weights = [
+            [(1.0, 0.0), (0.0, 1.0)], // 100% of p0 in, 100% of p1 out
+            [(0.0, 0.0), (0.6, 0.0)], // 60% of p1 in, nothing out
+            [(0.0, 1.0), (0.4, 0.0)], // 40% of p1 in, 100% of p0 out
+        ];
 
         // s0 = +0.3 - 0.5 = -0.2
         // s1 = +0.5*0.6 = +0.3
         // s2 = +0.5*0.4 - 0.3 = -0.1
         // cumulative: [-0.2, +0.1, 0.0]
-        let flow_up = compute_upward_flows::<N, P>(&port_flow_rates, &inlet, &outlet);
+        let flow_up = compute_upward_flows::<N, P>(&port_flow_rates, &weights);
 
         assert_relative_eq!(flow_up[0].value, -0.2);
         assert_relative_eq!(flow_up[1].value, 0.1);
