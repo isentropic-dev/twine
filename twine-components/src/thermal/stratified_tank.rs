@@ -4,8 +4,6 @@
 //! with energy and mass exchange via configured inlet ports,
 //! auxiliary heat sources, and ambient boundary conditions.
 
-#![allow(dead_code)]
-
 mod adjacent;
 mod buoyancy;
 mod environment;
@@ -20,11 +18,14 @@ mod port_flow;
 
 use std::array;
 
+use thiserror::Error;
 use twine_core::TimeDerivative;
 use twine_thermo::HeatFlow;
 use uom::{
     ConstZero,
-    si::f64::{MassDensity, SpecificHeatCapacity, ThermodynamicTemperature, VolumeRate},
+    si::f64::{
+        MassDensity, SpecificHeatCapacity, ThermalConductance, ThermodynamicTemperature, VolumeRate,
+    },
 };
 
 use adjacent::Adjacent;
@@ -35,7 +36,7 @@ pub use environment::Environment;
 pub use fluid::Fluid;
 pub use geometry::Geometry;
 pub use insulation::Insulation;
-pub use location::{Location, PortPairLocation};
+pub use location::{Location, PortLocation};
 pub use port_flow::PortFlow;
 
 pub trait DensityModel {
@@ -120,22 +121,100 @@ pub struct Output<const N: usize> {
     pub derivatives: [TimeDerivative<ThermodynamicTemperature>; N],
 }
 
+#[derive(Debug, Error)]
+pub enum StratifiedTankCreationError {
+    #[error("geometry is invalid: {0}")]
+    Geometry(String),
+    #[error("aux[{index}] location is invalid: {context}")]
+    AuxLocation { index: usize, context: String },
+    #[error("port[{index}] inlet location is invalid: {context}")]
+    PortInletLocation { index: usize, context: String },
+    #[error("port[{index}] outlet location is invalid: {context}")]
+    PortOutletLocation { index: usize, context: String },
+}
+
 impl<D: DensityModel, const N: usize, const P: usize, const Q: usize> StratifiedTank<D, N, P, Q> {
     /// Creates a new tank.
+    ///
+    /// # Errors
+    ///
+    /// TODO: doc errors
     pub fn new(
         fluid: Fluid<D>,
         geometry: Geometry,
         insulation: Insulation,
         aux_locations: [Location; Q],
-        port_locations: [PortPairLocation; P],
-    ) -> Self {
-        let nodes = geometry.into_node_array(&fluid, insulation, aux_locations, port_locations);
+        port_locations: [PortLocation; P],
+    ) -> Result<Self, StratifiedTankCreationError> {
+        let node_geometries = geometry
+            .into_node_geometries::<N>()
+            .map_err(StratifiedTankCreationError::Geometry)?;
 
-        Self {
+        let heights = node_geometries.map(|node| node.height);
+
+        // Calculate aux weights.
+        let mut aux_weight_by_node = [[0.0; Q]; N];
+        for (index, loc) in aux_locations.iter().enumerate() {
+            let weights = loc
+                .into_weights(&heights)
+                .map_err(|context| StratifiedTankCreationError::AuxLocation { index, context })?;
+            for node_idx in 0..N {
+                aux_weight_by_node[node_idx][index] = weights[node_idx];
+            }
+        }
+
+        // Calculate port weights.
+        let mut inlet_weight_by_node = [[0.0; P]; N];
+        let mut outlet_weight_by_node = [[0.0; P]; N];
+        for (index, port_loc) in port_locations.iter().enumerate() {
+            let inlet_weights = port_loc.inlet.into_weights(&heights).map_err(|context| {
+                StratifiedTankCreationError::PortInletLocation { index, context }
+            })?;
+            let outlet_weights = port_loc.outlet.into_weights(&heights).map_err(|context| {
+                StratifiedTankCreationError::PortOutletLocation { index, context }
+            })?;
+            for node_idx in 0..N {
+                inlet_weight_by_node[node_idx][index] = inlet_weights[node_idx];
+                outlet_weight_by_node[node_idx][index] = outlet_weights[node_idx];
+            }
+        }
+
+        let mut nodes = array::from_fn(|i| {
+            let node = node_geometries[i];
+            let aux_heat_weights = aux_weight_by_node[i];
+            let port_inlet_weights = inlet_weight_by_node[i];
+            let port_outlet_weights = outlet_weight_by_node[i];
+
+            Node {
+                vol: node.volume,
+                // TODO: The bottom and top UA values are calculated assuming nodes have equal area.
+                //       I think we'll need to scale them by adjacent area ratios if they aren't.
+                ua: Adjacent {
+                    bottom: node.height * fluid.thermal_conductivity,
+                    side: match insulation {
+                        Insulation::Adiabatic => ThermalConductance::ZERO,
+                    },
+                    top: node.height * fluid.thermal_conductivity,
+                },
+                aux_heat_weights,
+                port_inlet_weights,
+                port_outlet_weights,
+            }
+        });
+
+        // Fix ua values for bottom and top nodes.
+        nodes[0].ua.bottom = match insulation {
+            Insulation::Adiabatic => ThermalConductance::ZERO,
+        };
+        nodes[N - 1].ua.top = match insulation {
+            Insulation::Adiabatic => ThermalConductance::ZERO,
+        };
+
+        Ok(Self {
             cp: fluid.specific_heat,
             dens_model: fluid.density_model,
             nodes,
-        }
+        })
     }
 
     /// Evaluates the tank's thermal response at a single point in time.
