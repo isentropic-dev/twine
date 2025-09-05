@@ -1,15 +1,26 @@
 use std::f64::consts::PI;
 
-use uom::si::f64::{Area, Length, Volume};
+use uom::{
+    ConstZero,
+    si::f64::{Area, Length, Volume},
+};
 
 use super::Adjacent;
 
+/// Tank geometry options.
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub enum Geometry {
-    VerticalCylinder { diameter: Length, height: Length },
+    /// Vertical cylindrical tank.
+    VerticalCylinder {
+        /// Internal diameter of the tank.
+        diameter: Length,
+        /// Internal height of the tank.
+        height: Length,
+    },
 }
 
+/// Geometric properties of a discretized node used during tank construction.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(super) struct NodeGeometry {
     pub(super) area: Adjacent<Area>,
@@ -18,11 +29,29 @@ pub(super) struct NodeGeometry {
 }
 
 impl Geometry {
+    /// Partitions the tank geometry into `N` node geometries.
+    ///
+    /// Used during tank creation to derive per-node area, height, and volume.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error string if the geometry is invalid.
+    /// When called from [`StratifiedTank::new`], these errors are surfaced as
+    /// [`StratifiedTankCreationError::Geometry`].
     #[allow(clippy::unnecessary_wraps)]
     pub(super) fn into_node_geometries<const N: usize>(self) -> Result<[NodeGeometry; N], String> {
+        if N == 0 {
+            return Err(format!("node count must be ≥ 1, got {N}"));
+        }
+
         match self {
             Geometry::VerticalCylinder { diameter, height } => {
-                // TODO: check diameter and height > 0
+                if diameter <= Length::ZERO {
+                    return Err(format!("diameter must be > 0, got {diameter:?}"));
+                }
+                if height <= Length::ZERO {
+                    return Err(format!("height must be > 0, got {height:?}"));
+                }
 
                 let end_area = PI * diameter * diameter * 0.25;
 

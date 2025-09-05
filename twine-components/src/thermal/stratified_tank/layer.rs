@@ -9,6 +9,7 @@ use uom::si::f64::{
 
 use super::Adjacent;
 
+/// Runtime thermal state of a node (temperature, mass, capacity).
 #[derive(Debug, Clone, Copy, Default)]
 pub(super) struct Layer {
     pub(super) temp: ThermodynamicTemperature,

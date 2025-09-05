@@ -1,5 +1,21 @@
 use uom::{ConstZero, si::f64::Length};
 
+/// Vertical placement for ports and auxiliary sources in the tank.
+///
+/// A `Location` is defined by:
+/// - `height`: vertical position measured from the bottom,
+///   specified as an absolute length or a relative fraction of tank height in `[0, 1]`.
+/// - `span`: vertical extent centered at `height`
+///   (location covers `[height − span/2, height + span/2]`).
+///
+/// A nonzero span covers a vertical region and is distributed across nodes in
+/// proportion to geometric overlap.
+/// A zero span represents a single point at the given height.
+/// If a point lies exactly on an internal boundary, it maps to the upper node.
+///
+/// Constructors do not check invariants.
+/// Validation occurs when locations are mapped to nodes during tank creation,
+/// and invalid locations are reported via [`StratifiedTankCreationError`].
 #[derive(Debug, Clone, Copy)]
 pub struct Location {
     center: Position,
@@ -8,6 +24,7 @@ pub struct Location {
 
 impl Location {
     #[must_use]
+    /// Point location at an absolute height from the tank bottom.
     pub fn point_abs(z: Length) -> Self {
         Self {
             center: Position::Absolute(z),
@@ -16,6 +33,9 @@ impl Location {
     }
 
     #[must_use]
+    /// Point location at a relative height of tank height.
+    ///
+    /// The relative fraction is validated during tank creation and must be within `[0, 1]`.
     pub fn point_rel(frac: f64) -> Self {
         Self {
             center: Position::Relative(frac),
@@ -24,6 +44,7 @@ impl Location {
     }
 
     #[must_use]
+    /// Span centered at an absolute height with the given vertical extent.
     pub fn span_abs(center: Length, span: Length) -> Self {
         Self {
             center: Position::Absolute(center),
@@ -32,6 +53,7 @@ impl Location {
     }
 
     #[must_use]
+    /// Span centered at a relative height with the given vertical extent.
     pub fn span_rel(center_frac: f64, span: Length) -> Self {
         Self {
             center: Position::Relative(center_frac),
@@ -40,11 +62,13 @@ impl Location {
     }
 
     #[must_use]
+    /// Point at the bottom of the tank.
     pub fn tank_bottom() -> Self {
         Self::point_rel(0.0)
     }
 
     #[must_use]
+    /// Point at the top of the tank.
     pub fn tank_top() -> Self {
         Self::point_rel(1.0)
     }
@@ -118,12 +142,14 @@ impl Location {
     }
 }
 
+/// Port pair placement: inlet and outlet locations.
 #[derive(Debug, Clone, Copy)]
 pub struct PortLocation {
     pub inlet: Location,
     pub outlet: Location,
 }
 
+/// Vertical reference for a `Location` center height.
 #[derive(Debug, Clone, Copy)]
 pub enum Position {
     /// Fraction of total tank height from bottom.
