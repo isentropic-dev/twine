@@ -1,4 +1,5 @@
-#[derive(Debug, Clone, Copy, Default)]
+/// Values at the bottom, side, and top faces.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub(super) struct Adjacent<T> {
     pub(super) bottom: T,
     pub(super) side: T,
@@ -6,23 +7,13 @@ pub(super) struct Adjacent<T> {
 }
 
 impl<T: Copy> Adjacent<T> {
+    /// Constructs an `Adjacent` with the same value for all faces.
+    #[allow(dead_code)]
     pub(super) fn from_value(value: T) -> Self {
         Self {
             bottom: value,
             side: value,
             top: value,
         }
-    }
-
-    pub(super) fn with_bottom(self, bottom: T) -> Self {
-        Self { bottom, ..self }
-    }
-
-    pub(super) fn with_side(self, side: T) -> Self {
-        Self { side, ..self }
-    }
-
-    pub(super) fn with_top(self, top: T) -> Self {
-        Self { top, ..self }
     }
 }

@@ -64,9 +64,6 @@ mod tests {
     #[test]
     fn single_port_bottom_in_top_out() {
         // N=3 nodes, P=1 port pair
-        const N: usize = 3;
-        const P: usize = 1;
-
         let port_flow_rates = [rate(1.0)];
 
         // Inlet all into node 0; outlet all from node 2

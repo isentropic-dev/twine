@@ -4,34 +4,44 @@
 //! with energy and mass exchange via configured inlet ports,
 //! auxiliary heat sources, and ambient boundary conditions.
 
-#![allow(dead_code)]
-
 mod adjacent;
 mod buoyancy;
 mod environment;
+mod fluid;
+mod geometry;
+mod insulation;
 mod layer;
+mod location;
 mod mass_balance;
+mod node;
 mod port_flow;
 
 use std::array;
 
+use thiserror::Error;
 use twine_core::TimeDerivative;
 use twine_thermo::HeatFlow;
 use uom::{
     ConstZero,
     si::f64::{
-        MassDensity, SpecificHeatCapacity, ThermalConductance, ThermodynamicTemperature, Volume,
-        VolumeRate,
+        MassDensity, SpecificHeatCapacity, ThermalConductance, ThermodynamicTemperature, VolumeRate,
     },
 };
 
 use adjacent::Adjacent;
 use layer::Layer;
+use node::Node;
 
 pub use environment::Environment;
+pub use fluid::Fluid;
+pub use geometry::Geometry;
+pub use insulation::Insulation;
+pub use location::{Location, PortLocation};
 pub use port_flow::PortFlow;
 
+/// Provides fluid density as a function of temperature.
 pub trait DensityModel {
+    /// Returns the fluid density at the given temperature.
     fn density(&self, temperature: ThermodynamicTemperature) -> MassDensity;
 }
 
@@ -111,6 +121,178 @@ pub struct Output<const N: usize> {
     /// Includes the effects of mass flow, auxiliary heat input, and
     /// environmental heat loss or gain.
     pub derivatives: [TimeDerivative<ThermodynamicTemperature>; N],
+}
+
+/// Errors that can occur when creating a [`StratifiedTank`].
+#[derive(Debug, Error)]
+pub enum StratifiedTankCreationError {
+    #[error("geometry is invalid: {0}")]
+    Geometry(String),
+    #[error("aux[{index}] location is invalid: {context}")]
+    AuxLocation { index: usize, context: String },
+    #[error("port[{index}] inlet location is invalid: {context}")]
+    PortInletLocation { index: usize, context: String },
+    #[error("port[{index}] outlet location is invalid: {context}")]
+    PortOutletLocation { index: usize, context: String },
+}
+
+impl<D: DensityModel, const P: usize, const Q: usize> StratifiedTank<D, 0, P, Q> {
+    /// Creates a new stratified tank.
+    ///
+    /// Specify the number of nodes (`N`) with a const generic parameter on `new()`.
+    /// For example, to create a tank with 20 nodes:
+    ///
+    /// ```ignore
+    /// let tank = StratifiedTank::new::<20>(fluid, geometry, insulation, aux, ports)?;
+    /// ```
+    ///
+    /// The number of port pairs (`P`) and auxiliary heat sources (`Q`) are inferred
+    /// from the lengths of `port_locations` and `aux_locations`, respectively.
+    /// The density model type (`D`) is inferred from `fluid`.
+    ///
+    /// # Parameters
+    ///
+    /// - `fluid`: [`Fluid`] properties used for density, specific heat, and thermal conductivity.
+    /// - `geometry`: [`Geometry`] used to derive per-node volumes and areas.
+    /// - `insulation`: [`Insulation`] at the tank surfaces.
+    /// - `aux_locations`: Placement of auxiliary heat sources as [`Location`].
+    /// - `port_locations`: Placement of each port pair's inlet and outlet as [`PortLocation`].
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`StratifiedTankCreationError`] if the tank cannot be created.
+    ///
+    /// # Example
+    ///
+    /// Create a perfectly insulated cylindrical tank with a 10-inch long
+    /// auxiliary heater near the top and a bottom-inlet/top-outlet port pair.
+    ///
+    /// ```
+    /// use twine_components::thermal::stratified_tank::{
+    ///     DensityModel, Fluid, Geometry, Insulation, Location, PortLocation, StratifiedTank,
+    /// };
+    /// use uom::si::{
+    ///     f64::{
+    ///         Length, MassDensity, SpecificHeatCapacity, ThermalConductivity,
+    ///         ThermodynamicTemperature,
+    ///     },
+    ///     length::{inch, meter},
+    ///     mass_density::kilogram_per_cubic_meter,
+    ///     specific_heat_capacity::kilojoule_per_kilogram_kelvin,
+    ///     thermal_conductivity::watt_per_meter_kelvin,
+    /// };
+    ///
+    /// // Simple density model (constant with temperature).
+    /// struct ConstantDensity;
+    /// impl DensityModel for ConstantDensity {
+    ///     fn density(&self, _t: ThermodynamicTemperature) -> MassDensity {
+    ///         MassDensity::new::<kilogram_per_cubic_meter>(1000.0)
+    ///     }
+    /// }
+    ///
+    /// let fluid = Fluid {
+    ///     density_model: ConstantDensity,
+    ///     specific_heat: SpecificHeatCapacity::new::<kilojoule_per_kilogram_kelvin>(4.186),
+    ///     thermal_conductivity: ThermalConductivity::new::<watt_per_meter_kelvin>(0.6),
+    /// };
+    ///
+    /// let geometry = Geometry::VerticalCylinder {
+    ///     diameter: Length::new::<meter>(0.5),
+    ///     height: Length::new::<meter>(1.8),
+    /// };
+    ///
+    /// let insulation = Insulation::Adiabatic;
+    ///
+    /// let span = Length::new::<inch>(10.0);
+    /// let center = Length::new::<meter>(1.5);
+    /// let aux_locations = [Location::span_abs(center, span)];
+    ///
+    /// let port_locations = [PortLocation {
+    ///     inlet: Location::tank_bottom(),
+    ///     outlet: Location::tank_top(),
+    /// }];
+    ///
+    /// // Create a tank with 5 nodes.
+    /// let tank = StratifiedTank::new::<5>(fluid, geometry, insulation, aux_locations, port_locations)
+    ///     .expect("valid configuration");
+    /// ```
+    pub fn new<const N: usize>(
+        fluid: Fluid<D>,
+        geometry: Geometry,
+        insulation: Insulation,
+        aux_locations: [Location; Q],
+        port_locations: [PortLocation; P],
+    ) -> Result<StratifiedTank<D, N, P, Q>, StratifiedTankCreationError> {
+        let node_geometries = geometry
+            .into_node_geometries::<N>()
+            .map_err(StratifiedTankCreationError::Geometry)?;
+
+        let heights = node_geometries.map(|node| node.height);
+
+        // Calculate aux weights.
+        let mut aux_weight_by_node = [[0.0; Q]; N];
+        for (index, loc) in aux_locations.iter().enumerate() {
+            let weights = loc
+                .into_weights(&heights)
+                .map_err(|context| StratifiedTankCreationError::AuxLocation { index, context })?;
+            for node_idx in 0..N {
+                aux_weight_by_node[node_idx][index] = weights[node_idx];
+            }
+        }
+
+        // Calculate port weights.
+        let mut inlet_weight_by_node = [[0.0; P]; N];
+        let mut outlet_weight_by_node = [[0.0; P]; N];
+        for (index, port_loc) in port_locations.iter().enumerate() {
+            let inlet_weights = port_loc.inlet.into_weights(&heights).map_err(|context| {
+                StratifiedTankCreationError::PortInletLocation { index, context }
+            })?;
+            let outlet_weights = port_loc.outlet.into_weights(&heights).map_err(|context| {
+                StratifiedTankCreationError::PortOutletLocation { index, context }
+            })?;
+            for node_idx in 0..N {
+                inlet_weight_by_node[node_idx][index] = inlet_weights[node_idx];
+                outlet_weight_by_node[node_idx][index] = outlet_weights[node_idx];
+            }
+        }
+
+        let mut nodes = array::from_fn(|i| {
+            let node = node_geometries[i];
+            let aux_heat_weights = aux_weight_by_node[i];
+            let port_inlet_weights = inlet_weight_by_node[i];
+            let port_outlet_weights = outlet_weight_by_node[i];
+
+            Node {
+                vol: node.volume,
+                // TODO: The bottom and top UA values are calculated assuming nodes have equal area.
+                //       I think we'll need to scale them by adjacent area ratios if they aren't.
+                ua: Adjacent {
+                    bottom: node.height * fluid.thermal_conductivity,
+                    side: match insulation {
+                        Insulation::Adiabatic => ThermalConductance::ZERO,
+                    },
+                    top: node.height * fluid.thermal_conductivity,
+                },
+                aux_heat_weights,
+                port_inlet_weights,
+                port_outlet_weights,
+            }
+        });
+
+        // Fix UA values for bottom and top nodes.
+        nodes[0].ua.bottom = match insulation {
+            Insulation::Adiabatic => ThermalConductance::ZERO,
+        };
+        nodes[N - 1].ua.top = match insulation {
+            Insulation::Adiabatic => ThermalConductance::ZERO,
+        };
+
+        Ok(StratifiedTank {
+            cp: fluid.specific_heat,
+            dens_model: fluid.density_model,
+            nodes,
+        })
+    }
 }
 
 impl<D: DensityModel, const N: usize, const P: usize, const Q: usize> StratifiedTank<D, N, P, Q> {
@@ -243,26 +425,22 @@ impl<D: DensityModel, const N: usize, const P: usize, const Q: usize> Stratified
     }
 }
 
-struct Node<const P: usize, const Q: usize> {
-    vol: Volume,
-    ua: Adjacent<ThermalConductance>,
-    aux_heat_weights: [f64; Q],
-    port_inlet_weights: [f64; P],
-    port_outlet_weights: [f64; P],
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    use std::f64::consts::PI;
+
     use approx::assert_relative_eq;
     use uom::si::{
-        f64::{MassDensity, Power, ThermodynamicTemperature, Volume, VolumeRate},
+        f64::{
+            Length, MassDensity, Power, ThermalConductivity, ThermodynamicTemperature, VolumeRate,
+        },
+        length::meter,
         mass_density::kilogram_per_cubic_meter,
         power::kilowatt,
         specific_heat_capacity::kilojoule_per_kilogram_kelvin,
         thermodynamic_temperature::degree_celsius,
-        volume::cubic_meter as m3,
         volume_rate::gallon_per_minute,
     };
 
@@ -285,39 +463,32 @@ mod tests {
     }
 
     // Test tank:
+    // - vertical cylinder
     // - 3 nodes, each V=1 m³ and UA=0
     // - 1 port: inlet 100% to node 0, outlet 100% from node 2
     // - 1 aux: 100% applied to node 2
     fn test_tank() -> StratifiedTank<ConstantDensity, 3, 1, 1> {
-        let bottom = Node {
-            vol: Volume::new::<m3>(1.0),
-            ua: Adjacent::default(),
-            aux_heat_weights: [0.0],
-            port_inlet_weights: [1.0],
-            port_outlet_weights: [0.0],
+        let fluid = Fluid {
+            density_model: ConstantDensity::new(1000.0),
+            specific_heat: SpecificHeatCapacity::new::<kilojoule_per_kilogram_kelvin>(4.0),
+            thermal_conductivity: ThermalConductivity::ZERO,
         };
 
-        let middle = Node {
-            vol: Volume::new::<m3>(1.0),
-            ua: Adjacent::default(),
-            aux_heat_weights: [0.0],
-            port_inlet_weights: [0.0],
-            port_outlet_weights: [0.0],
+        let geometry = Geometry::VerticalCylinder {
+            diameter: Length::new::<meter>((4.0 / PI).sqrt()),
+            height: Length::new::<meter>(3.0),
         };
 
-        let top = Node {
-            vol: Volume::new::<m3>(1.0),
-            ua: Adjacent::default(),
-            aux_heat_weights: [1.0],
-            port_inlet_weights: [0.0],
-            port_outlet_weights: [1.0],
-        };
+        let insulation = Insulation::Adiabatic;
 
-        StratifiedTank {
-            dens_model: ConstantDensity::new(1000.0),
-            cp: SpecificHeatCapacity::new::<kilojoule_per_kilogram_kelvin>(4.0),
-            nodes: [bottom, middle, top],
-        }
+        let aux_locations = [Location::tank_top()];
+
+        let port_locations = [PortLocation {
+            inlet: Location::tank_bottom(),
+            outlet: Location::tank_top(),
+        }];
+
+        StratifiedTank::new(fluid, geometry, insulation, aux_locations, port_locations).unwrap()
     }
 
     fn port_flow(gpm: f64, celsius: f64) -> PortFlow {
