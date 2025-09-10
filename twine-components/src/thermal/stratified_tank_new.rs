@@ -378,7 +378,7 @@ impl<const N: usize, const P: usize, const Q: usize> StratifiedTank<N, P, Q> {
             temperatures[i + 1]
         };
 
-        energy_balance::deriv_from_conduction(
+        energy_balance::derivative_from_conduction(
             temperatures[i],
             Adjacent {
                 bottom: t_bottom,
