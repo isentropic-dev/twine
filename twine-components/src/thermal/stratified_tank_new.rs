@@ -68,7 +68,7 @@ pub struct StratifiedTank<const N: usize, const P: usize, const Q: usize> {
 /// - `N`: Number of nodes
 /// - `P`: Number of port pairs
 /// - `Q`: Number of auxiliary heat sources
-pub struct Input<const N: usize, const P: usize, const Q: usize> {
+pub struct StratifiedTankInput<const N: usize, const P: usize, const Q: usize> {
     /// Temperatures of the `N` nodes, from bottom to top.
     ///
     /// Values do not need to be thermally stable; if warmer nodes appear below
@@ -93,7 +93,7 @@ pub struct Input<const N: usize, const P: usize, const Q: usize> {
 /// Generic over:
 /// - `N`: Number of nodes
 #[derive(Debug, Clone)]
-pub struct Output<const N: usize> {
+pub struct StratifiedTankOutput<const N: usize> {
     /// Temperatures of the `N` nodes, from bottom to top.
     ///
     /// These values are guaranteed to be thermally stable.
@@ -275,8 +275,8 @@ impl<const N: usize, const P: usize, const Q: usize> StratifiedTank<N, P, Q> {
     /// Enforces thermal stability by mixing unstable nodes, then applies mass
     /// and energy balances to determine per-node temperature derivatives.
     #[must_use]
-    pub fn call(&self, input: &Input<N, P, Q>) -> Output<N> {
-        let Input {
+    pub fn call(&self, input: &StratifiedTankInput<N, P, Q>) -> StratifiedTankOutput<N> {
+        let StratifiedTankInput {
             temperatures: t_guess,
             port_flows,
             aux_heat_flows,
@@ -301,7 +301,7 @@ impl<const N: usize, const P: usize, const Q: usize> StratifiedTank<N, P, Q> {
                 + self.deriv_from_conduction(i, &temperatures, environment)
         });
 
-        Output {
+        StratifiedTankOutput {
             temperatures,
             derivatives,
         }
@@ -460,7 +460,7 @@ mod tests {
         let tank = test_tank();
         let t = ThermodynamicTemperature::new::<degree_celsius>(20.0);
 
-        let input = Input {
+        let input = StratifiedTankInput {
             temperatures: [t; 3],
             port_flows: zero_port_flows(),
             aux_heat_flows: [HeatFlow::None],
@@ -487,7 +487,7 @@ mod tests {
         let tank = test_tank();
         let t = ThermodynamicTemperature::new::<degree_celsius>(50.0);
 
-        let input = Input {
+        let input = StratifiedTankInput {
             temperatures: [t; 3],
             port_flows: zero_port_flows(),
             aux_heat_flows: [HeatFlow::from_signed(Power::new::<kilowatt>(20.0)).unwrap()],

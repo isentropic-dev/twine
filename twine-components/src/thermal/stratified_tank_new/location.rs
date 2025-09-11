@@ -2,73 +2,74 @@ use uom::{ConstZero, si::f64::Length};
 
 /// Vertical placement for ports and auxiliary sources in the tank.
 ///
-/// A `Location` is defined by:
-/// - `height`: vertical position measured from the bottom,
-///   specified as an absolute length or a relative fraction of tank height in `[0, 1]`.
-/// - `span`: vertical extent centered at `height`
-///   (location covers `[height − span/2, height + span/2]`).
+/// A location can be:
+/// - `Node(index)`: a discrete node by index,
+/// - `Point(position)`: a point given absolutely or relatively,
+/// - `Span(position, span)`: a symmetric span around an absolute/relative center.
 ///
-/// A nonzero span covers a vertical region and is distributed across nodes in
-/// proportion to geometric overlap.
-/// A zero span represents a single point at the given height.
-/// If a point lies exactly on an internal boundary, it maps to the upper node.
+/// Spans distribute weight across nodes in proportion to geometric overlap.
+/// A point that lies exactly on an internal boundary maps to the lower node.
 ///
 /// Constructors do not check invariants.
 /// Validation occurs when locations are mapped to nodes during tank creation,
-/// and invalid locations are reported via [`StratifiedTankCreationError`].
+/// and invalid locations are reported via `StratifiedTankCreationError`.
 #[derive(Debug, Clone, Copy)]
-pub struct Location {
-    center: Position,
-    span: Length,
+pub enum Location {
+    Node(usize),
+    Point(Position),
+    Span(Position, Length),
+}
+
+/// Vertical reference for specifying a position in a tank.
+///
+/// A position can be expressed in one of two ways:
+/// - `Relative(f64)`: a fraction of the total tank height in `[0, 1]`,
+/// - `Absolute(Length)`: a physical distance.
+#[derive(Debug, Clone, Copy)]
+pub enum Position {
+    Relative(f64),
+    Absolute(Length),
 }
 
 impl Location {
+    /// Point inside the node at the given index.
     #[must_use]
-    /// Point location at an absolute height from the tank bottom.
+    pub fn point_in_node(index: usize) -> Self {
+        Self::Node(index)
+    }
+
+    /// Point at an absolute height.
+    #[must_use]
     pub fn point_abs(z: Length) -> Self {
-        Self {
-            center: Position::Absolute(z),
-            span: Length::ZERO,
-        }
+        Self::Point(Position::Absolute(z))
     }
 
+    /// Point at a relative height.
     #[must_use]
-    /// Point location at a relative height of tank height.
-    ///
-    /// The relative fraction is validated during tank creation and must be within `[0, 1]`.
     pub fn point_rel(frac: f64) -> Self {
-        Self {
-            center: Position::Relative(frac),
-            span: Length::ZERO,
-        }
+        Self::Point(Position::Relative(frac))
     }
 
+    /// Span centered at an absolute height.
     #[must_use]
-    /// Span centered at an absolute height with the given vertical extent.
     pub fn span_abs(center: Length, span: Length) -> Self {
-        Self {
-            center: Position::Absolute(center),
-            span,
-        }
+        Self::Span(Position::Absolute(center), span)
     }
 
+    /// Span centered at a relative height.
     #[must_use]
-    /// Span centered at a relative height with the given vertical extent.
     pub fn span_rel(center_frac: f64, span: Length) -> Self {
-        Self {
-            center: Position::Relative(center_frac),
-            span,
-        }
+        Self::Span(Position::Relative(center_frac), span)
     }
 
-    #[must_use]
     /// Point at the bottom of the tank.
+    #[must_use]
     pub fn tank_bottom() -> Self {
         Self::point_rel(0.0)
     }
 
-    #[must_use]
     /// Point at the top of the tank.
+    #[must_use]
     pub fn tank_top() -> Self {
         Self::point_rel(1.0)
     }
@@ -77,21 +78,8 @@ impl Location {
         self,
         heights: &[Length; N],
     ) -> Result<[f64; N], String> {
-        let Self { center, span } = self;
-        let total_height = heights.iter().copied().sum();
-
-        let center = match center {
-            Position::Relative(frac) => {
-                if !(0.0..=1.0).contains(&frac) {
-                    return Err(format!("relative center must be in [0, 1], got {frac}"));
-                }
-                total_height * frac
-            }
-            Position::Absolute(z) => z,
-        };
-
-        if span < Length::ZERO {
-            return Err(format!("span must be ≥ 0, got {span:?}"));
+        if N == 0 {
+            return Err("must have at least one node".into());
         }
 
         let node_tops: [Length; N] = {
@@ -101,40 +89,54 @@ impl Location {
                 acc
             })
         };
+        let total_height = node_tops[N - 1];
 
         let mut weights = [0.0; N];
-        if span == Length::ZERO {
-            // Location is a point.
-            if center < Length::ZERO || center > total_height {
-                return Err(format!(
-                    "location out of bounds: {center:?} not within [0, {total_height:?}]"
-                ));
-            }
 
-            let index = node_tops
-                .partition_point(|&node_top| center >= node_top)
-                .min(N - 1);
-
-            weights[index] = 1.0;
-        } else {
-            // Location has a non-zero span.
-            let (z0, z1) = (center - span * 0.5, center + span * 0.5);
-
-            if z0 < Length::ZERO || z1 > total_height {
-                return Err(format!(
-                    "location out of bounds: [{z0:?}, {z1:?}] not within [0, {total_height:?}]"
-                ));
-            }
-
-            let mut start = Length::ZERO;
-            for i in 0..N {
-                let end = node_tops[i];
-                let lo = z0.max(start);
-                let hi = z1.min(end);
-                if hi > lo {
-                    weights[i] = ((hi - lo) / span).into();
+        match self {
+            Location::Node(index) => {
+                if index >= N {
+                    return Err(format!("node index must be in 0..{N}, got {index}"));
                 }
-                start = end;
+                weights[index] = 1.0;
+            }
+            Location::Point(position) => {
+                let z = position.to_abs(total_height)?;
+                if z < Length::ZERO || z > total_height {
+                    return Err(format!(
+                        "location out of bounds: {z:?} not within [0, {total_height:?}]"
+                    ));
+                }
+
+                let index = node_tops
+                    .partition_point(|&node_top| z > node_top)
+                    .min(N - 1);
+
+                weights[index] = 1.0;
+            }
+            Location::Span(position, span) => {
+                let center = position.to_abs(total_height)?;
+                if span <= Length::ZERO {
+                    return Err(format!("span must be > 0, got {span:?}"));
+                }
+
+                let (z0, z1) = (center - span * 0.5, center + span * 0.5);
+                if z0 < Length::ZERO || z1 > total_height {
+                    return Err(format!(
+                        "location out of bounds: [{z0:?}, {z1:?}] not within [0, {total_height:?}]"
+                    ));
+                }
+
+                let mut start = Length::ZERO;
+                for i in 0..N {
+                    let end = node_tops[i];
+                    let lo = z0.max(start);
+                    let hi = z1.min(end);
+                    if hi > lo {
+                        weights[i] = ((hi - lo) / span).into();
+                    }
+                    start = end;
+                }
             }
         }
 
@@ -149,15 +151,20 @@ pub struct PortLocation {
     pub outlet: Location,
 }
 
-/// Vertical reference for a `Location` center height.
-#[derive(Debug, Clone, Copy)]
-pub enum Position {
-    /// Fraction of total tank height from bottom.
-    Relative(f64),
-    /// Absolute distance from bottom.
-    Absolute(Length),
+impl Position {
+    fn to_abs(self, total: Length) -> Result<Length, String> {
+        match self {
+            Position::Absolute(z) => Ok(z),
+            Position::Relative(frac) => {
+                if (0.0..=1.0).contains(&frac) {
+                    Ok(total * frac)
+                } else {
+                    Err(format!("relative fraction must be in [0, 1], got {frac}"))
+                }
+            }
+        }
+    }
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -206,9 +213,9 @@ mod tests {
     }
 
     #[test]
-    fn point_on_internal_boundary_maps_to_upper_node() {
+    fn point_on_internal_boundary_maps_to_lower_node() {
         let heights = [m(1.0), m(1.0), m(1.0)];
-        let loc = Location::point_abs(m(1.0));
+        let loc = Location::point_abs(m(2.0));
 
         let [w0, w1, w2] = loc.into_weights(&heights).unwrap();
 
@@ -234,6 +241,42 @@ mod tests {
     }
 
     #[test]
+    fn point_in_node_zero_maps_to_first_node() {
+        let heights = [m(1.0), m(1.0), m(1.0)];
+        let loc = Location::point_in_node(0);
+
+        let [w0, w1, w2] = loc.into_weights(&heights).unwrap();
+
+        assert_relative_eq!(w0, 1.0);
+        assert_relative_eq!(w1, 0.0);
+        assert_relative_eq!(w2, 0.0);
+    }
+
+    #[test]
+    fn point_in_middle_node_maps_correctly() {
+        let heights = [m(1.0), m(1.0), m(1.0), m(1.0), m(1.0)];
+        let loc = Location::point_in_node(2);
+
+        let [w0, w1, w2, w3, w4] = loc.into_weights(&heights).unwrap();
+
+        assert_relative_eq!(w0, 0.0);
+        assert_relative_eq!(w1, 0.0);
+        assert_relative_eq!(w2, 1.0);
+        assert_relative_eq!(w3, 0.0);
+        assert_relative_eq!(w4, 0.0);
+    }
+
+    #[test]
+    fn point_in_node_last_index_errors() {
+        let heights = [m(1.0), m(1.0)];
+        let err = Location::point_in_node(2)
+            .into_weights(&heights)
+            .unwrap_err();
+
+        assert!(err.contains("node index must be in 0..2"));
+    }
+
+    #[test]
     fn span_within_single_node_all_weight_in_that_node() {
         let heights = [m(1.0), m(1.0), m(1.0)];
         // The span [0.25, 0.75] is entirely in node 0.
@@ -249,7 +292,7 @@ mod tests {
     #[test]
     fn span_crosses_two_nodes_distributes_by_overlap() {
         let heights = [m(1.0), m(1.0), m(1.0)];
-        // The span [0.65, 1.15] overlap 0.35 (70%) in node 0, 0.15 (30%) in node 1.
+        // The span [0.65, 1.15] overlaps 0.35 (70%) in node 0, 0.15 (30%) in node 1.
         let loc = Location::span_abs(m(0.9), m(0.5));
 
         let [w0, w1, w2] = loc.into_weights(&heights).unwrap();
@@ -312,10 +355,15 @@ mod tests {
     }
 
     #[test]
-    fn negative_span_errors() {
+    fn zero_and_negative_span_errors() {
         let heights = [m(1.0), m(1.0), m(1.0)];
+
+        let loc = Location::span_abs(m(0.5), m(0.0));
+        let err = loc.into_weights(&heights).unwrap_err();
+        assert!(err.contains("span must be > 0"));
+
         let loc = Location::span_abs(m(0.5), m(-0.1));
         let err = loc.into_weights(&heights).unwrap_err();
-        assert!(err.contains("span must be ≥ 0"));
+        assert!(err.contains("span must be > 0"));
     }
 }
