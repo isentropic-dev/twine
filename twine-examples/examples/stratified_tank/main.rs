@@ -67,8 +67,8 @@ fn configure_model() -> TankModel<NODES> {
         },
         // Model a 120 gallon tank.
         Geometry::VerticalCylinder {
-            diameter: Length::new::<meter>(0.60),
-            height: Length::new::<meter>(1.60),
+            diameter: Length::new::<meter>(0.6),
+            height: Length::new::<meter>(1.6),
         },
         // Assume perfect insulation.
         Insulation::Adiabatic,
