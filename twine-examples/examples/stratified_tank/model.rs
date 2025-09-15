@@ -7,7 +7,7 @@ use twine_components::{
         thermostat::{SetpointThermostat, SetpointThermostatInput},
     },
     schedule::step_schedule::StepSchedule,
-    thermal::stratified_tank_new::{
+    thermal::stratified_tank::{
         Environment, PortFlow, StratifiedTank, StratifiedTankInput, StratifiedTankOutput,
     },
 };

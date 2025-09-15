@@ -151,7 +151,7 @@ impl<const P: usize, const Q: usize> StratifiedTank<0, P, Q> {
     /// 10-inch auxiliary heater and a bottom-inlet/top-outlet port pair.
     ///
     /// ```
-    /// use twine_components::thermal::stratified_tank_new::{
+    /// use twine_components::thermal::stratified_tank::{
     ///     Fluid, Geometry, Insulation, Location, PortLocation, StratifiedTank,
     /// };
     /// use uom::si::{

@@ -1,2 +1,2 @@
-pub mod stratified_tank_new;
+pub mod stratified_tank;
 pub mod tank;

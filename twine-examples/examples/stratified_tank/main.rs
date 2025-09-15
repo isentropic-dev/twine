@@ -16,7 +16,7 @@ use jiff::civil::{DateTime, Time};
 use twine_components::{
     controller::SwitchState,
     schedule::step_schedule::StepSchedule,
-    thermal::stratified_tank_new::{
+    thermal::stratified_tank::{
         Fluid, Geometry, Insulation, Location, PortLocation, StratifiedTank,
     },
 };
