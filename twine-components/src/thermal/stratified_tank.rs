@@ -1,22 +1,15 @@
-//! Stratified thermal storage tank component.
-//!
-//! Models a tank divided into `N` fully mixed vertical layers,
-//! with energy and mass exchange via configured inlet ports,
-//! auxiliary heat sources, and ambient boundary conditions.
-
-mod adjacent;
 mod buoyancy;
+mod energy_balance;
 mod environment;
 mod fluid;
 mod geometry;
 mod insulation;
-mod layer;
 mod location;
 mod mass_balance;
 mod node;
 mod port_flow;
 
-use std::array;
+use std::{array, ops::Div};
 
 use thiserror::Error;
 use twine_core::TimeDerivative;
@@ -24,13 +17,12 @@ use twine_thermo::HeatFlow;
 use uom::{
     ConstZero,
     si::f64::{
-        MassDensity, SpecificHeatCapacity, ThermalConductance, ThermodynamicTemperature, VolumeRate,
+        HeatCapacity, Ratio, ThermalConductance, ThermalConductivity, ThermodynamicTemperature,
+        Volume, VolumeRate,
     },
 };
 
-use adjacent::Adjacent;
-use layer::Layer;
-use node::Node;
+use node::{Adjacent, Node};
 
 pub use environment::Environment;
 pub use fluid::Fluid;
@@ -39,15 +31,9 @@ pub use insulation::Insulation;
 pub use location::{Location, PortLocation};
 pub use port_flow::PortFlow;
 
-/// Provides fluid density as a function of temperature.
-pub trait DensityModel {
-    /// Returns the fluid density at the given temperature.
-    fn density(&self, temperature: ThermodynamicTemperature) -> MassDensity;
-}
-
 /// A stratified thermal energy storage tank.
 ///
-/// Represents a fixed-geometry tank with `N` fully mixed vertical layers.
+/// Represents a fixed-geometry tank with `N` fully mixed vertical nodes.
 /// Supports energy exchange through `P` port pairs and `Q` auxiliary heat sources.
 ///
 /// A **port pair** models a real-world connection between the tank and an
@@ -56,41 +42,38 @@ pub trait DensityModel {
 /// - The other end draws fluid out of the tank at the same volumetric rate.
 ///
 /// This pairing maintains mass balance in the tank.
-/// The outlet temperature for the port pair comes from the layer(s) where the
+/// The outlet temperature for the port pair comes from the node(s) where the
 /// outflow is taken.
 ///
-/// The location of port pairs and auxiliary heat sources are fixed when the
-/// tank is constructed; each may apply to a single layer or be split across
-/// multiple layers.
+/// The location of ports and auxiliary heat sources are fixed when the tank is
+/// created; each may apply to a single node or be split across multiple nodes.
 ///
 /// Generic over:
-/// - `D`: density model that provides `rho = f(T)`
-/// - `N`: number of nodes (layers)
+/// - `N`: number of nodes
 /// - `P`: number of port pairs
 /// - `Q`: number of auxiliary heat sources
-pub struct StratifiedTank<D: DensityModel, const N: usize, const P: usize, const Q: usize> {
-    cp: SpecificHeatCapacity,
-    dens_model: D,
+#[derive(Debug)]
+pub struct StratifiedTank<const N: usize, const P: usize, const Q: usize> {
     nodes: [Node<P, Q>; N],
+    vols: [Volume; N],
 }
 
 /// Input to the stratified tank component.
 ///
 /// Captures the runtime state needed to evaluate the tank's thermal response.
 /// Locations of ports and auxiliary heat sources, and how they are distributed
-/// across nodes, are fixed when the tank is constructed.
+/// across nodes, are fixed when the tank is created.
 /// This struct holds only the values that change at runtime.
 ///
 /// Generic over:
-/// - `N`: Number of nodes (layers)
+/// - `N`: Number of nodes
 /// - `P`: Number of port pairs
 /// - `Q`: Number of auxiliary heat sources
-pub struct Input<const N: usize, const P: usize, const Q: usize> {
-    /// Temperatures of the `N` layers, from bottom to top.
+pub struct StratifiedTankInput<const N: usize, const P: usize, const Q: usize> {
+    /// Temperatures of the `N` nodes, from bottom to top.
     ///
-    /// Each layer is fully mixed.
-    /// Values do not need to be stratified; if warmer layers appear below
-    /// cooler ones, the model mixes adjacent layers before computing energy balances.
+    /// Values do not need to be thermally stable; if warmer nodes appear below
+    /// cooler ones, the model mixes them before computing energy balances.
     pub temperatures: [ThermodynamicTemperature; N],
 
     /// Flow rates and temperatures for the `P` port pairs.
@@ -105,21 +88,22 @@ pub struct Input<const N: usize, const P: usize, const Q: usize> {
 
 /// Output from the stratified tank component.
 ///
-/// Captures the thermally stable layer temperatures and their time derivatives
+/// Captures the thermally stable node temperatures and their time derivatives
 /// after applying mass and energy balances.
 ///
 /// Generic over:
-/// - `N`: Number of nodes (layers)
-pub struct Output<const N: usize> {
-    /// Temperatures of the `N` layers, from bottom to top.
+/// - `N`: Number of nodes
+#[derive(Debug, Clone)]
+pub struct StratifiedTankOutput<const N: usize> {
+    /// Temperatures of the `N` nodes, from bottom to top.
     ///
     /// These values are guaranteed to be thermally stable.
     pub temperatures: [ThermodynamicTemperature; N],
 
-    /// Time derivatives of temperature in each layer.
+    /// Time derivatives of temperature in each node.
     ///
-    /// Includes the effects of mass flow, auxiliary heat input, and
-    /// environmental heat loss or gain.
+    /// Includes the effects of fluid flow, auxiliary heat input, conduction to
+    /// neighboring nodes, and environmental heat loss or gain.
     pub derivatives: [TimeDerivative<ThermodynamicTemperature>; N],
 }
 
@@ -136,7 +120,7 @@ pub enum StratifiedTankCreationError {
     PortOutletLocation { index: usize, context: String },
 }
 
-impl<D: DensityModel, const P: usize, const Q: usize> StratifiedTank<D, 0, P, Q> {
+impl<const P: usize, const Q: usize> StratifiedTank<0, P, Q> {
     /// Creates a new stratified tank.
     ///
     /// Specify the number of nodes (`N`) with a const generic parameter on `new()`.
@@ -148,15 +132,14 @@ impl<D: DensityModel, const P: usize, const Q: usize> StratifiedTank<D, 0, P, Q>
     ///
     /// The number of port pairs (`P`) and auxiliary heat sources (`Q`) are inferred
     /// from the lengths of `port_locations` and `aux_locations`, respectively.
-    /// The density model type (`D`) is inferred from `fluid`.
     ///
     /// # Parameters
     ///
-    /// - `fluid`: [`Fluid`] properties used for density, specific heat, and thermal conductivity.
+    /// - `fluid`: Incompressible [`Fluid`] properties.
     /// - `geometry`: [`Geometry`] used to derive per-node volumes and areas.
     /// - `insulation`: [`Insulation`] at the tank surfaces.
-    /// - `aux_locations`: Placement of auxiliary heat sources as [`Location`].
-    /// - `port_locations`: Placement of each port pair's inlet and outlet as [`PortLocation`].
+    /// - `aux_locations`: Placement of each auxiliary heat source as a [`Location`].
+    /// - `port_locations`: Placement of each port pair's inlet and outlet as a [`PortLocation`].
     ///
     /// # Errors
     ///
@@ -164,12 +147,12 @@ impl<D: DensityModel, const P: usize, const Q: usize> StratifiedTank<D, 0, P, Q>
     ///
     /// # Example
     ///
-    /// Create a perfectly insulated cylindrical tank with a 10-inch long
-    /// auxiliary heater near the top and a bottom-inlet/top-outlet port pair.
+    /// The following code creates a perfectly insulated cylindrical tank with a
+    /// 10-inch auxiliary heater and a bottom-inlet/top-outlet port pair.
     ///
     /// ```
     /// use twine_components::thermal::stratified_tank::{
-    ///     DensityModel, Fluid, Geometry, Insulation, Location, PortLocation, StratifiedTank,
+    ///     Fluid, Geometry, Insulation, Location, PortLocation, StratifiedTank,
     /// };
     /// use uom::si::{
     ///     f64::{
@@ -182,16 +165,8 @@ impl<D: DensityModel, const P: usize, const Q: usize> StratifiedTank<D, 0, P, Q>
     ///     thermal_conductivity::watt_per_meter_kelvin,
     /// };
     ///
-    /// // Simple density model (constant with temperature).
-    /// struct ConstantDensity;
-    /// impl DensityModel for ConstantDensity {
-    ///     fn density(&self, _t: ThermodynamicTemperature) -> MassDensity {
-    ///         MassDensity::new::<kilogram_per_cubic_meter>(1000.0)
-    ///     }
-    /// }
-    ///
     /// let fluid = Fluid {
-    ///     density_model: ConstantDensity,
+    ///     density: MassDensity::new::<kilogram_per_cubic_meter>(1000.0),
     ///     specific_heat: SpecificHeatCapacity::new::<kilojoule_per_kilogram_kelvin>(4.186),
     ///     thermal_conductivity: ThermalConductivity::new::<watt_per_meter_kelvin>(0.6),
     /// };
@@ -203,9 +178,9 @@ impl<D: DensityModel, const P: usize, const Q: usize> StratifiedTank<D, 0, P, Q>
     ///
     /// let insulation = Insulation::Adiabatic;
     ///
-    /// let span = Length::new::<inch>(10.0);
-    /// let center = Length::new::<meter>(1.5);
-    /// let aux_locations = [Location::span_abs(center, span)];
+    /// let el_center = Length::new::<meter>(1.5);
+    /// let el_length = Length::new::<inch>(10.0);
+    /// let aux_locations = [Location::span_abs(el_center, el_length)];
     ///
     /// let port_locations = [PortLocation {
     ///     inlet: Location::tank_bottom(),
@@ -217,12 +192,12 @@ impl<D: DensityModel, const P: usize, const Q: usize> StratifiedTank<D, 0, P, Q>
     ///     .expect("valid configuration");
     /// ```
     pub fn new<const N: usize>(
-        fluid: Fluid<D>,
+        fluid: Fluid,
         geometry: Geometry,
         insulation: Insulation,
         aux_locations: [Location; Q],
         port_locations: [PortLocation; P],
-    ) -> Result<StratifiedTank<D, N, P, Q>, StratifiedTankCreationError> {
+    ) -> Result<StratifiedTank<N, P, Q>, StratifiedTankCreationError> {
         let node_geometries = geometry
             .into_node_geometries::<N>()
             .map_err(StratifiedTankCreationError::Geometry)?;
@@ -256,174 +231,195 @@ impl<D: DensityModel, const P: usize, const Q: usize> StratifiedTank<D, 0, P, Q>
             }
         }
 
-        let mut nodes = array::from_fn(|i| {
+        let nodes = array::from_fn(|i| {
             let node = node_geometries[i];
             let aux_heat_weights = aux_weight_by_node[i];
             let port_inlet_weights = inlet_weight_by_node[i];
             let port_outlet_weights = outlet_weight_by_node[i];
 
-            Node {
-                vol: node.volume,
-                // TODO: The bottom and top UA values are calculated assuming nodes have equal area.
-                //       I think we'll need to scale them by adjacent area ratios if they aren't.
-                ua: Adjacent {
-                    bottom: node.height * fluid.thermal_conductivity,
-                    side: match insulation {
+            let ua = Adjacent {
+                bottom: if i == 0 {
+                    match insulation {
                         Insulation::Adiabatic => ThermalConductance::ZERO,
-                    },
-                    top: node.height * fluid.thermal_conductivity,
+                    }
+                } else {
+                    let node_below = node_geometries[i - 1];
+                    ua_between_nodes(fluid.thermal_conductivity, node_below, node)
                 },
+                side: match insulation {
+                    Insulation::Adiabatic => ThermalConductance::ZERO,
+                },
+                top: if i == N - 1 {
+                    match insulation {
+                        Insulation::Adiabatic => ThermalConductance::ZERO,
+                    }
+                } else {
+                    let node_above = node_geometries[i + 1];
+                    ua_between_nodes(fluid.thermal_conductivity, node, node_above)
+                },
+            };
+
+            Node {
+                inv_volume: node.volume.recip(),
+                inv_heat_capacity: (node.volume * fluid.density * fluid.specific_heat).recip(),
+                ua,
                 aux_heat_weights,
                 port_inlet_weights,
                 port_outlet_weights,
             }
         });
 
-        // Fix UA values for bottom and top nodes.
-        nodes[0].ua.bottom = match insulation {
-            Insulation::Adiabatic => ThermalConductance::ZERO,
-        };
-        nodes[N - 1].ua.top = match insulation {
-            Insulation::Adiabatic => ThermalConductance::ZERO,
-        };
-
         Ok(StratifiedTank {
-            cp: fluid.specific_heat,
-            dens_model: fluid.density_model,
             nodes,
+            vols: node_geometries.map(|node| node.volume),
         })
     }
 }
 
-impl<D: DensityModel, const N: usize, const P: usize, const Q: usize> StratifiedTank<D, N, P, Q> {
+impl<const N: usize, const P: usize, const Q: usize> StratifiedTank<N, P, Q> {
     /// Evaluates the tank's thermal response at a single point in time.
     ///
-    /// Enforces thermal stability by mixing unstable layers, then applies port
-    /// flows, auxiliary heat input, and environmental effects.
+    /// Enforces thermal stability by mixing unstable nodes, then applies mass
+    /// and energy balances to determine per-node temperature derivatives.
     #[must_use]
-    pub fn call(&self, input: &Input<N, P, Q>) -> Output<N> {
-        let Input {
+    pub fn call(&self, input: &StratifiedTankInput<N, P, Q>) -> StratifiedTankOutput<N> {
+        let StratifiedTankInput {
             temperatures: t_guess,
             port_flows,
             aux_heat_flows,
             environment,
         } = input;
 
-        // Create stabilized layers.
-        let vol = array::from_fn(|i| self.nodes[i].vol);
-        let layers = buoyancy::stabilize(t_guess, &vol, &self.dens_model)
-            .map(|(temp, mass)| Layer::new(temp, mass, self.cp));
+        // Stabilize node temperatures.
+        let mut temperatures = *t_guess;
+        buoyancy::stabilize(&mut temperatures, &self.vols);
 
         // Compute node-to-node flow.
         let upward_flows = mass_balance::compute_upward_flows(
             &port_flows.map(PortFlow::into_rate),
-            &array::from_fn(|n| {
-                array::from_fn(|p| {
-                    (
-                        self.nodes[n].port_inlet_weights[p],
-                        self.nodes[n].port_outlet_weights[p],
-                    )
-                })
-            }),
+            &self.nodes.map(|n| n.port_inlet_weights),
+            &self.nodes.map(|n| n.port_outlet_weights),
         );
 
-        // Calculate the total derivative for each layer: flows + aux + conduction.
+        // Calculate the total derivative for each node: flows + aux + conduction.
         let derivatives = array::from_fn(|i| {
-            self.deriv_from_flows(i, &layers, &upward_flows, port_flows)
-                + self.deriv_from_aux(i, &layers, aux_heat_flows)
-                + self.deriv_from_conduction(i, &layers, environment)
+            self.deriv_from_flows(i, &temperatures, &upward_flows, port_flows)
+                + self.deriv_from_aux(i, aux_heat_flows)
+                + self.deriv_from_conduction(i, &temperatures, environment)
         });
 
-        Output {
-            temperatures: layers.map(Layer::into_temperature),
+        StratifiedTankOutput {
+            temperatures,
             derivatives,
         }
     }
 
-    /// Computes the `i`th layer's temperature derivative due to fluid flows.
+    /// Computes the `i`th node's `dT/dt` due to fluid flows.
     fn deriv_from_flows(
         &self,
         i: usize,
-        layers: &[Layer; N],
+        temperatures: &[ThermodynamicTemperature; N],
         upward_flows: &[VolumeRate; N],
         port_flows: &[PortFlow; P],
     ) -> TimeDerivative<ThermodynamicTemperature> {
-        let layer = layers[i];
+        let node = self.nodes[i];
 
-        // Optional flow from the layer below.
+        // Optional flow from the node below.
         let flow_from_below = if i > 0 && upward_flows[i - 1] > VolumeRate::ZERO {
-            Some((upward_flows[i - 1], layers[i - 1].temp))
+            Some((upward_flows[i - 1], temperatures[i - 1]))
         } else {
             None
         };
 
-        // Optional flow from the layer above.
+        // Optional flow from the node above.
         let flow_from_above = if i < N - 1 && upward_flows[i] < VolumeRate::ZERO {
-            Some((-upward_flows[i], layers[i + 1].temp))
+            Some((-upward_flows[i], temperatures[i + 1]))
         } else {
             None
         };
 
         let inflows = port_flows
             .iter()
-            .zip(self.nodes[i].port_inlet_weights)
+            .zip(node.port_inlet_weights)
             .map(|(port_flow, weight)| (port_flow.rate() * weight, port_flow.inlet_temperature))
             .chain(flow_from_below)
-            .chain(flow_from_above)
-            .map(|(v_dot, temp)| (v_dot * self.dens_model.density(temp), temp));
+            .chain(flow_from_above);
 
-        layer.derivative_from_fluid_flows(inflows)
+        energy_balance::derivative_from_fluid_flows(temperatures[i], node.inv_volume, inflows)
     }
 
-    /// Computes the `i`th layer's temperature derivative due to auxiliary heat sources.
+    /// Computes the `i`th node's `dT/dt` due to auxiliary heat sources.
     fn deriv_from_aux(
         &self,
         i: usize,
-        layers: &[Layer; N],
         aux_heat_flows: &[HeatFlow; Q],
     ) -> TimeDerivative<ThermodynamicTemperature> {
-        let layer = layers[i];
+        let node = self.nodes[i];
 
-        // Weight each aux source by this layer's allocation.
         let heat_flows = aux_heat_flows
             .iter()
-            .zip(self.nodes[i].aux_heat_weights)
+            .zip(node.aux_heat_weights)
             .map(|(q_dot, weight)| q_dot.signed() * weight);
 
-        layer.derivative_from_heat_flows(heat_flows)
+        energy_balance::derivative_from_heat_flows(node.inv_heat_capacity, heat_flows)
     }
 
-    /// Computes the `i`th layer's temperature derivative due to conduction to surroundings.
+    /// Computes the `i`th node's `dT/dt` due to conduction to its surroundings.
     fn deriv_from_conduction(
         &self,
         i: usize,
-        layers: &[Layer; N],
+        temperatures: &[ThermodynamicTemperature; N],
         env: &Environment,
     ) -> TimeDerivative<ThermodynamicTemperature> {
-        let layer = layers[i];
+        let node = self.nodes[i];
 
-        let bottom = if i == 0 {
+        let t_bottom = if i == 0 {
             env.bottom
         } else {
-            layers[i - 1].temp
+            temperatures[i - 1]
         };
 
-        let top = if i == N - 1 {
+        let t_top = if i == N - 1 {
             env.top
         } else {
-            layers[i + 1].temp
+            temperatures[i + 1]
         };
 
-        layer.derivative_from_conduction(
-            self.nodes[i].ua,
+        energy_balance::derivative_from_conduction(
+            temperatures[i],
             Adjacent {
-                bottom,
+                bottom: t_bottom,
                 side: env.side,
-                top,
+                top: t_top,
             },
+            node.ua,
+            node.inv_heat_capacity,
         )
     }
 }
+
+/// Overall conductance (UA) between two adjacent, well-mixed nodes.
+///
+/// The interface is modeled as two thermal resistances in series:
+/// ```text
+/// R_total = R_below + R_above
+///         = (0.5·h_below) / (k·A_below_top)
+///         + (0.5·h_above) / (k·A_above_bottom)
+/// UA = 1 / R_total
+/// ```
+fn ua_between_nodes(
+    k: ThermalConductivity,
+    below: geometry::NodeGeometry,
+    above: geometry::NodeGeometry,
+) -> ThermalConductance {
+    let r_below = 0.5 * below.height / (k * below.area.top);
+    let r_above = 0.5 * above.height / (k * above.area.bottom);
+    let r_total = r_below + r_above;
+    r_total.recip()
+}
+
+type InverseHeatCapacity = <Ratio as Div<HeatCapacity>>::Output;
+type InverseVolume = <Ratio as Div<Volume>>::Output;
 
 #[cfg(test)]
 mod tests {
@@ -434,7 +430,8 @@ mod tests {
     use approx::assert_relative_eq;
     use uom::si::{
         f64::{
-            Length, MassDensity, Power, ThermalConductivity, ThermodynamicTemperature, VolumeRate,
+            Length, MassDensity, Power, SpecificHeatCapacity, ThermalConductivity,
+            ThermodynamicTemperature, VolumeRate,
         },
         length::meter,
         mass_density::kilogram_per_cubic_meter,
@@ -444,32 +441,14 @@ mod tests {
         volume_rate::gallon_per_minute,
     };
 
-    struct ConstantDensity {
-        density: MassDensity,
-    }
-
-    impl ConstantDensity {
-        fn new(rho_kg_m3: f64) -> Self {
-            Self {
-                density: MassDensity::new::<kilogram_per_cubic_meter>(rho_kg_m3),
-            }
-        }
-    }
-
-    impl DensityModel for ConstantDensity {
-        fn density(&self, _temperature: ThermodynamicTemperature) -> MassDensity {
-            self.density
-        }
-    }
-
     // Test tank:
     // - vertical cylinder
     // - 3 nodes, each V=1 m³ and UA=0
     // - 1 port: inlet 100% to node 0, outlet 100% from node 2
     // - 1 aux: 100% applied to node 2
-    fn test_tank() -> StratifiedTank<ConstantDensity, 3, 1, 1> {
+    fn test_tank() -> StratifiedTank<3, 1, 1> {
         let fluid = Fluid {
-            density_model: ConstantDensity::new(1000.0),
+            density: MassDensity::new::<kilogram_per_cubic_meter>(1000.0),
             specific_heat: SpecificHeatCapacity::new::<kilojoule_per_kilogram_kelvin>(4.0),
             thermal_conductivity: ThermalConductivity::ZERO,
         };
@@ -508,7 +487,7 @@ mod tests {
         let tank = test_tank();
         let t = ThermodynamicTemperature::new::<degree_celsius>(20.0);
 
-        let input = Input {
+        let input = StratifiedTankInput {
             temperatures: [t; 3],
             port_flows: zero_port_flows(),
             aux_heat_flows: [HeatFlow::None],
@@ -535,7 +514,7 @@ mod tests {
         let tank = test_tank();
         let t = ThermodynamicTemperature::new::<degree_celsius>(50.0);
 
-        let input = Input {
+        let input = StratifiedTankInput {
             temperatures: [t; 3],
             port_flows: zero_port_flows(),
             aux_heat_flows: [HeatFlow::from_signed(Power::new::<kilowatt>(20.0)).unwrap()],
@@ -550,7 +529,7 @@ mod tests {
 
         // Q/C = Q / (V * rho * cp)
         //     = 20 kW / (1 m³ * 1,000 kg/m³ * 4 kJ/(kg·K))
-        //     = 20,000 / 4,000,000 = 0.005 K/s at layer 2
+        //     = 20,000 / 4,000,000 = 0.005 K/s at node 2
         assert_relative_eq!(out.derivatives[0].value, 0.0);
         assert_relative_eq!(out.derivatives[1].value, 0.0);
         assert_relative_eq!(out.derivatives[2].value, 0.005);

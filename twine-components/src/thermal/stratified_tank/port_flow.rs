@@ -3,7 +3,7 @@ use uom::si::f64::{ThermodynamicTemperature, VolumeRate};
 
 /// Inlet conditions for a port pair.
 ///
-/// See [`StratifiedTank`] for how port pairs are placed and distributed across layers.
+/// See [`StratifiedTank`] for how port pairs are placed and distributed across nodes.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PortFlow {
     /// Common volumetric flow for the port pair (inlet and outlet).
@@ -11,7 +11,7 @@ pub struct PortFlow {
 
     /// Inlet fluid temperature.
     ///
-    /// The outlet temperature is determined by the layer(s) assocated with the outflow.
+    /// The outlet temperature is determined by the node(s) assocated with the outflow.
     pub inlet_temperature: ThermodynamicTemperature,
 }
 
