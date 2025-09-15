@@ -17,7 +17,8 @@ use twine_thermo::HeatFlow;
 use uom::{
     ConstZero,
     si::f64::{
-        HeatCapacity, Ratio, ThermalConductance, ThermodynamicTemperature, Volume, VolumeRate,
+        HeatCapacity, Ratio, ThermalConductance, ThermalConductivity, ThermodynamicTemperature,
+        Volume, VolumeRate,
     },
 };
 
@@ -68,7 +69,7 @@ pub struct StratifiedTank<const N: usize, const P: usize, const Q: usize> {
 /// - `N`: Number of nodes
 /// - `P`: Number of port pairs
 /// - `Q`: Number of auxiliary heat sources
-pub struct Input<const N: usize, const P: usize, const Q: usize> {
+pub struct StratifiedTankInput<const N: usize, const P: usize, const Q: usize> {
     /// Temperatures of the `N` nodes, from bottom to top.
     ///
     /// Values do not need to be thermally stable; if warmer nodes appear below
@@ -93,7 +94,7 @@ pub struct Input<const N: usize, const P: usize, const Q: usize> {
 /// Generic over:
 /// - `N`: Number of nodes
 #[derive(Debug, Clone)]
-pub struct Output<const N: usize> {
+pub struct StratifiedTankOutput<const N: usize> {
     /// Temperatures of the `N` nodes, from bottom to top.
     ///
     /// These values are guaranteed to be thermally stable.
@@ -230,37 +231,43 @@ impl<const P: usize, const Q: usize> StratifiedTank<0, P, Q> {
             }
         }
 
-        let mut nodes = array::from_fn(|i| {
+        let nodes = array::from_fn(|i| {
             let node = node_geometries[i];
             let aux_heat_weights = aux_weight_by_node[i];
             let port_inlet_weights = inlet_weight_by_node[i];
             let port_outlet_weights = outlet_weight_by_node[i];
 
+            let ua = Adjacent {
+                bottom: if i == 0 {
+                    match insulation {
+                        Insulation::Adiabatic => ThermalConductance::ZERO,
+                    }
+                } else {
+                    let node_below = node_geometries[i - 1];
+                    ua_between_nodes(fluid.thermal_conductivity, node_below, node)
+                },
+                side: match insulation {
+                    Insulation::Adiabatic => ThermalConductance::ZERO,
+                },
+                top: if i == N - 1 {
+                    match insulation {
+                        Insulation::Adiabatic => ThermalConductance::ZERO,
+                    }
+                } else {
+                    let node_above = node_geometries[i + 1];
+                    ua_between_nodes(fluid.thermal_conductivity, node, node_above)
+                },
+            };
+
             Node {
                 inv_volume: node.volume.recip(),
                 inv_heat_capacity: (node.volume * fluid.density * fluid.specific_heat).recip(),
-                // TODO: The bottom and top UA values are calculated assuming nodes have equal area.
-                //       I think we'll need to scale them by adjacent area ratios if they aren't.
-                ua: Adjacent {
-                    bottom: node.height * fluid.thermal_conductivity,
-                    side: match insulation {
-                        Insulation::Adiabatic => ThermalConductance::ZERO,
-                    },
-                    top: node.height * fluid.thermal_conductivity,
-                },
+                ua,
                 aux_heat_weights,
                 port_inlet_weights,
                 port_outlet_weights,
             }
         });
-
-        // Fix UA values for bottom and top nodes.
-        nodes[0].ua.bottom = match insulation {
-            Insulation::Adiabatic => ThermalConductance::ZERO,
-        };
-        nodes[N - 1].ua.top = match insulation {
-            Insulation::Adiabatic => ThermalConductance::ZERO,
-        };
 
         Ok(StratifiedTank {
             nodes,
@@ -275,8 +282,8 @@ impl<const N: usize, const P: usize, const Q: usize> StratifiedTank<N, P, Q> {
     /// Enforces thermal stability by mixing unstable nodes, then applies mass
     /// and energy balances to determine per-node temperature derivatives.
     #[must_use]
-    pub fn call(&self, input: &Input<N, P, Q>) -> Output<N> {
-        let Input {
+    pub fn call(&self, input: &StratifiedTankInput<N, P, Q>) -> StratifiedTankOutput<N> {
+        let StratifiedTankInput {
             temperatures: t_guess,
             port_flows,
             aux_heat_flows,
@@ -301,7 +308,7 @@ impl<const N: usize, const P: usize, const Q: usize> StratifiedTank<N, P, Q> {
                 + self.deriv_from_conduction(i, &temperatures, environment)
         });
 
-        Output {
+        StratifiedTankOutput {
             temperatures,
             derivatives,
         }
@@ -391,6 +398,26 @@ impl<const N: usize, const P: usize, const Q: usize> StratifiedTank<N, P, Q> {
     }
 }
 
+/// Overall conductance (UA) between two adjacent, well-mixed nodes.
+///
+/// The interface is modeled as two thermal resistances in series:
+/// ```text
+/// R_total = R_below + R_above
+///         = (0.5·h_below) / (k·A_below_top)
+///         + (0.5·h_above) / (k·A_above_bottom)
+/// UA = 1 / R_total
+/// ```
+fn ua_between_nodes(
+    k: ThermalConductivity,
+    below: geometry::NodeGeometry,
+    above: geometry::NodeGeometry,
+) -> ThermalConductance {
+    let r_below = 0.5 * below.height / (k * below.area.top);
+    let r_above = 0.5 * above.height / (k * above.area.bottom);
+    let r_total = r_below + r_above;
+    r_total.recip()
+}
+
 type InverseHeatCapacity = <Ratio as Div<HeatCapacity>>::Output;
 type InverseVolume = <Ratio as Div<Volume>>::Output;
 
@@ -460,7 +487,7 @@ mod tests {
         let tank = test_tank();
         let t = ThermodynamicTemperature::new::<degree_celsius>(20.0);
 
-        let input = Input {
+        let input = StratifiedTankInput {
             temperatures: [t; 3],
             port_flows: zero_port_flows(),
             aux_heat_flows: [HeatFlow::None],
@@ -487,7 +514,7 @@ mod tests {
         let tank = test_tank();
         let t = ThermodynamicTemperature::new::<degree_celsius>(50.0);
 
-        let input = Input {
+        let input = StratifiedTankInput {
             temperatures: [t; 3],
             port_flows: zero_port_flows(),
             aux_heat_flows: [HeatFlow::from_signed(Power::new::<kilowatt>(20.0)).unwrap()],
