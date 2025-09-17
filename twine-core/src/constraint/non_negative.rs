@@ -30,7 +30,7 @@ use super::{Constrained, Constraint, ConstraintError};
 /// assert!(NonNegative::new(-7).is_err());
 /// assert!(NonNegative::new(f64::NAN).is_err());
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct NonNegative;
 
 impl NonNegative {

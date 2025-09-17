@@ -55,7 +55,7 @@ use super::{Constrained, Constraint, ConstraintError};
 /// assert_eq!(z.into_inner().get::<ratio>(), 0.0);
 /// assert_eq!(o.into_inner().get::<ratio>(), 1.0);
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct UnitInterval;
 
 impl UnitInterval {
