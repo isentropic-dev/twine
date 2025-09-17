@@ -1,12 +1,21 @@
+//! Effectiveness–NTU relations for idealized heat exchanger configurations.
+
 use twine_core::constraint::{Constrained, ConstraintResult, NonNegative, UnitInterval};
 use uom::si::{f64::Ratio, ratio::ratio};
 
+/// Heat exchanger effectiveness.
 type Effectiveness = Constrained<Ratio, UnitInterval>;
+/// Number of transfer units.
 type Ntu = Constrained<Ratio, NonNegative>;
+/// Capacity ratio, defined as `C_min / C_max` and limited to `[0, 1]`.
 type CapacityRatio = Constrained<Ratio, UnitInterval>;
 
 #[derive(Debug, Clone, Copy)]
 #[non_exhaustive]
+/// Input data for computing heat exchanger effectiveness from NTU.
+///
+/// Use the associated constructor to validate raw ratios before invoking
+/// [`effectiveness`].
 pub enum EffectivenessArrangement {
     OneFluid {
         ntu: Ntu,
@@ -18,12 +27,29 @@ pub enum EffectivenessArrangement {
 }
 
 impl EffectivenessArrangement {
+    /// Creates effectiveness input for a heat exchanger where the capacitance
+    /// rate of one stream is much greater than the other (i.e. the capacity
+    /// ratio == 0).
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`ConstraintError`] if:
+    ///
+    /// - if `ntu` is negative.
     pub fn one_fluid(ntu: Ratio) -> ConstraintResult<Self> {
         Ok(Self::OneFluid {
             ntu: NonNegative::new(ntu)?,
         })
     }
 
+    /// Creates effectiveness input for a counter-flow heat exchanger.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`ConstraintError`] if:
+    ///
+    /// - if `ntu` is negative.
+    /// - if `capacity_ratio` is not within `[0, 1]`.
     pub fn counter_flow(ntu: Ratio, capacity_ratio: Ratio) -> ConstraintResult<Self> {
         Ok(Self::CounterFlow {
             ntu: NonNegative::new(ntu)?,
@@ -32,6 +58,13 @@ impl EffectivenessArrangement {
     }
 }
 
+/// Computes heat exchanger effectiveness.
+///
+/// # Errors
+///
+/// Returns [`ConstraintError`] if the supplied parameters fall outside their
+/// valid ranges. This is unlikely if the respective constructors were used to
+/// create the [`EffectivenessArrangement`].
 pub fn effectiveness(arrangement: EffectivenessArrangement) -> ConstraintResult<Effectiveness> {
     let effectiveness = match arrangement {
         EffectivenessArrangement::OneFluid { ntu } => {
@@ -60,6 +93,10 @@ pub fn effectiveness(arrangement: EffectivenessArrangement) -> ConstraintResult<
 
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy)]
+/// Input data for computing NTU from heat exchanger effectiveness.
+///
+/// Use the provided constructors to validate raw ratios before calling
+/// [`ntu`].
 pub enum NtuArrangement {
     OneFluid {
         effectiveness: Effectiveness,
@@ -71,12 +108,28 @@ pub enum NtuArrangement {
 }
 
 impl NtuArrangement {
+    /// Creates NTU input for a heat exchanger where the capacitance rate of one
+    /// stream is much greater than the other (i.e. the capacity ratio == 0).
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`ConstraintError`] if:
+    ///
+    /// - `effectiveness` is outsite `[0, 1]`.
     pub fn one_fluid(effectiveness: Ratio) -> ConstraintResult<Self> {
         Ok(Self::OneFluid {
             effectiveness: UnitInterval::new(effectiveness)?,
         })
     }
 
+    /// Creates NTU input for a counter-flow heat exchanger.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`ConstraintError`] if:
+    ///
+    /// - `effectiveness` is outside `[0, 1]`.
+    /// - `capacity_ratio` is outside `[0, 1]`.
     pub fn counter_flow(effectiveness: Ratio, capacity_ratio: Ratio) -> ConstraintResult<Self> {
         Ok(Self::CounterFlow {
             effectiveness: UnitInterval::new(effectiveness)?,
@@ -85,6 +138,13 @@ impl NtuArrangement {
     }
 }
 
+/// Computes NTU for a heat exchanger.
+///
+/// # Errors
+///
+/// Returns [`ConstraintError`] when the provided values violate the expected
+/// ranges. This should not happen when values are constructed through
+/// [`NtuArrangement`].
 pub fn ntu(arrangement: NtuArrangement) -> ConstraintResult<Ntu> {
     let ntu = match arrangement {
         NtuArrangement::OneFluid { effectiveness } => {
