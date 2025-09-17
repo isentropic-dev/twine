@@ -1,118 +1,156 @@
-#![allow(dead_code)]
+use twine_core::constraint::{Constrained, ConstraintResult, NonNegative, UnitInterval};
+use uom::si::{f64::Ratio, ratio::ratio};
 
-use std::ops::{Deref, Div};
+type Effectiveness = Constrained<Ratio, UnitInterval>;
+type Ntu = Constrained<Ratio, NonNegative>;
+type CapacityRatio = Constrained<Ratio, UnitInterval>;
 
-use twine_core::constraint::{Constrained, ConstraintError, NonNegative, UnitInterval};
-use uom::si::f64::{Ratio, ThermalConductance};
+#[derive(Debug, Clone, Copy)]
+#[non_exhaustive]
+pub enum EffectivenessArrangement {
+    OneFluid {
+        ntu: Ntu,
+    },
+    CounterFlow {
+        ntu: Ntu,
+        capacity_ratio: CapacityRatio,
+    },
+}
 
-/// A fluid capacitance rate.
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-struct CapacitanceRate(Constrained<ThermalConductance, NonNegative>);
+impl EffectivenessArrangement {
+    pub fn one_fluid(ntu: Ratio) -> ConstraintResult<Self> {
+        Ok(Self::OneFluid {
+            ntu: NonNegative::new(ntu)?,
+        })
+    }
 
-impl CapacitanceRate {
-    /// Constructs a `CapacitanceRate`.
-    ///
-    /// # Errors
-    ///
-    /// Fails if the value is negative.
-    fn new(value: ThermalConductance) -> Result<Self, ConstraintError> {
-        Ok(Self(NonNegative::new(value)?))
+    pub fn counter_flow(ntu: Ratio, capacity_ratio: Ratio) -> ConstraintResult<Self> {
+        Ok(Self::CounterFlow {
+            ntu: NonNegative::new(ntu)?,
+            capacity_ratio: UnitInterval::new(capacity_ratio)?,
+        })
     }
 }
 
-impl TryFrom<ThermalConductance> for CapacitanceRate {
-    type Error = ConstraintError;
+pub fn effectiveness(arrangement: EffectivenessArrangement) -> ConstraintResult<Effectiveness> {
+    let effectiveness = match arrangement {
+        EffectivenessArrangement::OneFluid { ntu } => {
+            let ntu = ntu.into_inner().get::<ratio>();
 
-    fn try_from(value: ThermalConductance) -> Result<Self, Self::Error> {
-        CapacitanceRate::new(value)
+            1. - (-ntu).exp()
+        }
+        EffectivenessArrangement::CounterFlow {
+            ntu,
+            capacity_ratio,
+        } => {
+            let ntu = ntu.into_inner().get::<ratio>();
+            let cr = capacity_ratio.into_inner().get::<ratio>();
+
+            if cr < 1. {
+                (1. - (-ntu * (1. - cr)).exp()) / (1. - cr * (-ntu * (1. - cr)).exp())
+            } else {
+                // cr == 1
+                ntu / (1. + ntu)
+            }
+        }
+    };
+
+    UnitInterval::new(Ratio::new::<ratio>(effectiveness))
+}
+
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy)]
+pub enum NtuArrangement {
+    OneFluid {
+        effectiveness: Effectiveness,
+    },
+    CounterFlow {
+        effectiveness: Effectiveness,
+        capacity_ratio: CapacityRatio,
+    },
+}
+
+impl NtuArrangement {
+    pub fn one_fluid(effectiveness: Ratio) -> ConstraintResult<Self> {
+        Ok(Self::OneFluid {
+            effectiveness: UnitInterval::new(effectiveness)?,
+        })
+    }
+
+    pub fn counter_flow(effectiveness: Ratio, capacity_ratio: Ratio) -> ConstraintResult<Self> {
+        Ok(Self::CounterFlow {
+            effectiveness: UnitInterval::new(effectiveness)?,
+            capacity_ratio: UnitInterval::new(capacity_ratio)?,
+        })
     }
 }
 
-impl Deref for CapacitanceRate {
-    type Target = ThermalConductance;
+pub fn ntu(arrangement: NtuArrangement) -> ConstraintResult<Ntu> {
+    let ntu = match arrangement {
+        NtuArrangement::OneFluid { effectiveness } => {
+            let eff = effectiveness.into_inner().get::<ratio>();
+            -(1. - eff).ln()
+        }
+        NtuArrangement::CounterFlow {
+            effectiveness,
+            capacity_ratio,
+        } => {
+            let eff = effectiveness.into_inner().get::<ratio>();
+            let cr = capacity_ratio.into_inner().get::<ratio>();
 
-    fn deref(&self) -> &Self::Target {
-        self.0.as_ref()
-    }
-}
+            if cr < 1. {
+                (((1. - eff * cr) / (1. - eff)).ln()) / (1. - cr)
+            } else {
+                // cr == 1
+                eff / (1. - eff)
+            }
+        }
+    };
 
-impl Div for CapacitanceRate {
-    type Output = Result<CapacityRatio, ConstraintError>;
-
-    fn div(self, rhs: Self) -> Self::Output {
-        CapacityRatio::new(*self / *rhs)
-    }
-}
-
-/// The capacity ratio of two fluids in a heat exchanger.
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-struct CapacityRatio(Constrained<Ratio, UnitInterval>);
-
-impl CapacityRatio {
-    /// Constructs a `CapacityRatio`.
-    ///
-    /// # Errors
-    ///
-    /// Fails if the value is not in the unit interval.
-    fn new(value: Ratio) -> Result<Self, ConstraintError> {
-        Ok(Self(UnitInterval::new(value)?))
-    }
-
-    /// Construct a `CapacityRatio` from the `CapacitanceRate`s of two fluids in
-    /// a heat exchanger.
-    fn from_capacitance_rates(
-        c_dot_cold: CapacitanceRate,
-        c_dot_hot: CapacitanceRate,
-    ) -> Result<Self, ConstraintError> {
-        let (c_dot_min, c_dot_max) = if c_dot_cold <= c_dot_hot {
-            (c_dot_cold, c_dot_hot)
-        } else {
-            (c_dot_hot, c_dot_cold)
-        };
-
-        c_dot_min / c_dot_max
-    }
-}
-
-impl TryFrom<f64> for CapacityRatio {
-    type Error = ConstraintError;
-
-    fn try_from(value: f64) -> Result<Self, Self::Error> {
-        Self::new(value.into())
-    }
+    NonNegative::new(Ratio::new::<ratio>(ntu))
 }
 
 #[cfg(test)]
 mod tests {
-    use uom::si::thermal_conductance::watt_per_kelvin;
+    use approx::assert_relative_eq;
 
     use super::*;
 
     #[test]
-    fn from_capacitance_rates() -> Result<(), ConstraintError> {
-        let cases = &[(0., 100., 0.), (100., 100., 1.), (25., 100., 0.25)];
+    fn roundtrip_one_fluid() -> ConstraintResult<()> {
+        for ntu_val in [0., 0.1, 0.5, 1., 5.] {
+            let eff = effectiveness(EffectivenessArrangement::one_fluid(Ratio::new::<ratio>(
+                ntu_val,
+            ))?)?;
+            let back = ntu(NtuArrangement::one_fluid(eff.into_inner())?)?;
 
-        for &(cold, hot, expected) in cases {
-            let cr = CapacityRatio::from_capacitance_rates(
-                ThermalConductance::new::<watt_per_kelvin>(cold).try_into()?,
-                ThermalConductance::new::<watt_per_kelvin>(hot).try_into()?,
-            )?;
-
-            assert_eq!(cr, expected.try_into()?);
+            assert_relative_eq!(back.into_inner().get::<ratio>(), ntu_val);
         }
-
         Ok(())
     }
 
     #[test]
-    fn from_capacitance_rates_both_zero() -> Result<(), ConstraintError> {
-        let result = CapacityRatio::from_capacitance_rates(
-            ThermalConductance::new::<watt_per_kelvin>(0.).try_into()?,
-            ThermalConductance::new::<watt_per_kelvin>(0.).try_into()?,
-        );
+    fn roundtrip_counter_flow() -> ConstraintResult<()> {
+        let ntu_vals = [0., 0.1, 0.5, 1., 5.];
+        let cr_vals = [0., 0.25, 0.5, 1.];
 
-        assert!(matches!(result, Err(ConstraintError::NotANumber)));
+        for ntu_val in ntu_vals {
+            for cr_val in cr_vals {
+                let cr_ratio = Ratio::new::<ratio>(cr_val);
 
+                let eff = effectiveness(EffectivenessArrangement::counter_flow(
+                    Ratio::new::<ratio>(ntu_val),
+                    cr_ratio,
+                )?)?;
+                let back = ntu(NtuArrangement::counter_flow(eff.into_inner(), cr_ratio)?)?;
+
+                assert_relative_eq!(
+                    back.into_inner().get::<ratio>(),
+                    ntu_val,
+                    max_relative = 1e-12
+                );
+            }
+        }
         Ok(())
     }
 }
