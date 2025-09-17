@@ -1,13 +1,13 @@
 use std::{cmp::Ordering, marker::PhantomData};
 
-use num_traits::{One, Zero};
+use uom::si::{f64::Ratio, ratio::ratio};
 
 use super::{Constrained, Constraint, ConstraintError};
 
 /// Marker type enforcing that a value lies in the closed unit interval: `0 ≤ x ≤ 1`.
 ///
-/// Works with any `T: PartialOrd + Zero + One`, though in practice this
-/// constraint is most useful for floating-point scalars (e.g., `f64`).
+/// Requires `T: UnitBounds`.
+/// We provide [`UnitBounds`] implementations for `f32`, `f64`, and `uom::si::f64::Ratio`.
 ///
 /// You can construct a value constrained to `[0, 1]` using either the generic
 /// [`Constrained::new`] method or the convenient [`UnitInterval::new`]
@@ -16,6 +16,8 @@ use super::{Constrained, Constraint, ConstraintError};
 /// are also provided for the endpoints.
 ///
 /// # Examples
+///
+/// Using with `f64`:
 ///
 /// ```
 /// use twine_core::constraint::{Constrained, UnitInterval};
@@ -38,6 +40,21 @@ use super::{Constrained, Constraint, ConstraintError};
 /// assert!(UnitInterval::new(1.0001).is_err());
 /// assert!(UnitInterval::new(f64::NAN).is_err());
 /// ```
+///
+/// Using with `uom::si::f64::Ratio`:
+///
+/// ```
+/// use twine_core::constraint::{Constrained, UnitInterval};
+/// use uom::si::{f64::Ratio, ratio::{ratio, percent}};
+///
+/// let r = Constrained::<Ratio, UnitInterval>::new(Ratio::new::<ratio>(0.42)).unwrap();
+/// assert_eq!(r.as_ref().get::<percent>(), 42.0);
+///
+/// let z = UnitInterval::zero::<Ratio>();
+/// let o = UnitInterval::one::<Ratio>();
+/// assert_eq!(z.into_inner().get::<ratio>(), 0.0);
+/// assert_eq!(o.into_inner().get::<ratio>(), 1.0);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct UnitInterval;
 
@@ -51,19 +68,13 @@ impl UnitInterval {
     /// - [`ConstraintError::BelowMinimum`] if less than zero.
     /// - [`ConstraintError::AboveMaximum`] if greater than one.
     /// - [`ConstraintError::NotANumber`] if comparison is undefined (e.g., NaN).
-    pub fn new<T>(value: T) -> Result<Constrained<T, UnitInterval>, ConstraintError>
-    where
-        T: PartialOrd + Zero + One,
-    {
+    pub fn new<T: UnitBounds>(value: T) -> Result<Constrained<T, UnitInterval>, ConstraintError> {
         Constrained::<T, UnitInterval>::new(value)
     }
 
     /// Returns the lower bound (zero) as a constrained value.
     #[must_use]
-    pub fn zero<T>() -> Constrained<T, UnitInterval>
-    where
-        T: PartialOrd + Zero + One,
-    {
+    pub fn zero<T: UnitBounds>() -> Constrained<T, UnitInterval> {
         Constrained::<T, UnitInterval> {
             value: T::zero(),
             _marker: PhantomData,
@@ -72,10 +83,7 @@ impl UnitInterval {
 
     /// Returns the upper bound (one) as a constrained value.
     #[must_use]
-    pub fn one<T>() -> Constrained<T, UnitInterval>
-    where
-        T: PartialOrd + Zero + One,
-    {
+    pub fn one<T: UnitBounds>() -> Constrained<T, UnitInterval> {
         Constrained::<T, UnitInterval> {
             value: T::one(),
             _marker: PhantomData,
@@ -83,7 +91,7 @@ impl UnitInterval {
     }
 }
 
-impl<T: PartialOrd + Zero + One> Constraint<T> for UnitInterval {
+impl<T: UnitBounds> Constraint<T> for UnitInterval {
     fn check(value: &T) -> Result<(), ConstraintError> {
         match (value.partial_cmp(&T::zero()), value.partial_cmp(&T::one())) {
             (None, _) | (_, None) => Err(ConstraintError::NotANumber),
@@ -94,9 +102,49 @@ impl<T: PartialOrd + Zero + One> Constraint<T> for UnitInterval {
     }
 }
 
+/// Supplies 0 and 1 for types used in the closed unit interval [0, 1].
+///
+/// Implement this trait for your type `T` if you want to use it with
+/// `Constrained<T, UnitInterval>`.
+/// Implementations should ensure that `zero() <= one()` under the type's
+/// `PartialOrd` so the closed interval is well-formed.
+pub trait UnitBounds: PartialOrd {
+    fn zero() -> Self;
+    fn one() -> Self;
+}
+
+impl UnitBounds for f32 {
+    fn zero() -> Self {
+        0.0
+    }
+    fn one() -> Self {
+        1.0
+    }
+}
+
+impl UnitBounds for f64 {
+    fn zero() -> Self {
+        0.0
+    }
+    fn one() -> Self {
+        1.0
+    }
+}
+
+impl UnitBounds for Ratio {
+    fn zero() -> Self {
+        Ratio::new::<ratio>(0.0)
+    }
+    fn one() -> Self {
+        Ratio::new::<ratio>(1.0)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use uom::si::ratio::percent;
 
     #[test]
     #[allow(clippy::float_cmp)]
@@ -144,6 +192,35 @@ mod tests {
         assert!(matches!(
             UnitInterval::new(f64::NAN),
             Err(ConstraintError::NotANumber)
+        ));
+    }
+
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn uom_ratio_valid() {
+        assert!(Constrained::<Ratio, UnitInterval>::new(Ratio::new::<ratio>(0.0)).is_ok());
+        assert!(Constrained::<Ratio, UnitInterval>::new(Ratio::new::<ratio>(1.0)).is_ok());
+        assert!(UnitInterval::new(Ratio::new::<ratio>(0.5)).is_ok());
+
+        let z = UnitInterval::zero::<Ratio>();
+        let o = UnitInterval::one::<Ratio>();
+
+        assert_eq!(z.into_inner().get::<ratio>(), 0.0);
+        assert_eq!(z.into_inner().get::<percent>(), 0.0);
+
+        assert_eq!(o.into_inner().get::<ratio>(), 1.0);
+        assert_eq!(o.into_inner().get::<percent>(), 100.0);
+    }
+
+    #[test]
+    fn uom_ratio_out_of_range() {
+        assert!(matches!(
+            UnitInterval::new(Ratio::new::<ratio>(-0.1)),
+            Err(ConstraintError::BelowMinimum)
+        ));
+        assert!(matches!(
+            UnitInterval::new(Ratio::new::<ratio>(1.1)),
+            Err(ConstraintError::AboveMaximum)
         ));
     }
 }
