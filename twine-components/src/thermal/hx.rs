@@ -1,9 +1,9 @@
 #![allow(dead_code)]
 
-use std::ops::Deref;
+use std::ops::{Deref, Div};
 
 use twine_core::constraint::{Constrained, ConstraintError, NonNegative, UnitInterval};
-use uom::si::{f64::ThermalConductance, thermal_conductance::watt_per_kelvin};
+use uom::si::f64::{Ratio, ThermalConductance};
 
 /// A fluid capacitance rate.
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
@@ -36,9 +36,17 @@ impl Deref for CapacitanceRate {
     }
 }
 
+impl Div for CapacitanceRate {
+    type Output = Result<CapacityRatio, ConstraintError>;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        CapacityRatio::new(*self / *rhs)
+    }
+}
+
 /// The capacity ratio of two fluids in a heat exchanger.
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-struct CapacityRatio(Constrained<f64, UnitInterval>);
+struct CapacityRatio(Constrained<Ratio, UnitInterval>);
 
 impl CapacityRatio {
     /// Constructs a `CapacityRatio`.
@@ -46,7 +54,7 @@ impl CapacityRatio {
     /// # Errors
     ///
     /// Fails if the value is not in the unit interval.
-    fn new(value: f64) -> Result<Self, ConstraintError> {
+    fn new(value: Ratio) -> Result<Self, ConstraintError> {
         Ok(Self(UnitInterval::new(value)?))
     }
 
@@ -62,7 +70,7 @@ impl CapacityRatio {
             (c_dot_hot, c_dot_cold)
         };
 
-        Self::new(c_dot_min.get::<watt_per_kelvin>() / c_dot_max.get::<watt_per_kelvin>())
+        c_dot_min / c_dot_max
     }
 }
 
@@ -70,12 +78,14 @@ impl TryFrom<f64> for CapacityRatio {
     type Error = ConstraintError;
 
     fn try_from(value: f64) -> Result<Self, Self::Error> {
-        Self::new(value)
+        Self::new(value.into())
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use uom::si::thermal_conductance::watt_per_kelvin;
+
     use super::*;
 
     #[test]
