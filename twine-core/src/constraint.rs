@@ -82,6 +82,9 @@ pub enum ConstraintError {
     AboveMaximum,
 }
 
+/// A result type alias to use with [`Constraint`].
+pub type ConstraintResult<T, E = ConstraintError> = Result<T, E>;
+
 /// A wrapper enforcing a numeric constraint at construction time.
 ///
 /// Combine this with one of the provided marker types (such as [`NonNegative`])
