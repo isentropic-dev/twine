@@ -1,5 +1,8 @@
 //! Effectiveness–NTU relations for idealized heat exchanger configurations.
 
+mod one_fluid;
+mod stream;
+
 use twine_core::constraint::{Constrained, ConstraintResult, NonNegative, UnitInterval};
 use uom::si::{f64::Ratio, ratio::ratio};
 
