@@ -1,25 +1,17 @@
-use twine_core::constraint::{Constrained, StrictlyPositive};
 use twine_thermo::HeatFlow;
-use uom::si::f64::{MassRate, SpecificHeatCapacity, ThermalConductance, ThermodynamicTemperature};
+use uom::si::f64::ThermodynamicTemperature;
 
-pub(crate) type CapacitanceRate = ThermalConductance;
-
-pub(crate) fn capacitance_rate(
-    mass_rate: MassRate,
-    specific_heat: SpecificHeatCapacity,
-) -> CapacitanceRate {
-    mass_rate * specific_heat
-}
+use crate::thermal::hx::capacitance_rate::CapacitanceRate;
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct StreamInlet {
+pub struct StreamInlet {
     pub(crate) capacitance_rate: CapacitanceRate,
     pub(crate) temperature: ThermodynamicTemperature,
 }
 
 impl StreamInlet {
     pub(crate) fn new(
-        capacitance_rate: ThermalConductance,
+        capacitance_rate: CapacitanceRate,
         temperature: ThermodynamicTemperature,
     ) -> Self {
         Self {
@@ -54,7 +46,7 @@ impl StreamInlet {
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Stream {
-    pub(crate) capacitance_rate: ThermalConductance,
+    pub(crate) capacitance_rate: CapacitanceRate,
     inlet_temperature: ThermodynamicTemperature,
     outlet_temperature: ThermodynamicTemperature,
     pub(crate) heat_flow: HeatFlow,
@@ -69,107 +61,3 @@ impl Stream {
         matches!(self.heat_flow, HeatFlow::In(_))
     }
 }
-
-// #[derive(Debug, Clone, Copy)]
-// pub(crate) struct Stream {
-//     mass_rate: MassRate,
-//     specific_heat: SpecificHeatCapacity,
-//     inlet_temperature: ThermodynamicTemperature,
-// }
-
-// impl Stream {
-//     pub(crate) fn capacitance_rate(&self) -> ThermalConductance {
-//         self.mass_rate * self.specific_heat
-//     }
-// }
-
-// #[derive(Debug, Clone, Copy)]
-// pub(crate) enum HxPort {
-//     Stream(Stream),
-//     IsoThermal(ThermodynamicTemperature),
-// }
-
-// impl HxPort {
-//     pub(crate) fn stream(
-//         mass_rate: MassRate,
-//         specific_heat: SpecificHeatCapacity,
-//         inlet_temperature: ThermodynamicTemperature,
-//     ) -> Self {
-//         Self::Stream(Stream {
-//             mass_rate,
-//             specific_heat,
-//             inlet_temperature,
-//         })
-//     }
-
-//     pub(crate) fn isothermal(temperature: ThermodynamicTemperature) -> Self {
-//         Self::IsoThermal(temperature)
-//     }
-
-//     pub(crate) fn temperature(&self) -> ThermodynamicTemperature {
-//         match *self {
-//             HxPort::Stream(stream) => stream.inlet_temperature,
-//             HxPort::IsoThermal(temperature) => temperature,
-//         }
-//     }
-// }
-
-// #[derive(Debug, Clone, Copy)]
-// pub(crate) struct HxPortResult {
-//     pub(crate) port: HxPort,
-//     pub(crate) heat_flow: HeatFlow,
-// }
-
-// impl HxPortResult {
-//     pub(crate) fn is_source(&self) -> bool {
-//         matches!(self.heat_flow, HeatFlow::Out(_))
-//     }
-
-//     pub(crate) fn is_sink(&self) -> bool {
-//         matches!(self.heat_flow, HeatFlow::In(_))
-//     }
-
-//     pub(crate) fn outlet_temperature(&self) -> ThermodynamicTemperature {
-//         match (self.port, self.heat_flow) {
-//             (HxPort::Stream(stream), HeatFlow::In(heat_flow)) => {
-//                 stream.inlet_temperature + (heat_flow.into_inner() / stream.capacitance_rate())
-//             }
-//             (HxPort::Stream(stream), HeatFlow::Out(heat_flow)) => {
-//                 stream.inlet_temperature - (heat_flow.into_inner() / stream.capacitance_rate())
-//             }
-//             (HxPort::Stream(stream), HeatFlow::None) => stream.inlet_temperature,
-//             (HxPort::IsoThermal(temperature), _) => temperature,
-//         }
-//     }
-// }
-
-// pub(crate) struct HxResult {
-//     pub(crate) heat_flow: Power,
-// }
-
-// #[derive(Debug, Clone, Copy)]
-// pub(crate) struct HxHeatFlow {
-//     pub(crate) source: HxPort,
-//     pub(crate) sink: HxPort,
-//     pub(crate) value: Power,
-// }
-
-// impl HxHeatFlow {
-//     pub(crate) fn source_outlet_temperature(&self) -> ThermodynamicTemperature {
-//         match self.source {
-//             HxPort::Stream(stream) => {
-//                 stream.inlet_temperature - (self.value / stream.capacitance_rate())
-//             }
-//             HxPort::IsoThermal(temperature) => temperature,
-//         }
-//     }
-
-//     pub(crate) fn sink_outlet_temperature(&self) -> ThermodynamicTemperature {
-//         match self.sink {
-//             HxPort::Stream(stream) => {
-//                 stream.inlet_temperature + (self.value / stream.capacitance_rate())
-//             }
-//             HxPort::IsoThermal(temperature) => temperature,
-//         }
-//     }
-// }
