@@ -26,7 +26,8 @@ use crate::thermal::hx::{
 /// # Example
 ///
 /// ```rust
-/// use crate::thermal::hx::{
+/// # use twine_core::constraint::ConstraintError;
+/// use twine_components::thermal::hx::{
 ///     Arrangement, CapacitanceRate, KnownConductanceAndInlets, StreamInlet,
 /// };
 /// use uom::si::{
@@ -35,7 +36,7 @@ use crate::thermal::hx::{
 ///     thermodynamic_temperature::degree_celsius,
 /// };
 /// // Create a counter-flow heat exchanger to simulate.
-/// let hx = KnownConductanceAndInlets(Arrangement::CounterFlow);
+/// let hx = KnownConductanceAndInlets::new(Arrangement::CounterFlow);
 ///
 /// // Execute the simulation.
 /// //
@@ -55,6 +56,7 @@ use crate::thermal::hx::{
 ///         ),
 ///     ],
 /// )?;
+/// # Ok::<(), ConstraintError>(())
 /// ```
 pub struct KnownConductanceAndInlets(Arrangement);
 
@@ -65,6 +67,12 @@ pub struct KnownConductanceAndInletsResult {
 }
 
 impl KnownConductanceAndInlets {
+    /// Creates a new [`KnownConductanceAndInlets`].
+    #[must_use]
+    pub fn new(arrangement: Arrangement) -> Self {
+        Self(arrangement)
+    }
+
     fn calculate_max_heat_flow(inlets: [StreamInlet; 2]) -> ConstraintResult<[Stream; 2]> {
         let min_capacitance_rate = inlets[0].capacitance_rate.min(*inlets[1].capacitance_rate);
         let max_heat_flow =
@@ -141,7 +149,7 @@ mod tests {
 
     #[test]
     fn known_conductance_and_inlets() -> ConstraintResult<()> {
-        let hx = KnownConductanceAndInlets(Arrangement::CounterFlow);
+        let hx = KnownConductanceAndInlets::new(Arrangement::CounterFlow);
 
         let result = hx.call(
             ThermalConductance::new::<kilowatt_per_kelvin>(3. * 4.0_f64.ln()),
