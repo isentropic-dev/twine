@@ -16,7 +16,7 @@ use crate::thermal::hx::{
 /// Simulate heat exchanger performance given the conductance and inlet
 /// conditions.
 ///
-/// This uses the effectivenss-NTU method to determine the heat transfer between
+/// This uses the effectiveness-NTU method to determine the heat transfer between
 /// the two streams, then performs energy balances on each stream to determine
 /// their outlet temperatures.
 ///
