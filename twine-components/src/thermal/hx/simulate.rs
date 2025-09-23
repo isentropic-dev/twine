@@ -39,7 +39,7 @@ use crate::thermal::hx::{
 ///
 /// // Execute the simulation.
 /// //
-/// // The result will contain the effectiveness of the heat exchanger,  as well
+/// // The result will contain the effectiveness of the heat exchanger, as well
 /// // fully-resolved streams. Each stream contains its outlet temperature and
 /// // the heat transferred to/from it.
 /// let result = hx.call(
@@ -129,9 +129,10 @@ impl KnownConductanceAndInlets {
 
 #[cfg(test)]
 mod tests {
+    use approx::assert_relative_eq;
     use uom::si::{
-        f64::ThermodynamicTemperature, thermal_conductance::watt_per_kelvin,
-        thermodynamic_temperature::kelvin,
+        f64::ThermodynamicTemperature, power::kilowatt, ratio::ratio,
+        thermal_conductance::kilowatt_per_kelvin, thermodynamic_temperature::degree_celsius,
     };
 
     use crate::thermal::hx::capacitance_rate::CapacitanceRate;
@@ -139,24 +140,39 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_thing() -> ConstraintResult<()> {
+    fn known_conductance_and_inlets() -> ConstraintResult<()> {
         let hx = KnownConductanceAndInlets(Arrangement::CounterFlow);
 
         let result = hx.call(
-            ThermalConductance::new::<watt_per_kelvin>(50.),
+            ThermalConductance::new::<kilowatt_per_kelvin>(3. * 4.0_f64.ln()),
             [
                 StreamInlet::new(
-                    CapacitanceRate::new::<watt_per_kelvin>(10.)?,
-                    ThermodynamicTemperature::new::<kelvin>(300.),
+                    CapacitanceRate::new::<kilowatt_per_kelvin>(3.)?,
+                    ThermodynamicTemperature::new::<degree_celsius>(50.),
                 ),
                 StreamInlet::new(
-                    CapacitanceRate::new::<watt_per_kelvin>(20.)?,
-                    ThermodynamicTemperature::new::<kelvin>(250.),
+                    CapacitanceRate::new::<kilowatt_per_kelvin>(6.)?,
+                    ThermodynamicTemperature::new::<degree_celsius>(80.),
                 ),
             ],
         )?;
 
-        println!("{result:?}");
+        let KnownConductanceAndInletsResult {
+            streams,
+            effectiveness,
+        } = result;
+
+        assert_relative_eq!(effectiveness.get::<ratio>(), 2. / 3.);
+        assert!(matches!(streams[0].heat_flow, HeatFlow::In(_)));
+        assert!(matches!(streams[1].heat_flow, HeatFlow::Out(_)));
+        for stream in streams {
+            assert_relative_eq!(
+                stream.heat_flow.signed().get::<kilowatt>().abs(),
+                60.,
+                max_relative = 1e-15
+            );
+            assert_relative_eq!(stream.outlet_temperature.get::<degree_celsius>(), 70.);
+        }
 
         Ok(())
     }
