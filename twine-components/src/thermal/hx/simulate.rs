@@ -108,7 +108,7 @@ impl KnownConductanceAndInlets {
     /// # Errors
     ///
     /// This function will return an error if any of the provided inputs are not
-    /// withing their expected bounds.
+    /// within their expected bounds.
     pub fn call(
         &self,
         ua: ThermalConductance,
