@@ -65,3 +65,25 @@ impl Deref for Ntu {
         self.0.as_ref()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use approx::assert_relative_eq;
+    use uom::si::thermal_conductance::watt_per_kelvin;
+
+    use super::*;
+
+    #[test]
+    fn from_conductance_and_capacitance_rates() -> ConstraintResult<()> {
+        let ua = ThermalConductance::new::<watt_per_kelvin>(10.);
+        let capacitance_rates = [
+            CapacitanceRate::new::<watt_per_kelvin>(10.)?,
+            CapacitanceRate::new::<watt_per_kelvin>(20.)?,
+        ];
+
+        let ntu = Ntu::from_conductance_and_capacitance_rates(ua, capacitance_rates)?;
+
+        assert_relative_eq!(ntu.get::<ratio>(), 1.);
+        Ok(())
+    }
+}

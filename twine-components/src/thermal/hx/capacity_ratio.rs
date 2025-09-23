@@ -34,3 +34,24 @@ impl Deref for CapacityRatio {
         self.0.as_ref()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use approx::assert_relative_eq;
+    use uom::si::thermal_conductance::watt_per_kelvin;
+
+    use super::*;
+
+    #[test]
+    fn from_capacitance_rates() -> ConstraintResult<()> {
+        let capacitance_rates = [
+            CapacitanceRate::new::<watt_per_kelvin>(10.)?,
+            CapacitanceRate::new::<watt_per_kelvin>(20.)?,
+        ];
+
+        let capacity_ratio = CapacityRatio::from_capacitance_rates(capacitance_rates)?;
+
+        assert_relative_eq!(capacity_ratio.get::<ratio>(), 0.5);
+        Ok(())
+    }
+}

@@ -44,3 +44,26 @@ impl Div<CapacitanceRate> for Power {
         self / rhs.0.into_inner()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use approx::assert_relative_eq;
+    use uom::si::{
+        mass_rate::kilogram_per_second, specific_heat_capacity::joule_per_kilogram_kelvin,
+        thermal_conductance::watt_per_kelvin,
+    };
+
+    use super::*;
+
+    #[test]
+    fn from_mass_rate_and_specific_heat() -> ConstraintResult<()> {
+        let mass_rate = MassRate::new::<kilogram_per_second>(10.);
+        let specific_heat = SpecificHeatCapacity::new::<joule_per_kilogram_kelvin>(4000.);
+
+        let capacitance_rate =
+            CapacitanceRate::from_mass_rate_and_specific_heat(mass_rate, specific_heat)?;
+
+        assert_relative_eq!(capacitance_rate.get::<watt_per_kelvin>(), 40000.);
+        Ok(())
+    }
+}
