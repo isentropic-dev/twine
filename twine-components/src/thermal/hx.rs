@@ -1,3 +1,12 @@
+#![warn(missing_docs)]
+
+//! Tools for analyzing heat exchangers.
+//!
+//! This includes functions for:
+//! - Calculating effectiveness/NTU for different arrangements (i.e. counter-flow)
+//! - Simulating heat exchanger performance
+//! - Sizing heat exchangers given a desired performance
+
 mod arrangement;
 mod capacitance_rate;
 mod capacity_ratio;

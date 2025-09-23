@@ -1,14 +1,20 @@
-use std::ops::{Deref, Div};
+use std::ops::Deref;
 
 use twine_core::constraint::{Constrained, ConstraintResult, StrictlyPositive};
-use uom::si::f64::{
-    MassRate, Power, SpecificHeatCapacity, TemperatureInterval, ThermalConductance,
-};
+use uom::si::f64::{MassRate, SpecificHeatCapacity, ThermalConductance};
 
+/// The capacitance rate of a working fluid in a heat exchanger.
+///
+/// The capacitance rate must be > 0.
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct CapacitanceRate(Constrained<ThermalConductance, StrictlyPositive>);
 
 impl CapacitanceRate {
+    /// Create a [`CapacitanceRate`] from a value.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the value is <= 0.
     pub fn new<U>(value: f64) -> ConstraintResult<Self>
     where
         U: uom::si::thermal_conductance::Unit + uom::Conversion<f64, T = f64>,
@@ -17,10 +23,22 @@ impl CapacitanceRate {
         Self::from_quantity(quantity)
     }
 
+    /// Create a [`CapacitanceRate`] from a uom quantity.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the quantity is <= 0.
     pub fn from_quantity(quantity: ThermalConductance) -> ConstraintResult<Self> {
         Ok(Self(StrictlyPositive::new(quantity)?))
     }
 
+    /// Create a [`CapacitanceRate`] from a mass rate and specific heat
+    /// capacity.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if either the mass rate or specific
+    /// heat is <= 0.
     pub fn from_mass_rate_and_specific_heat(
         mass_rate: MassRate,
         specific_heat: SpecificHeatCapacity,
@@ -34,14 +52,6 @@ impl Deref for CapacitanceRate {
 
     fn deref(&self) -> &Self::Target {
         self.0.as_ref()
-    }
-}
-
-impl Div<CapacitanceRate> for Power {
-    type Output = TemperatureInterval;
-
-    fn div(self, rhs: CapacitanceRate) -> Self::Output {
-        self / rhs.0.into_inner()
     }
 }
 

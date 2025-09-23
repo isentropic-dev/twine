@@ -1,18 +1,26 @@
 use crate::thermal::hx::{capacity_ratio::CapacityRatio, effectiveness::Effectiveness, ntu::Ntu};
 
+/// Heat exchanger arrangements.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy)]
 pub enum Arrangement {
+    /// A counter-flow arrangement, where fluids flow in opposing directions.
     CounterFlow,
 }
 
 impl Arrangement {
+    /// Calculate the effectiveness for an arrangement given the [NTU](Ntu) and
+    ///[capacity ratio](CapacityRatio).
+    #[must_use]
     pub fn effectiveness(&self, ntu: Ntu, capacity_ratio: CapacityRatio) -> Effectiveness {
         match self {
             Arrangement::CounterFlow => Effectiveness::counter_flow(ntu, capacity_ratio),
         }
     }
 
+    /// Calculate the [NTU](Ntu) for an arrangement given the
+    /// [effectiveness](Effectiveness) and [capacity ratio](CapacityRatio).
+    #[must_use]
     pub fn ntu(&self, effectiveness: Effectiveness, capacity_ratio: CapacityRatio) -> Ntu {
         match self {
             Arrangement::CounterFlow => Ntu::counter_flow(effectiveness, capacity_ratio),
