@@ -20,7 +20,7 @@ use crate::thermal::hx::{
 /// the two streams, then performs energy balances on each stream to determine
 /// their outlet temperatures.
 ///
-/// This assumes the both working fluids have a constant specific heat capacity
+/// This assumes that both working fluids have a constant specific heat capacity
 /// as they pass through the heat exchanger.
 ///
 /// # Example
