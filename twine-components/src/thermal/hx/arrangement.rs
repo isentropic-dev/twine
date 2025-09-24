@@ -1,63 +1,12 @@
-use uom::si::ratio::ratio;
+mod counterflow;
 
-use crate::thermal::hx::{capacity_ratio::CapacityRatio, effectiveness::Effectiveness, ntu::Ntu};
-
-pub trait Arrangement {
-    /// Calculate the effectiveness for an arrangement given the [NTU](Ntu) and
-    ///[capacity ratio](CapacityRatio).
-    fn effectiveness(&self, ntu: Ntu, capacity_ratio: CapacityRatio) -> Effectiveness;
-
-    /// Calculate the [NTU](Ntu) for an arrangement given the
-    /// [effectiveness](Effectiveness) and [capacity ratio](CapacityRatio).
-    fn ntu(&self, effectiveness: Effectiveness, capacity_ratio: CapacityRatio) -> Ntu;
-}
-
-/// A counter-flow arrangement.
-#[derive(Debug, Clone, Copy)]
-pub struct CounterFlow;
-
-impl Arrangement for CounterFlow {
-    fn effectiveness(&self, ntu: Ntu, capacity_ratio: CapacityRatio) -> Effectiveness {
-        let cr = capacity_ratio.get::<ratio>();
-
-        if cr == 0. {
-            return Effectiveness::infinite_capacitance_rate(ntu);
-        }
-
-        Effectiveness::new({
-            let ntu = ntu.get::<ratio>();
-            if cr < 1. {
-                (1. - (-ntu * (1. - cr)).exp()) / (1. - cr * (-ntu * (1. - cr)).exp())
-            } else {
-                ntu / (1. + ntu)
-            }
-        })
-        .expect("ntu should always yield valid effectiveness")
-    }
-
-    fn ntu(&self, effectiveness: Effectiveness, capacity_ratio: CapacityRatio) -> Ntu {
-        let cr = capacity_ratio.get::<ratio>();
-
-        if cr == 0. {
-            return Ntu::infinite_capacitance_rate(effectiveness);
-        }
-
-        Ntu::new({
-            let eff = effectiveness.get::<ratio>();
-            if cr < 1. {
-                (((1. - eff * cr) / (1. - eff)).ln()) / (1. - cr)
-            } else {
-                // cr == 1
-                eff / (1. - eff)
-            }
-        })
-        .expect("effectiveness should always yield valid ntu")
-    }
-}
+pub use counterflow::CounterFlow;
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::thermal::hx::{CapacityRatio, EffectivenessNtu, effectiveness_ntu::Ntu};
+
     use approx::assert_relative_eq;
     use twine_core::constraint::ConstraintResult;
     use uom::si::ratio::ratio;

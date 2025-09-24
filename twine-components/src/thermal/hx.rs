@@ -10,24 +10,19 @@
 mod arrangement;
 mod capacitance_rate;
 mod capacity_ratio;
-mod effectiveness;
-mod ntu;
-mod scenario;
+mod effectiveness_ntu;
+pub mod functional;
 mod stream;
 
 pub use arrangement::CounterFlow;
 pub use capacitance_rate::CapacitanceRate;
 pub use capacity_ratio::CapacityRatio;
-pub use effectiveness::Effectiveness;
-pub use ntu::Ntu;
-pub use scenario::Scenario;
+pub use effectiveness_ntu::{Effectiveness, EffectivenessNtu, Ntu};
 pub use stream::StreamInlet;
 use twine_core::constraint::ConstraintResult;
+use uom::si::f64::ThermalConductance;
 
-use crate::thermal::hx::{
-    arrangement::Arrangement, scenario::known_conductance_and_inlets::known_conductance_and_inlets,
-    stream::Stream,
-};
+use crate::thermal::hx::functional::KnownConductanceAndInletsResult;
 
 /// Analyze heat exchanger performance in various scenarios.
 ///
@@ -71,21 +66,16 @@ use crate::thermal::hx::{
 ///
 /// This function will return an error if any of the provided inputs are not
 /// within their expected bounds.
-pub fn hx(arrangement: &impl Arrangement, scenario: Scenario) -> ConstraintResult<HxResult> {
-    match scenario {
-        Scenario::KnownConductanceAndInlets { ua, inlets } => {
-            known_conductance_and_inlets(arrangement, ua, inlets)
-        }
-    }
-}
+pub struct Hx<T>(T);
 
-/// Result of calling the heat exchanger component.
-#[derive(Debug, Clone, Copy)]
-pub struct HxResult {
-    /// The fully-resolved heat exchanger streams.
-    pub streams: [Stream; 2],
-    /// The effectiveness of the heat exchanger.
-    pub effectiveness: Effectiveness,
+impl<T: EffectivenessNtu> Hx<T> {
+    pub fn known_conductance_and_inlets(
+        &self,
+        ua: ThermalConductance,
+        inlets: [StreamInlet; 2],
+    ) -> ConstraintResult<KnownConductanceAndInletsResult> {
+        functional::known_conductance_and_inlets(&self.0, ua, inlets)
+    }
 }
 
 #[cfg(test)]
@@ -104,24 +94,23 @@ mod tests {
 
     #[test]
     fn hx_usability() -> ConstraintResult<()> {
-        let result = hx(
-            &CounterFlow,
-            Scenario::KnownConductanceAndInlets {
-                ua: ThermalConductance::new::<kilowatt_per_kelvin>(3. * 4.0_f64.ln()),
-                inlets: [
-                    StreamInlet::new(
-                        CapacitanceRate::new::<kilowatt_per_kelvin>(3.)?,
-                        ThermodynamicTemperature::new::<degree_celsius>(50.),
-                    ),
-                    StreamInlet::new(
-                        CapacitanceRate::new::<kilowatt_per_kelvin>(6.)?,
-                        ThermodynamicTemperature::new::<degree_celsius>(80.),
-                    ),
-                ],
-            },
+        let hx = Hx(CounterFlow);
+
+        let result = hx.known_conductance_and_inlets(
+            ThermalConductance::new::<kilowatt_per_kelvin>(3. * 4.0_f64.ln()),
+            [
+                StreamInlet::new(
+                    CapacitanceRate::new::<kilowatt_per_kelvin>(3.)?,
+                    ThermodynamicTemperature::new::<degree_celsius>(50.),
+                ),
+                StreamInlet::new(
+                    CapacitanceRate::new::<kilowatt_per_kelvin>(6.)?,
+                    ThermodynamicTemperature::new::<degree_celsius>(80.),
+                ),
+            ],
         )?;
 
-        let HxResult {
+        let KnownConductanceAndInletsResult {
             streams,
             effectiveness,
         } = result;

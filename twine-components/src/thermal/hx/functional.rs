@@ -1,3 +1,5 @@
+//! The functional API for hx operations.
+
 use twine_core::constraint::ConstraintResult;
 use twine_thermo::{HeatFlow, units::TemperatureDifference};
 use uom::{
@@ -5,10 +7,12 @@ use uom::{
     si::f64::{Power, ThermalConductance},
 };
 
-use crate::thermal::hx::{Arrangement, CapacityRatio, HxResult, Ntu, StreamInlet, stream::Stream};
+use crate::thermal::hx::{
+    CapacityRatio, Effectiveness, EffectivenessNtu, Ntu, StreamInlet, stream::Stream,
+};
 
 /// Analyze a heat exchanger when its conductance and inlet conditions are
-///known.
+/// known.
 ///
 /// Given the conductance of the heat exchanger and inlet conditions as
 /// [`StreamInlet`], the fully resolved [streams](Stream) and heat exchanger
@@ -18,11 +22,11 @@ use crate::thermal::hx::{Arrangement, CapacityRatio, HxResult, Ntu, StreamInlet,
 ///
 /// This function will return an error if any of the provided inputs are not
 /// within their expected bounds.
-pub(crate) fn known_conductance_and_inlets(
-    arrangement: &impl Arrangement,
+pub fn known_conductance_and_inlets(
+    arrangement: &impl EffectivenessNtu,
     ua: ThermalConductance,
     inlets: [StreamInlet; 2],
-) -> ConstraintResult<HxResult> {
+) -> ConstraintResult<KnownConductanceAndInletsResult> {
     let streams_with_max_heat = calculate_max_heat_flow(inlets)?;
     let capacitance_rates = [inlets[0].capacitance_rate, inlets[1].capacitance_rate];
     let effectiveness = arrangement.effectiveness(
@@ -30,7 +34,7 @@ pub(crate) fn known_conductance_and_inlets(
         CapacityRatio::from_capacitance_rates(capacitance_rates)?,
     );
 
-    Ok(HxResult {
+    Ok(KnownConductanceAndInletsResult {
         streams: [
             inlets[0].with_heat_flow(HeatFlow::from_signed(
                 *effectiveness * streams_with_max_heat[0].heat_flow.signed(),
@@ -41,6 +45,12 @@ pub(crate) fn known_conductance_and_inlets(
         ],
         effectiveness,
     })
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct KnownConductanceAndInletsResult {
+    pub streams: [Stream; 2],
+    pub effectiveness: Effectiveness,
 }
 
 fn calculate_max_heat_flow(inlets: [StreamInlet; 2]) -> ConstraintResult<[Stream; 2]> {
@@ -97,7 +107,7 @@ mod tests {
             ],
         )?;
 
-        let HxResult {
+        let KnownConductanceAndInletsResult {
             streams,
             effectiveness,
         } = result;
