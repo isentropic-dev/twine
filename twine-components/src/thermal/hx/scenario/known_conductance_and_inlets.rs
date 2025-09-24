@@ -19,7 +19,7 @@ use crate::thermal::hx::{Arrangement, CapacityRatio, HxResult, Ntu, StreamInlet,
 /// This function will return an error if any of the provided inputs are not
 /// within their expected bounds.
 pub(crate) fn known_conductance_and_inlets(
-    arrangement: Arrangement,
+    arrangement: &impl Arrangement,
     ua: ThermalConductance,
     inlets: [StreamInlet; 2],
 ) -> ConstraintResult<HxResult> {
@@ -76,14 +76,14 @@ mod tests {
         thermal_conductance::kilowatt_per_kelvin, thermodynamic_temperature::degree_celsius,
     };
 
-    use crate::thermal::hx::CapacitanceRate;
+    use crate::thermal::hx::{CapacitanceRate, arrangement::CounterFlow};
 
     use super::*;
 
     #[test]
     fn known_conductance_and_inlets() -> ConstraintResult<()> {
         let result = super::known_conductance_and_inlets(
-            Arrangement::CounterFlow,
+            &CounterFlow,
             ThermalConductance::new::<kilowatt_per_kelvin>(3. * 4.0_f64.ln()),
             [
                 StreamInlet::new(

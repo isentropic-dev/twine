@@ -15,16 +15,17 @@ mod ntu;
 mod scenario;
 mod stream;
 
-pub use arrangement::Arrangement;
+pub use arrangement::CounterFlow;
 pub use capacitance_rate::CapacitanceRate;
 pub use capacity_ratio::CapacityRatio;
 pub use effectiveness::Effectiveness;
 pub use ntu::Ntu;
+pub use scenario::Scenario;
 pub use stream::StreamInlet;
 use twine_core::constraint::ConstraintResult;
 
 use crate::thermal::hx::{
-    scenario::{Scenario, known_conductance_and_inlets::known_conductance_and_inlets},
+    arrangement::Arrangement, scenario::known_conductance_and_inlets::known_conductance_and_inlets,
     stream::Stream,
 };
 
@@ -37,17 +38,18 @@ use crate::thermal::hx::{
 ///
 /// ```rust
 /// # use twine_core::constraint::ConstraintError;
-/// use twine_components::thermal::hx::{
-///     hx, Arrangement, CapacitanceRate, Scenario, StreamInlet,
-/// };
 /// use uom::si::{
 ///     f64::{ThermalConductance, ThermodynamicTemperature},
-///     thermal_conductance::watt_per_kelvin,
+///     thermal_conductance::kilowatt_per_kelvin,
 ///     thermodynamic_temperature::degree_celsius,
 /// };
 ///
+/// use twine_components::thermal::hx::{
+///     CapacitanceRate, CounterFlow, HxResult, Scenario, StreamInlet, hx,
+/// };
+///
 /// let result = hx(
-///     Arrangement::CounterFlow,
+///     &CounterFlow,
 ///     Scenario::KnownConductanceAndInlets {
 ///         ua: ThermalConductance::new::<kilowatt_per_kelvin>(3. * 4.0_f64.ln()),
 ///         inlets: [
@@ -62,7 +64,6 @@ use crate::thermal::hx::{
 ///         ],
 ///     },
 /// )?;
-///
 /// # Ok::<(), ConstraintError>(())
 /// ```
 ///
@@ -70,7 +71,7 @@ use crate::thermal::hx::{
 ///
 /// This function will return an error if any of the provided inputs are not
 /// within their expected bounds.
-pub fn hx(arrangement: Arrangement, scenario: Scenario) -> ConstraintResult<HxResult> {
+pub fn hx(arrangement: &impl Arrangement, scenario: Scenario) -> ConstraintResult<HxResult> {
     match scenario {
         Scenario::KnownConductanceAndInlets { ua, inlets } => {
             known_conductance_and_inlets(arrangement, ua, inlets)
@@ -104,7 +105,7 @@ mod tests {
     #[test]
     fn hx_usability() -> ConstraintResult<()> {
         let result = hx(
-            Arrangement::CounterFlow,
+            &CounterFlow,
             Scenario::KnownConductanceAndInlets {
                 ua: ThermalConductance::new::<kilowatt_per_kelvin>(3. * 4.0_f64.ln()),
                 inlets: [

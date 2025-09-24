@@ -6,9 +6,7 @@ use uom::si::{
     ratio::ratio,
 };
 
-use crate::thermal::hx::{
-    capacitance_rate::CapacitanceRate, capacity_ratio::CapacityRatio, effectiveness::Effectiveness,
-};
+use crate::thermal::hx::{capacitance_rate::CapacitanceRate, effectiveness::Effectiveness};
 
 /// The number of transfer units for a heat exchanger.
 ///
@@ -56,31 +54,9 @@ impl Ntu {
         Self::from_quantity(ua / capacitance_rates[0].min(*capacitance_rates[1]))
     }
 
-    fn infinite_capacitance_rate(effectiveness: Effectiveness) -> Self {
+    pub(super) fn infinite_capacitance_rate(effectiveness: Effectiveness) -> Self {
         let eff = effectiveness.get::<ratio>();
         Self::new(-(1. - eff).ln()).expect("effectiveness should always yield valid ntu")
-    }
-
-    pub(super) fn counter_flow(
-        effectiveness: Effectiveness,
-        capacity_ratio: CapacityRatio,
-    ) -> Self {
-        let cr = capacity_ratio.get::<ratio>();
-
-        if cr == 0. {
-            return Self::infinite_capacitance_rate(effectiveness);
-        }
-
-        Self::new({
-            let eff = effectiveness.get::<ratio>();
-            if cr < 1. {
-                (((1. - eff * cr) / (1. - eff)).ln()) / (1. - cr)
-            } else {
-                // cr == 1
-                eff / (1. - eff)
-            }
-        })
-        .expect("effectiveness should always yield valid ntu")
     }
 }
 

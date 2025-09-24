@@ -3,7 +3,7 @@ use std::ops::Deref;
 use twine_core::constraint::{Constrained, ConstraintResult, UnitInterval};
 use uom::si::{f64::Ratio, ratio::ratio};
 
-use crate::thermal::hx::{capacity_ratio::CapacityRatio, ntu::Ntu};
+use crate::thermal::hx::ntu::Ntu;
 
 /// The effectiveness of a heat exchanger.
 ///
@@ -36,27 +36,9 @@ impl Effectiveness {
         Ok(Self(UnitInterval::new(quantity)?))
     }
 
-    fn infinite_capacitance_rate(ntu: Ntu) -> Self {
+    pub(super) fn infinite_capacitance_rate(ntu: Ntu) -> Self {
         let ntu = ntu.get::<ratio>();
         Self::new(1. - (-ntu).exp()).expect("ntu should always yield valid effectiveness")
-    }
-
-    pub(super) fn counter_flow(ntu: Ntu, capacity_ratio: CapacityRatio) -> Self {
-        let cr = capacity_ratio.get::<ratio>();
-
-        if cr == 0. {
-            return Self::infinite_capacitance_rate(ntu);
-        }
-
-        Self::new({
-            let ntu = ntu.get::<ratio>();
-            if cr < 1. {
-                (1. - (-ntu * (1. - cr)).exp()) / (1. - cr * (-ntu * (1. - cr)).exp())
-            } else {
-                ntu / (1. + ntu)
-            }
-        })
-        .expect("ntu should always yield valid effectiveness")
     }
 }
 
