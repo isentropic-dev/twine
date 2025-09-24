@@ -32,34 +32,32 @@ use crate::thermal::hx::functional::KnownConductanceAndInletsResult;
 /// # Example
 ///
 /// ```rust
-/// # use twine_core::constraint::ConstraintError;
+/// # use twine_core::constraint::ConstraintResult;
 /// use uom::si::{
 ///     f64::{ThermalConductance, ThermodynamicTemperature},
 ///     thermal_conductance::kilowatt_per_kelvin,
 ///     thermodynamic_temperature::degree_celsius,
 /// };
+/// use twine_components::thermal::hx::{CapacitanceRate, CounterFlow, Hx, StreamInlet};
 ///
-/// use twine_components::thermal::hx::{
-///     CapacitanceRate, CounterFlow, HxResult, Scenario, StreamInlet, hx,
-/// };
+/// # fn main() -> ConstraintResult<()> {
+/// let hx = Hx::new(CounterFlow);
 ///
-/// let result = hx(
-///     &CounterFlow,
-///     Scenario::KnownConductanceAndInlets {
-///         ua: ThermalConductance::new::<kilowatt_per_kelvin>(3. * 4.0_f64.ln()),
-///         inlets: [
-///             StreamInlet::new(
-///                 CapacitanceRate::new::<kilowatt_per_kelvin>(3.)?,
-///                 ThermodynamicTemperature::new::<degree_celsius>(50.),
-///             ),
-///             StreamInlet::new(
-///                 CapacitanceRate::new::<kilowatt_per_kelvin>(6.)?,
-///                 ThermodynamicTemperature::new::<degree_celsius>(80.),
-///             ),
-///         ],
-///     },
+/// let result = hx.known_conductance_and_inlets(
+///     ThermalConductance::new::<kilowatt_per_kelvin>(3. * 4.0_f64.ln()),
+///     [
+///         StreamInlet::new(
+///             CapacitanceRate::new::<kilowatt_per_kelvin>(3.)?,
+///             ThermodynamicTemperature::new::<degree_celsius>(50.),
+///         ),
+///         StreamInlet::new(
+///             CapacitanceRate::new::<kilowatt_per_kelvin>(6.)?,
+///             ThermodynamicTemperature::new::<degree_celsius>(80.),
+///         ),
+///     ],
 /// )?;
-/// # Ok::<(), ConstraintError>(())
+/// # Ok(())
+/// # }
 /// ```
 ///
 /// # Errors
@@ -67,6 +65,13 @@ use crate::thermal::hx::functional::KnownConductanceAndInletsResult;
 /// This function will return an error if any of the provided inputs are not
 /// within their expected bounds.
 pub struct Hx<T>(T);
+
+impl<T> Hx<T> {
+    /// Create a new heat exchanger configured with the supplied arrangement.
+    pub const fn new(arrangement: T) -> Self {
+        Self(arrangement)
+    }
+}
 
 impl<T: EffectivenessNtu> Hx<T> {
     pub fn known_conductance_and_inlets(
