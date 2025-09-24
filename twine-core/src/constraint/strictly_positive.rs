@@ -31,7 +31,7 @@ use super::{Constrained, Constraint, ConstraintError};
 /// assert!(StrictlyPositive::new(-1).is_err());
 /// assert!(StrictlyPositive::new(f64::NAN).is_err());
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct StrictlyPositive;
 
 impl StrictlyPositive {
