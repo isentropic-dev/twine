@@ -103,7 +103,7 @@ mod tests {
 
     #[test]
     fn hx_usability() -> ConstraintResult<()> {
-        let hx = Hx(CounterFlow);
+        let hx = Hx::new(CounterFlow);
 
         let result = hx.known_conductance_and_inlets(
             ThermalConductance::new::<kilowatt_per_kelvin>(3. * 4.0_f64.ln()),
