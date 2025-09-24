@@ -8,9 +8,10 @@ use uom::si::{
 
 use crate::thermal::hx::{CapacitanceRate, CapacityRatio};
 
+/// Relationship between effectiveness and NTU for a flow arrangement.
 pub trait EffectivenessNtu {
     /// Calculate the effectiveness for an arrangement given the [NTU](Ntu) and
-    ///[capacity ratio](CapacityRatio).
+    /// [capacity ratio](CapacityRatio).
     fn effectiveness(&self, ntu: Ntu, capacity_ratio: CapacityRatio) -> Effectiveness;
 
     /// Calculate the [NTU](Ntu) for an arrangement given the
@@ -28,23 +29,21 @@ pub trait EffectivenessNtu {
 pub struct Effectiveness(Constrained<Ratio, UnitInterval>);
 
 impl Effectiveness {
-    /// Create an [`Effectiveness`] from a value.
+    /// Create an [`Effectiveness`] from a scalar value.
     ///
     /// # Errors
     ///
-    /// This function will return an error if the value is not in the interval
-    /// [0, 1].
+    /// Returns `Err` if the value lies outside the interval [0, 1].
     pub fn new(value: f64) -> ConstraintResult<Self> {
         let quantity = Ratio::new::<ratio>(value);
         Self::from_quantity(quantity)
     }
 
-    /// Create an [`Effectiveness`] from a uom quantity.
+    /// Create an [`Effectiveness`] from a ratio quantity.
     ///
     /// # Errors
     ///
-    /// This function will return an error if the quantity is not in the
-    /// interval [0, 1].
+    /// Returns `Err` if the quantity lies outside the interval [0, 1].
     pub fn from_quantity(quantity: Ratio) -> ConstraintResult<Self> {
         Ok(Self(UnitInterval::new(quantity)?))
     }
@@ -73,21 +72,21 @@ impl Deref for Effectiveness {
 pub struct Ntu(Constrained<Ratio, NonNegative>);
 
 impl Ntu {
-    /// Create an [`Ntu`] from a value.
+    /// Create an [`Ntu`] from a scalar value.
     ///
     /// # Errors
     ///
-    /// This function will return an error if the value is < 0.
+    /// Returns `Err` if the value is negative.
     pub fn new(value: f64) -> ConstraintResult<Self> {
         let quantity = Ratio::new::<ratio>(value);
         Self::from_quantity(quantity)
     }
 
-    /// Create an [`Ntu`] from a uom quantity.
+    /// Create an [`Ntu`] from a ratio quantity.
     ///
     /// # Errors
     ///
-    /// This function will return an error if the quantity is < 0.
+    /// Returns `Err` if the quantity is negative.
     pub fn from_quantity(quantity: Ratio) -> ConstraintResult<Self> {
         Ok(Self(NonNegative::new(quantity)?))
     }
@@ -100,8 +99,8 @@ impl Ntu {
     ///
     /// # Errors
     ///
-    /// This function will return an error if either the conductance or
-    /// [capacitance rates](CapacitanceRate) are < 0.
+    /// Returns `Err` if the resulting NTU would be negative (for example, when
+    /// `ua` is negative).
     pub fn from_conductance_and_capacitance_rates(
         ua: ThermalConductance,
         capacitance_rates: [CapacitanceRate; 2],

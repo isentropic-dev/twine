@@ -2,10 +2,9 @@
 
 //! Tools for analyzing heat exchangers.
 //!
-//! This includes functions for:
-//! - Calculating effectiveness/NTU for different arrangements (i.e. counter-flow)
-//! - Simulating heat exchanger performance
-//! - Sizing heat exchangers given a desired performance
+//! These utilities provide standard effectiveness-NTU relationships, helpers
+//! for sizing exchangers, and functional APIs for working directly with
+//! thermodynamic primitives.
 
 mod arrangement;
 mod capacitance_rate;
@@ -24,10 +23,13 @@ use uom::si::f64::ThermalConductance;
 
 use crate::thermal::hx::functional::KnownConductanceAndInletsResult;
 
-/// Analyze heat exchanger performance in various scenarios.
+/// High-level entry point for solving heat exchanger scenarios with a chosen
+/// arrangement.
 ///
-/// This assumes that both working fluids have a constant specific heat capacity
-/// as they pass through the heat exchanger.
+/// The wrapped arrangement must implement [`EffectivenessNtu`], providing the
+/// effectiveness/NTU relationships consumed by helper methods. Calculations
+/// assume both fluids maintain a constant specific heat as they traverse the
+/// exchanger.
 ///
 /// # Example
 ///
@@ -43,7 +45,7 @@ use crate::thermal::hx::functional::KnownConductanceAndInletsResult;
 /// # fn main() -> ConstraintResult<()> {
 /// let hx = Hx::new(CounterFlow);
 ///
-/// let result = hx.known_conductance_and_inlets(
+/// let _ = hx.known_conductance_and_inlets(
 ///     ThermalConductance::new::<kilowatt_per_kelvin>(3. * 4.0_f64.ln()),
 ///     [
 ///         StreamInlet::new(
@@ -59,21 +61,23 @@ use crate::thermal::hx::functional::KnownConductanceAndInletsResult;
 /// # Ok(())
 /// # }
 /// ```
-///
-/// # Errors
-///
-/// This function will return an error if any of the provided inputs are not
-/// within their expected bounds.
 pub struct Hx<T>(T);
 
 impl<T> Hx<T> {
-    /// Create a new heat exchanger configured with the supplied arrangement.
+    /// Create a heat exchanger configured with the supplied arrangement.
     pub const fn new(arrangement: T) -> Self {
         Self(arrangement)
     }
 }
 
 impl<T: EffectivenessNtu> Hx<T> {
+    /// Resolve outlet conditions for both streams using a known conductance and
+    /// inlet states, returning a [`KnownConductanceAndInletsResult`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any of the supplied thermodynamic quantities violate
+    /// their constraints (for example, a non-positive capacitance rate).
     pub fn known_conductance_and_inlets(
         &self,
         ua: ThermalConductance,

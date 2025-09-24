@@ -3,10 +3,9 @@ use uom::si::f64::ThermodynamicTemperature;
 
 use crate::thermal::hx::capacitance_rate::CapacitanceRate;
 
-/// The conditions at the inlet of a heat exchanger.
+/// Inlet state for a stream entering the heat exchanger.
 ///
-/// This assumes that the specific heat of the fluid remains constant as it
-/// passes through the heat exchanger.
+/// Assumes the fluid's specific heat remains constant through the exchanger.
 #[derive(Debug, Clone, Copy)]
 pub struct StreamInlet {
     pub(crate) capacitance_rate: CapacitanceRate,
@@ -14,7 +13,7 @@ pub struct StreamInlet {
 }
 
 impl StreamInlet {
-    /// Creates a new [`StreamInlet`].
+    /// Capture the inlet capacitance rate and temperature.
     #[must_use]
     pub fn new(capacitance_rate: CapacitanceRate, temperature: ThermodynamicTemperature) -> Self {
         Self {
@@ -50,9 +49,16 @@ impl StreamInlet {
 /// A fully-resolved heat exchanger stream.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Stream {
+    /// Effective capacitance rate for the stream.
     pub capacitance_rate: CapacitanceRate,
+    /// Temperature at the exchanger inlet.
     pub inlet_temperature: ThermodynamicTemperature,
+    /// Temperature after the stream leaves the exchanger.
+    ///
+    /// When the capacitance rate tends to infinity this matches the inlet
+    /// temperature.
     pub outlet_temperature: ThermodynamicTemperature,
+    /// Net heat flow direction and magnitude for the stream.
     pub heat_flow: HeatFlow,
 }
 

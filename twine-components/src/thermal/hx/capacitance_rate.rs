@@ -3,18 +3,18 @@ use std::ops::Deref;
 use twine_core::constraint::{Constrained, ConstraintResult, StrictlyPositive};
 use uom::si::f64::{MassRate, SpecificHeatCapacity, ThermalConductance};
 
-/// The capacitance rate of a working fluid in a heat exchanger.
+/// Capacitance rate (`m_dot` * `c_p`) of a working fluid in a heat exchanger.
 ///
-/// The capacitance rate must be > 0.
+/// The value must be strictly positive.
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct CapacitanceRate(Constrained<ThermalConductance, StrictlyPositive>);
 
 impl CapacitanceRate {
-    /// Create a [`CapacitanceRate`] from a value.
+    /// Create a [`CapacitanceRate`] from a scalar value.
     ///
     /// # Errors
     ///
-    /// This function will return an error if the value is <= 0.
+    /// Returns `Err` if the value is not strictly positive.
     pub fn new<U>(value: f64) -> ConstraintResult<Self>
     where
         U: uom::si::thermal_conductance::Unit + uom::Conversion<f64, T = f64>,
@@ -23,11 +23,11 @@ impl CapacitanceRate {
         Self::from_quantity(quantity)
     }
 
-    /// Create a [`CapacitanceRate`] from a uom quantity.
+    /// Create a [`CapacitanceRate`] from a quantity with thermal-conductance units.
     ///
     /// # Errors
     ///
-    /// This function will return an error if the quantity is <= 0.
+    /// Returns `Err` if the quantity is not strictly positive.
     pub fn from_quantity(quantity: ThermalConductance) -> ConstraintResult<Self> {
         Ok(Self(StrictlyPositive::new(quantity)?))
     }
@@ -37,8 +37,7 @@ impl CapacitanceRate {
     ///
     /// # Errors
     ///
-    /// This function will return an error if either the mass rate or specific
-    /// heat is <= 0.
+    /// Returns `Err` if either operand is not strictly positive.
     pub fn from_mass_rate_and_specific_heat(
         mass_rate: MassRate,
         specific_heat: SpecificHeatCapacity,

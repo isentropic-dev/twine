@@ -1,3 +1,5 @@
+//! Flow arrangements supported by the heat exchanger utilities.
+
 mod counterflow;
 
 pub use counterflow::CounterFlow;

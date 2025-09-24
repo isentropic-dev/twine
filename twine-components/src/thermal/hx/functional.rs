@@ -1,4 +1,4 @@
-//! The functional API for hx operations.
+//! Functional helpers for common heat exchanger calculations.
 
 use twine_core::constraint::ConstraintResult;
 use twine_thermo::{HeatFlow, units::TemperatureDifference};
@@ -57,8 +57,8 @@ use crate::thermal::hx::{
 ///
 /// # Errors
 ///
-/// This function will return an error if any of the provided inputs are not
-/// within their expected bounds.
+/// Returns `Err` if any supplied quantity violates its constraints (for
+/// example, a non-positive capacitance rate).
 pub fn known_conductance_and_inlets(
     arrangement: &impl EffectivenessNtu,
     ua: ThermalConductance,
@@ -84,9 +84,12 @@ pub fn known_conductance_and_inlets(
     })
 }
 
+/// Resolved exchanger state returned from [`known_conductance_and_inlets`].
 #[derive(Debug, Clone, Copy)]
 pub struct KnownConductanceAndInletsResult {
+    /// Final state for each stream after traversing the exchanger (same order as the inputs).
     pub streams: [Stream; 2],
+    /// Overall effectiveness computed for the scenario.
     pub effectiveness: Effectiveness,
 }
 

@@ -1,3 +1,5 @@
+//! Counter-flow effectiveness-NTU relationships.
+
 use uom::si::ratio::ratio;
 
 use crate::thermal::hx::{
@@ -5,7 +7,7 @@ use crate::thermal::hx::{
     effectiveness_ntu::{Effectiveness, EffectivenessNtu, Ntu},
 };
 
-/// A counter-flow arrangement.
+/// Counter-flow heat exchanger arrangement.
 #[derive(Debug, Clone, Copy)]
 pub struct CounterFlow;
 

@@ -5,47 +5,40 @@ use uom::si::{f64::Ratio, ratio::ratio};
 
 use crate::thermal::hx::capacitance_rate::CapacitanceRate;
 
-/// The capacity ratio of a heat exchanger.
+/// Capacity ratio (`C_min` / `C_max`) for a heat exchanger.
 ///
-/// The capacity ratio is a dimensionless number reflecting how well-balanced a
-/// heat exchanger is. If a heat exchanger is perfectly balanced (capacity ratio
-/// = 1), then both fluids will experience the same temperature change. If a
-/// heat exchanger is unbalanced, one fluid will experience a larger temperature
-/// change than the other.
-///
-/// The capacity ratio must be in the interval [0, 1].
+/// The ratio quantifies how evenly the stream capacitance rates are matched and
+/// must fall in the closed interval [0, 1].
 #[derive(Debug, Clone, Copy)]
 pub struct CapacityRatio(Constrained<Ratio, UnitInterval>);
 
 impl CapacityRatio {
-    /// Create a [`CapacityRatio`] from a value.
+    /// Create a [`CapacityRatio`] from a scalar value.
     ///
     /// # Errors
     ///
-    /// This function will return an error if the value is not in the interval
-    /// [0, 1].
+    /// Returns `Err` if the value lies outside the interval [0, 1].
     pub fn new(value: f64) -> ConstraintResult<Self> {
         let quantity = Ratio::new::<ratio>(value);
         Self::from_quantity(quantity)
     }
 
-    /// Create a [`CapacityRatio`] from a uom quantity.
+    /// Create a [`CapacityRatio`] from a quantity with ratio units.
     ///
     /// # Errors
     ///
-    /// This function will return an error if the quantity is not in the
-    /// interval [0, 1].
+    /// Returns `Err` if the quantity lies outside the interval [0, 1].
     pub fn from_quantity(quantity: Ratio) -> ConstraintResult<Self> {
         Ok(Self(UnitInterval::new(quantity)?))
     }
 
     /// Create a [`CapacityRatio`] from the [capacitance rates](CapacitanceRate)
-    /// of the fluids.
+    /// of the two streams.
     ///
     /// # Errors
     ///
-    /// This function will return an error if either capacitance rate is not in
-    /// the interval [0, 1].
+    /// Returns `Err` if the ratio of the supplied capacitance rates falls
+    /// outside the interval [0, 1].
     pub fn from_capacitance_rates(
         capacitance_rates: [CapacitanceRate; 2],
     ) -> ConstraintResult<Self> {
