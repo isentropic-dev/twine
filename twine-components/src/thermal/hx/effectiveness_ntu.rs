@@ -116,7 +116,7 @@ impl Deref for Ntu {
 pub(super) fn effectiveness_via(
     ntu: Ntu,
     capacity_ratio: CapacityRatio,
-    fn_raw: impl FnOnce(f64, f64) -> f64,
+    fn_raw: impl Fn(f64, f64) -> f64,
 ) -> Effectiveness {
     let cr = capacity_ratio.get::<ratio>();
     let ntu = ntu.get::<ratio>();
@@ -133,7 +133,7 @@ pub(super) fn effectiveness_via(
 pub(super) fn ntu_via(
     effectiveness: Effectiveness,
     capacity_ratio: CapacityRatio,
-    fn_raw: impl FnOnce(f64, f64) -> f64,
+    fn_raw: impl Fn(f64, f64) -> f64,
 ) -> Ntu {
     let cr = capacity_ratio.get::<ratio>();
     let eff = effectiveness.get::<ratio>();

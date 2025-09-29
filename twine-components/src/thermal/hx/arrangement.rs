@@ -1,10 +1,10 @@
 //! Flow arrangements supported by the heat exchanger utilities.
 
-mod counterflow;
-mod parallelflow;
+mod counter_flow;
+mod parallel_flow;
 
-pub use counterflow::CounterFlow;
-pub use parallelflow::ParallelFlow;
+pub use counter_flow::CounterFlow;
+pub use parallel_flow::ParallelFlow;
 
 #[cfg(test)]
 mod tests {
