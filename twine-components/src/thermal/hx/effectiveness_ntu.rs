@@ -47,11 +47,6 @@ impl Effectiveness {
     pub fn from_quantity(quantity: Ratio) -> ConstraintResult<Self> {
         Ok(Self(UnitInterval::new(quantity)?))
     }
-
-    pub(super) fn infinite_capacitance_rate(ntu: Ntu) -> Self {
-        let ntu = ntu.get::<ratio>();
-        Self::new(1. - (-ntu).exp()).expect("ntu should always yield valid effectiveness")
-    }
 }
 
 impl Deref for Effectiveness {
@@ -107,11 +102,6 @@ impl Ntu {
     ) -> ConstraintResult<Self> {
         Self::from_quantity(ua / capacitance_rates[0].min(*capacitance_rates[1]))
     }
-
-    pub(super) fn infinite_capacitance_rate(effectiveness: Effectiveness) -> Self {
-        let eff = effectiveness.get::<ratio>();
-        Self::new(-(1. - eff).ln()).expect("effectiveness should always yield valid ntu")
-    }
 }
 
 impl Deref for Ntu {
@@ -120,6 +110,39 @@ impl Deref for Ntu {
     fn deref(&self) -> &Self::Target {
         self.0.as_ref()
     }
+}
+
+#[inline]
+pub(super) fn effectiveness_via(
+    ntu: Ntu,
+    capacity_ratio: CapacityRatio,
+    fn_raw: impl Fn(f64, f64) -> f64,
+) -> Effectiveness {
+    let cr = capacity_ratio.get::<ratio>();
+    let ntu = ntu.get::<ratio>();
+    if cr == 0.0 {
+        return {
+            Effectiveness::new(1. - (-ntu).exp())
+                .expect("ntu should always yield valid effectiveness")
+        };
+    }
+    Effectiveness::new(fn_raw(ntu, cr)).expect("ntu should always yield valid effectiveness")
+}
+
+#[inline]
+pub(super) fn ntu_via(
+    effectiveness: Effectiveness,
+    capacity_ratio: CapacityRatio,
+    fn_raw: impl Fn(f64, f64) -> f64,
+) -> Ntu {
+    let cr = capacity_ratio.get::<ratio>();
+    let eff = effectiveness.get::<ratio>();
+    if cr == 0.0 {
+        return {
+            Ntu::new(-(1. - eff).ln()).expect("effectiveness should always yield valid ntu")
+        };
+    }
+    Ntu::new(fn_raw(eff, cr)).expect("effectiveness should always yield valid ntu")
 }
 
 #[cfg(test)]

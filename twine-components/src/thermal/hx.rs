@@ -6,14 +6,13 @@
 //! for sizing exchangers, and functional APIs for working directly with
 //! thermodynamic primitives.
 
-mod arrangement;
+pub mod arrangement;
 mod capacitance_rate;
 mod capacity_ratio;
 mod effectiveness_ntu;
 pub mod functional;
 mod stream;
 
-pub use arrangement::CounterFlow;
 pub use capacitance_rate::CapacitanceRate;
 pub use capacity_ratio::CapacityRatio;
 pub use effectiveness_ntu::{Effectiveness, EffectivenessNtu, Ntu};
@@ -40,10 +39,10 @@ use crate::thermal::hx::functional::KnownConductanceAndInletsResult;
 ///     thermal_conductance::kilowatt_per_kelvin,
 ///     thermodynamic_temperature::degree_celsius,
 /// };
-/// use twine_components::thermal::hx::{CapacitanceRate, CounterFlow, Hx, StreamInlet};
+/// use twine_components::thermal::hx::{arrangement, CapacitanceRate, Hx, StreamInlet};
 ///
 /// # fn main() -> ConstraintResult<()> {
-/// let hx = Hx::new(CounterFlow);
+/// let hx = Hx::new(arrangement::CounterFlow);
 ///
 /// let _ = hx.known_conductance_and_inlets(
 ///     ThermalConductance::new::<kilowatt_per_kelvin>(3. * 4.0_f64.ln()),
@@ -103,7 +102,7 @@ mod tests {
 
     #[test]
     fn hx_usability() -> ConstraintResult<()> {
-        let hx = Hx::new(CounterFlow);
+        let hx = Hx::new(arrangement::CounterFlow);
 
         let result = hx.known_conductance_and_inlets(
             ThermalConductance::new::<kilowatt_per_kelvin>(3. * 4.0_f64.ln()),

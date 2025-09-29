@@ -1,8 +1,10 @@
 //! Flow arrangements supported by the heat exchanger utilities.
 
-mod counterflow;
+mod counter_flow;
+mod parallel_flow;
 
-pub use counterflow::CounterFlow;
+pub use counter_flow::CounterFlow;
+pub use parallel_flow::ParallelFlow;
 
 #[cfg(test)]
 mod tests {
@@ -15,7 +17,7 @@ mod tests {
 
     #[test]
     fn roundtrips() -> ConstraintResult<()> {
-        let arrangements = vec![CounterFlow];
+        let arrangements: Vec<&'static dyn EffectivenessNtu> = vec![&CounterFlow, &ParallelFlow];
         let ntus = [0., 0.1, 0.5, 1., 5.];
         let capacity_ratios = [0., 0.25, 0.5, 1.];
 

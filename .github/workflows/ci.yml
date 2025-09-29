@@ -13,6 +13,8 @@ jobs:
         uses: actions/checkout@v4
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
       - name: Set up cache
         uses: Swatinem/rust-cache@v2
       - name: Run Clippy
