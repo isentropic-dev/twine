@@ -30,15 +30,15 @@ use crate::thermal::hx::{
 ///     thermodynamic_temperature::degree_celsius,
 /// };
 /// use twine_components::thermal::hx::{
+///     arrangement,
 ///     CapacitanceRate,
-///     CounterFlow,
 ///     StreamInlet,
 ///     functional,
 /// };
 ///
 /// # fn main() -> ConstraintResult<()> {
 /// let result = functional::known_conductance_and_inlets(
-///     &CounterFlow,
+///     &arrangement::CounterFlow,
 ///     ThermalConductance::new::<kilowatt_per_kelvin>(3. * 4.0_f64.ln()),
 ///     [
 ///         StreamInlet::new(
