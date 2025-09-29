@@ -15,6 +15,7 @@ impl EffectivenessNtu for CounterFlow {
             if cr < 1. {
                 (1. - (-ntu * (1. - cr)).exp()) / (1. - cr * (-ntu * (1. - cr)).exp())
             } else {
+                // cr == 1
                 ntu / (1. + ntu)
             }
         })
