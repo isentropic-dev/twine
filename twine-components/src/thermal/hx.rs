@@ -15,12 +15,14 @@ mod stream;
 
 pub use capacitance_rate::CapacitanceRate;
 pub use capacity_ratio::CapacityRatio;
-pub use effectiveness_ntu::{Effectiveness, EffectivenessNtu, Ntu};
+pub use effectiveness_ntu::{Effectiveness, Ntu};
 pub use stream::StreamInlet;
 use twine_core::constraint::ConstraintResult;
 use uom::si::f64::ThermalConductance;
 
-use crate::thermal::hx::functional::KnownConductanceAndInletsResult;
+use crate::thermal::hx::{
+    effectiveness_ntu::EffectivenessRelation, functional::KnownConductanceAndInletsResult,
+};
 
 /// High-level entry point for solving heat exchanger scenarios with a chosen
 /// arrangement.
@@ -69,7 +71,7 @@ impl<T> Hx<T> {
     }
 }
 
-impl<T: EffectivenessNtu> Hx<T> {
+impl<T: EffectivenessRelation> Hx<T> {
     /// Resolve outlet conditions for both streams using a known conductance and
     /// inlet states, returning a [`KnownConductanceAndInletsResult`].
     ///

@@ -1,15 +1,17 @@
 //! Counter-flow effectiveness-NTU relationships.
 
 use crate::thermal::hx::{
-    CapacityRatio,
-    effectiveness_ntu::{Effectiveness, EffectivenessNtu, Ntu, effectiveness_via, ntu_via},
+    capacity_ratio::CapacityRatio,
+    effectiveness_ntu::{
+        Effectiveness, EffectivenessRelation, Ntu, NtuRelation, effectiveness_via, ntu_via,
+    },
 };
 
 /// Counter-flow heat exchanger arrangement.
 #[derive(Debug, Clone, Copy)]
 pub struct CounterFlow;
 
-impl EffectivenessNtu for CounterFlow {
+impl EffectivenessRelation for CounterFlow {
     fn effectiveness(&self, ntu: Ntu, capacity_ratio: CapacityRatio) -> Effectiveness {
         effectiveness_via(ntu, capacity_ratio, |ntu, cr| {
             if cr < 1. {
@@ -20,7 +22,9 @@ impl EffectivenessNtu for CounterFlow {
             }
         })
     }
+}
 
+impl NtuRelation for CounterFlow {
     fn ntu(&self, effectiveness: Effectiveness, capacity_ratio: CapacityRatio) -> Ntu {
         ntu_via(effectiveness, capacity_ratio, |eff, cr| {
             if cr < 1. {

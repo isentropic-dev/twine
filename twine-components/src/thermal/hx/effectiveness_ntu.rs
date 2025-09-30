@@ -8,16 +8,28 @@ use uom::si::{
 
 use crate::thermal::hx::{CapacitanceRate, CapacityRatio};
 
-/// Relationship between effectiveness and NTU for a flow arrangement.
-pub trait EffectivenessNtu {
+pub trait EffectivenessRelation {
     /// Calculate the effectiveness for an arrangement given the [NTU](Ntu) and
     /// [capacity ratio](CapacityRatio).
     fn effectiveness(&self, ntu: Ntu, capacity_ratio: CapacityRatio) -> Effectiveness;
+}
 
+pub trait NtuRelation {
     /// Calculate the [NTU](Ntu) for an arrangement given the
     /// [effectiveness](Effectiveness) and [capacity ratio](CapacityRatio).
     fn ntu(&self, effectiveness: Effectiveness, capacity_ratio: CapacityRatio) -> Ntu;
 }
+
+// /// Relationship between effectiveness and NTU for a flow arrangement.
+// pub trait EffectivenessNtu {
+//     /// Calculate the effectiveness for an arrangement given the [NTU](Ntu) and
+//     /// [capacity ratio](CapacityRatio).
+//     fn effectiveness(&self, ntu: Ntu, capacity_ratio: CapacityRatio) -> Effectiveness;
+
+//     /// Calculate the [NTU](Ntu) for an arrangement given the
+//     /// [effectiveness](Effectiveness) and [capacity ratio](CapacityRatio).
+//     fn ntu(&self, effectiveness: Effectiveness, capacity_ratio: CapacityRatio) -> Ntu;
+// }
 
 /// The effectiveness of a heat exchanger.
 ///

@@ -8,7 +8,8 @@ use uom::{
 };
 
 use crate::thermal::hx::{
-    CapacityRatio, Effectiveness, EffectivenessNtu, Ntu, StreamInlet, stream::Stream,
+    CapacityRatio, Effectiveness, Ntu, StreamInlet, effectiveness_ntu::EffectivenessRelation,
+    stream::Stream,
 };
 
 /// Analyze a heat exchanger when its conductance and inlet conditions are
@@ -60,7 +61,7 @@ use crate::thermal::hx::{
 /// Returns `Err` if any supplied quantity violates its constraints (for
 /// example, a non-positive capacitance rate).
 pub fn known_conductance_and_inlets(
-    arrangement: &impl EffectivenessNtu,
+    arrangement: &impl EffectivenessRelation,
     ua: ThermalConductance,
     inlets: [StreamInlet; 2],
 ) -> ConstraintResult<KnownConductanceAndInletsResult> {
