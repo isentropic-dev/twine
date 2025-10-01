@@ -11,25 +11,14 @@ use crate::thermal::hx::{CapacitanceRate, CapacityRatio};
 pub trait EffectivenessRelation {
     /// Calculate the effectiveness for an arrangement given the [NTU](Ntu) and
     /// [capacity ratio](CapacityRatio).
-    fn effectiveness(&self, ntu: Ntu, capacity_ratio: CapacityRatio) -> Effectiveness;
+    fn effectiveness(&self, ntu: Ntu, capacitance_rates: [CapacitanceRate; 2]) -> Effectiveness;
 }
 
 pub trait NtuRelation {
     /// Calculate the [NTU](Ntu) for an arrangement given the
     /// [effectiveness](Effectiveness) and [capacity ratio](CapacityRatio).
-    fn ntu(&self, effectiveness: Effectiveness, capacity_ratio: CapacityRatio) -> Ntu;
+    fn ntu(&self, effectiveness: Effectiveness, capacitance_rates: [CapacitanceRate; 2]) -> Ntu;
 }
-
-// /// Relationship between effectiveness and NTU for a flow arrangement.
-// pub trait EffectivenessNtu {
-//     /// Calculate the effectiveness for an arrangement given the [NTU](Ntu) and
-//     /// [capacity ratio](CapacityRatio).
-//     fn effectiveness(&self, ntu: Ntu, capacity_ratio: CapacityRatio) -> Effectiveness;
-
-//     /// Calculate the [NTU](Ntu) for an arrangement given the
-//     /// [effectiveness](Effectiveness) and [capacity ratio](CapacityRatio).
-//     fn ntu(&self, effectiveness: Effectiveness, capacity_ratio: CapacityRatio) -> Ntu;
-// }
 
 /// The effectiveness of a heat exchanger.
 ///
@@ -127,10 +116,10 @@ impl Deref for Ntu {
 #[inline]
 pub(super) fn effectiveness_via(
     ntu: Ntu,
-    capacity_ratio: CapacityRatio,
+    capacitance_rates: [CapacitanceRate; 2],
     fn_raw: impl Fn(f64, f64) -> f64,
 ) -> Effectiveness {
-    let cr = capacity_ratio.get::<ratio>();
+    let cr = CapacityRatio::from_capacitance_rates(capacitance_rates).get::<ratio>();
     let ntu = ntu.get::<ratio>();
     if cr == 0.0 {
         return {
@@ -144,10 +133,10 @@ pub(super) fn effectiveness_via(
 #[inline]
 pub(super) fn ntu_via(
     effectiveness: Effectiveness,
-    capacity_ratio: CapacityRatio,
+    capacitance_rates: [CapacitanceRate; 2],
     fn_raw: impl Fn(f64, f64) -> f64,
 ) -> Ntu {
-    let cr = capacity_ratio.get::<ratio>();
+    let cr = CapacityRatio::from_capacitance_rates(capacitance_rates).get::<ratio>();
     let eff = effectiveness.get::<ratio>();
     if cr == 0.0 {
         return {

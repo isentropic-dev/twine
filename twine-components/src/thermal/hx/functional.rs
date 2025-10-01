@@ -8,8 +8,7 @@ use uom::{
 };
 
 use crate::thermal::hx::{
-    CapacityRatio, Effectiveness, Ntu, StreamInlet, effectiveness_ntu::EffectivenessRelation,
-    stream::Stream,
+    Effectiveness, Ntu, StreamInlet, effectiveness_ntu::EffectivenessRelation, stream::Stream,
 };
 
 /// Analyze a heat exchanger when its conductance and inlet conditions are
@@ -69,7 +68,7 @@ pub fn known_conductance_and_inlets(
     let capacitance_rates = [inlets[0].capacitance_rate, inlets[1].capacitance_rate];
     let effectiveness = arrangement.effectiveness(
         Ntu::from_conductance_and_capacitance_rates(ua, capacitance_rates)?,
-        CapacityRatio::from_capacitance_rates(capacitance_rates)?,
+        capacitance_rates,
     );
 
     Ok(KnownConductanceAndInletsResult {
