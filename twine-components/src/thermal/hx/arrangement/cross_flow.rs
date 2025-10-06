@@ -1,23 +1,17 @@
-use crate::thermal::hx::effectiveness_ntu::{EffectivenessRelation, NtuRelation};
+//! Cross-flow effectiveness-NTU relationships.
 
-struct CrossFlow<T: MixState, U: MixState>(T, U);
+use crate::thermal::hx::effectiveness_ntu::{
+    EffectivenessRelation, NtuRelation, effectiveness_via, ntu_via,
+};
 
-struct Mixed;
-struct Unmixed;
+pub struct CrossFlow<T: MixState, U: MixState>(T, U);
+
+pub struct Mixed;
+pub struct Unmixed;
 
 trait MixState {}
 impl MixState for Mixed {}
 impl MixState for Unmixed {}
-
-impl EffectivenessRelation for CrossFlow<Mixed, Mixed> {
-    fn effectiveness(
-        &self,
-        ntu: crate::thermal::hx::Ntu,
-        capacitance_rates: [crate::thermal::hx::CapacitanceRate; 2],
-    ) -> crate::thermal::hx::Effectiveness {
-        todo!()
-    }
-}
 
 impl EffectivenessRelation for CrossFlow<Unmixed, Unmixed> {
     fn effectiveness(
@@ -25,7 +19,21 @@ impl EffectivenessRelation for CrossFlow<Unmixed, Unmixed> {
         ntu: crate::thermal::hx::Ntu,
         capacitance_rates: [crate::thermal::hx::CapacitanceRate; 2],
     ) -> crate::thermal::hx::Effectiveness {
-        todo!()
+        effectiveness_via(ntu, capacitance_rates, |ntu, cr| {
+            1. - ((ntu.powf(0.22) / cr) * ((-cr * ntu.powf(0.78)).exp() - 1.)).exp()
+        })
+    }
+}
+
+impl EffectivenessRelation for CrossFlow<Mixed, Mixed> {
+    fn effectiveness(
+        &self,
+        ntu: crate::thermal::hx::Ntu,
+        capacitance_rates: [crate::thermal::hx::CapacitanceRate; 2],
+    ) -> crate::thermal::hx::Effectiveness {
+        effectiveness_via(ntu, capacitance_rates, |ntu, cr| {
+            1. / (1. / (1. - -ntu.exp()) + cr / (1. - (-cr * ntu).exp()) - 1. / ntu)
+        })
     }
 }
 
@@ -35,7 +43,15 @@ impl EffectivenessRelation for CrossFlow<Mixed, Unmixed> {
         ntu: crate::thermal::hx::Ntu,
         capacitance_rates: [crate::thermal::hx::CapacitanceRate; 2],
     ) -> crate::thermal::hx::Effectiveness {
-        todo!()
+        if capacitance_rates[0] >= capacitance_rates[1] {
+            effectiveness_via(ntu, capacitance_rates, |ntu, cr| {
+                (1. - (cr * (-ntu.exp() - 1.)).exp()) / cr
+            })
+        } else {
+            effectiveness_via(ntu, capacitance_rates, |ntu, cr| {
+                1. - (-((1. - (-cr * ntu).exp()) / cr)).exp()
+            })
+        }
     }
 }
 
@@ -45,7 +61,7 @@ impl EffectivenessRelation for CrossFlow<Unmixed, Mixed> {
         ntu: crate::thermal::hx::Ntu,
         capacitance_rates: [crate::thermal::hx::CapacitanceRate; 2],
     ) -> crate::thermal::hx::Effectiveness {
-        todo!()
+        CrossFlow(Mixed, Unmixed).effectiveness(ntu, [capacitance_rates[1], capacitance_rates[0]])
     }
 }
 
@@ -55,7 +71,17 @@ impl NtuRelation for CrossFlow<Mixed, Unmixed> {
         effectiveness: crate::thermal::hx::Effectiveness,
         capacitance_rates: [crate::thermal::hx::CapacitanceRate; 2],
     ) -> crate::thermal::hx::Ntu {
-        todo!()
+        if capacitance_rates[0] >= capacitance_rates[1] {
+            ntu_via(effectiveness, capacitance_rates, |eff, cr| {
+                -(1. + (1. - eff * cr).ln() / cr).ln()
+            })
+        } else {
+            ntu_via(effectiveness, capacitance_rates, |eff, cr| {
+                println!("eff: {eff}");
+                println!();
+                -(cr * (1. - eff).ln() + 1.).ln() / cr
+            })
+        }
     }
 }
 
@@ -65,6 +91,51 @@ impl NtuRelation for CrossFlow<Unmixed, Mixed> {
         effectiveness: crate::thermal::hx::Effectiveness,
         capacitance_rates: [crate::thermal::hx::CapacitanceRate; 2],
     ) -> crate::thermal::hx::Ntu {
-        todo!()
+        CrossFlow(Mixed, Unmixed).ntu(effectiveness, [capacitance_rates[1], capacitance_rates[0]])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use approx::assert_relative_eq;
+    use twine_core::constraint::ConstraintResult;
+    use uom::si::{ratio::ratio, thermal_conductance::watt_per_kelvin};
+
+    use crate::thermal::hx::{CapacitanceRate, Ntu};
+
+    use super::*;
+
+    #[test]
+    fn roundtrip_mixed_unmixed() -> ConstraintResult<()> {
+        let ntus = [0., 0.1, 0.5, 1., 5.];
+        let capacitance_rates = [
+            // c_r == 0
+            [1., f64::INFINITY],
+            // c_r == 0.25
+            [1., 4.],
+            // c_r == 0.5
+            [1., 2.],
+            // c_r == 1
+            [1., 1.],
+        ];
+
+        for ntu in ntus {
+            for pair in capacitance_rates {
+                let rates = [
+                    CapacitanceRate::new::<watt_per_kelvin>(pair[0])?,
+                    CapacitanceRate::new::<watt_per_kelvin>(pair[1])?,
+                ];
+
+                let mixed_unmixed = CrossFlow(Mixed, Unmixed);
+                // let unmixed_mixed = CrossFlow(Unmixed, Mixed);
+
+                let eff = mixed_unmixed.effectiveness(Ntu::new(ntu)?, rates);
+                let back = mixed_unmixed.ntu(eff, rates);
+
+                assert_relative_eq!(back.get::<ratio>(), ntu, max_relative = 1e-12);
+            }
+        }
+
+        Ok(())
     }
 }
