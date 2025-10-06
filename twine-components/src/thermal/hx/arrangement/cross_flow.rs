@@ -101,7 +101,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn roundtrip_mixed_unmixed() -> ConstraintResult<()> {
+    fn roundtrip() -> ConstraintResult<()> {
         let ntus = [0., 0.1, 0.5, 1., 5.];
         let capacitance_rates = [
             // c_r == 0
