@@ -5,9 +5,23 @@ use crate::thermal::hx::{
     effectiveness_ntu::{EffectivenessRelation, NtuRelation, effectiveness_via, ntu_via},
 };
 
+use std::marker::PhantomData;
+
 /// Cross-flow heat exchanger arrangement.
-#[derive(Debug, Clone, Copy)]
-pub struct CrossFlow<T: MixState, U: MixState>(T, U);
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CrossFlow<T: MixState, U: MixState> {
+    _marker: PhantomData<(T, U)>,
+}
+
+impl<T: MixState, U: MixState> CrossFlow<T, U> {
+    /// Construct a cross-flow arrangement with the given mixing states.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            _marker: PhantomData,
+        }
+    }
+}
 
 /// Marker type for a cross-flow stream that is mixed across the flow channel.
 pub struct Mixed;
@@ -50,7 +64,8 @@ impl EffectivenessRelation for CrossFlow<Mixed, Unmixed> {
 
 impl EffectivenessRelation for CrossFlow<Unmixed, Mixed> {
     fn effectiveness(&self, ntu: Ntu, capacitance_rates: [CapacitanceRate; 2]) -> Effectiveness {
-        CrossFlow(Mixed, Unmixed).effectiveness(ntu, [capacitance_rates[1], capacitance_rates[0]])
+        CrossFlow::<Mixed, Unmixed>::new()
+            .effectiveness(ntu, [capacitance_rates[1], capacitance_rates[0]])
     }
 }
 
@@ -70,7 +85,8 @@ impl NtuRelation for CrossFlow<Mixed, Unmixed> {
 
 impl NtuRelation for CrossFlow<Unmixed, Mixed> {
     fn ntu(&self, effectiveness: Effectiveness, capacitance_rates: [CapacitanceRate; 2]) -> Ntu {
-        CrossFlow(Mixed, Unmixed).ntu(effectiveness, [capacitance_rates[1], capacitance_rates[0]])
+        CrossFlow::<Mixed, Unmixed>::new()
+            .ntu(effectiveness, [capacitance_rates[1], capacitance_rates[0]])
     }
 }
 
@@ -112,7 +128,7 @@ mod tests {
                     CapacitanceRate::new::<watt_per_kelvin>(pair[1])?,
                 ];
 
-                let mixed_unmixed = CrossFlow(Mixed, Unmixed);
+                let mixed_unmixed = CrossFlow::<Mixed, Unmixed>::new();
                 let eff = mixed_unmixed.effectiveness(Ntu::new(ntu)?, rates);
                 let back = mixed_unmixed.ntu(eff, rates);
 
