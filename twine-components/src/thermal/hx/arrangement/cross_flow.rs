@@ -1,7 +1,8 @@
 //! Cross-flow effectiveness-NTU relationships.
 
-use crate::thermal::hx::effectiveness_ntu::{
-    EffectivenessRelation, NtuRelation, effectiveness_via, ntu_via,
+use crate::thermal::hx::{
+    CapacitanceRate, Effectiveness, Ntu,
+    effectiveness_ntu::{EffectivenessRelation, NtuRelation, effectiveness_via, ntu_via},
 };
 
 /// Cross-flow heat exchanger arrangement.
@@ -18,11 +19,7 @@ impl MixState for Mixed {}
 impl MixState for Unmixed {}
 
 impl EffectivenessRelation for CrossFlow<Unmixed, Unmixed> {
-    fn effectiveness(
-        &self,
-        ntu: crate::thermal::hx::Ntu,
-        capacitance_rates: [crate::thermal::hx::CapacitanceRate; 2],
-    ) -> crate::thermal::hx::Effectiveness {
+    fn effectiveness(&self, ntu: Ntu, capacitance_rates: [CapacitanceRate; 2]) -> Effectiveness {
         effectiveness_via(ntu, capacitance_rates, |ntu, cr| {
             1. - ((ntu.powf(0.22) / cr) * ((-cr * ntu.powf(0.78)).exp() - 1.)).exp()
         })
@@ -30,11 +27,7 @@ impl EffectivenessRelation for CrossFlow<Unmixed, Unmixed> {
 }
 
 impl EffectivenessRelation for CrossFlow<Mixed, Mixed> {
-    fn effectiveness(
-        &self,
-        ntu: crate::thermal::hx::Ntu,
-        capacitance_rates: [crate::thermal::hx::CapacitanceRate; 2],
-    ) -> crate::thermal::hx::Effectiveness {
+    fn effectiveness(&self, ntu: Ntu, capacitance_rates: [CapacitanceRate; 2]) -> Effectiveness {
         effectiveness_via(ntu, capacitance_rates, |ntu, cr| {
             1. / (1. / (1. - (-ntu).exp()) + cr / (1. - (-cr * ntu).exp()) - 1. / ntu)
         })
@@ -42,11 +35,7 @@ impl EffectivenessRelation for CrossFlow<Mixed, Mixed> {
 }
 
 impl EffectivenessRelation for CrossFlow<Mixed, Unmixed> {
-    fn effectiveness(
-        &self,
-        ntu: crate::thermal::hx::Ntu,
-        capacitance_rates: [crate::thermal::hx::CapacitanceRate; 2],
-    ) -> crate::thermal::hx::Effectiveness {
+    fn effectiveness(&self, ntu: Ntu, capacitance_rates: [CapacitanceRate; 2]) -> Effectiveness {
         if capacitance_rates[0] >= capacitance_rates[1] {
             effectiveness_via(ntu, capacitance_rates, |ntu, cr| {
                 (1. - (cr * ((-ntu).exp() - 1.)).exp()) / cr
@@ -60,21 +49,13 @@ impl EffectivenessRelation for CrossFlow<Mixed, Unmixed> {
 }
 
 impl EffectivenessRelation for CrossFlow<Unmixed, Mixed> {
-    fn effectiveness(
-        &self,
-        ntu: crate::thermal::hx::Ntu,
-        capacitance_rates: [crate::thermal::hx::CapacitanceRate; 2],
-    ) -> crate::thermal::hx::Effectiveness {
+    fn effectiveness(&self, ntu: Ntu, capacitance_rates: [CapacitanceRate; 2]) -> Effectiveness {
         CrossFlow(Mixed, Unmixed).effectiveness(ntu, [capacitance_rates[1], capacitance_rates[0]])
     }
 }
 
 impl NtuRelation for CrossFlow<Mixed, Unmixed> {
-    fn ntu(
-        &self,
-        effectiveness: crate::thermal::hx::Effectiveness,
-        capacitance_rates: [crate::thermal::hx::CapacitanceRate; 2],
-    ) -> crate::thermal::hx::Ntu {
+    fn ntu(&self, effectiveness: Effectiveness, capacitance_rates: [CapacitanceRate; 2]) -> Ntu {
         if capacitance_rates[0] >= capacitance_rates[1] {
             ntu_via(effectiveness, capacitance_rates, |eff, cr| {
                 -(1. + (1. - eff * cr).ln() / cr).ln()
@@ -88,11 +69,7 @@ impl NtuRelation for CrossFlow<Mixed, Unmixed> {
 }
 
 impl NtuRelation for CrossFlow<Unmixed, Mixed> {
-    fn ntu(
-        &self,
-        effectiveness: crate::thermal::hx::Effectiveness,
-        capacitance_rates: [crate::thermal::hx::CapacitanceRate; 2],
-    ) -> crate::thermal::hx::Ntu {
+    fn ntu(&self, effectiveness: Effectiveness, capacitance_rates: [CapacitanceRate; 2]) -> Ntu {
         CrossFlow(Mixed, Unmixed).ntu(effectiveness, [capacitance_rates[1], capacitance_rates[0]])
     }
 }
