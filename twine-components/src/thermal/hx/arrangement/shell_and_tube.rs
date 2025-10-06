@@ -5,7 +5,7 @@ use crate::thermal::hx::{
     effectiveness_ntu::{EffectivenessRelation, NtuRelation, effectiveness_via, ntu_via},
 };
 
-/// Shell-and-tube heat exchanger arrangement constrained to supported pass counts.
+/// Shell-and-tube heat exchanger arrangement.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ShellAndTube<const S: i32, const T: i32> {
     _marker: PhantomData<()>,
@@ -84,8 +84,12 @@ impl<const S: i32, const T: i32> NtuRelation for ShellAndTube<S, T> {
             ntu_via(effectiveness, capacitance_rates, ntu_1)
         } else {
             ntu_via(effectiveness, capacitance_rates, |eff, cr| {
-                let f = ((eff * cr - 1.) / (eff - 1.)).powf(1.0 / f64::from(S));
-                let eff_1 = (f - 1.) / (f - cr);
+                let eff_1 = if cr < 1. {
+                    let f = ((eff * cr - 1.) / (eff - 1.)).powf(1.0 / f64::from(S));
+                    (f - 1.) / (f - cr)
+                } else {
+                    eff / (f64::from(S) - eff * (f64::from(S) - 1.))
+                };
                 ntu_1(eff_1, cr)
             })
         }
@@ -123,7 +127,6 @@ mod tests {
         let capacitance_rates = [[1., 1.], [1., 2.], [2., 1.], [1., 4.]];
 
         for ntu in ntus {
-            println!("ntu: {ntu:?}");
             for pair in capacitance_rates {
                 let rates = [
                     CapacitanceRate::new::<watt_per_kelvin>(pair[0])?,
@@ -131,7 +134,6 @@ mod tests {
                 ];
 
                 let eff = arrangement.effectiveness(Ntu::new(ntu)?, rates);
-                println!("effectiveness: {eff:?}");
                 let back = arrangement.ntu(eff, rates);
 
                 assert_relative_eq!(back.get::<ratio>(), ntu, max_relative = 1e-12);
