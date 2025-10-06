@@ -4,12 +4,16 @@ use crate::thermal::hx::effectiveness_ntu::{
     EffectivenessRelation, NtuRelation, effectiveness_via, ntu_via,
 };
 
+/// Cross-flow heat exchanger arrangement.
+#[derive(Debug, Clone, Copy)]
 pub struct CrossFlow<T: MixState, U: MixState>(T, U);
 
+/// Marker type for a cross-flow stream that is mixed across the flow channel.
 pub struct Mixed;
+/// Marker type for a cross-flow stream that remains unmixed across the flow channel.
 pub struct Unmixed;
 
-trait MixState {}
+pub trait MixState {}
 impl MixState for Mixed {}
 impl MixState for Unmixed {}
 
@@ -32,7 +36,7 @@ impl EffectivenessRelation for CrossFlow<Mixed, Mixed> {
         capacitance_rates: [crate::thermal::hx::CapacitanceRate; 2],
     ) -> crate::thermal::hx::Effectiveness {
         effectiveness_via(ntu, capacitance_rates, |ntu, cr| {
-            1. / (1. / (1. - -ntu.exp()) + cr / (1. - (-cr * ntu).exp()) - 1. / ntu)
+            1. / (1. / (1. - (-ntu).exp()) + cr / (1. - (-cr * ntu).exp()) - 1. / ntu)
         })
     }
 }
@@ -45,7 +49,7 @@ impl EffectivenessRelation for CrossFlow<Mixed, Unmixed> {
     ) -> crate::thermal::hx::Effectiveness {
         if capacitance_rates[0] >= capacitance_rates[1] {
             effectiveness_via(ntu, capacitance_rates, |ntu, cr| {
-                (1. - (cr * (-ntu.exp() - 1.)).exp()) / cr
+                (1. - (cr * ((-ntu).exp() - 1.)).exp()) / cr
             })
         } else {
             effectiveness_via(ntu, capacitance_rates, |ntu, cr| {
@@ -77,8 +81,6 @@ impl NtuRelation for CrossFlow<Mixed, Unmixed> {
             })
         } else {
             ntu_via(effectiveness, capacitance_rates, |eff, cr| {
-                println!("eff: {eff}");
-                println!();
                 -(cr * (1. - eff).ln() + 1.).ln() / cr
             })
         }
@@ -117,6 +119,13 @@ mod tests {
             [1., 2.],
             // c_r == 1
             [1., 1.],
+            // flip mixed/unmixed
+            // c_r == 0.5
+            [2., 1.],
+            // c_r == 0.25
+            [4., 1.],
+            // c_r == 0
+            [f64::INFINITY, 1.],
         ];
 
         for ntu in ntus {
@@ -127,8 +136,6 @@ mod tests {
                 ];
 
                 let mixed_unmixed = CrossFlow(Mixed, Unmixed);
-                // let unmixed_mixed = CrossFlow(Unmixed, Mixed);
-
                 let eff = mixed_unmixed.effectiveness(Ntu::new(ntu)?, rates);
                 let back = mixed_unmixed.ntu(eff, rates);
 

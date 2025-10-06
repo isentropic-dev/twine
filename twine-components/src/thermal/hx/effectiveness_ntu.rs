@@ -14,6 +14,7 @@ pub trait EffectivenessRelation {
     fn effectiveness(&self, ntu: Ntu, capacitance_rates: [CapacitanceRate; 2]) -> Effectiveness;
 }
 
+#[allow(dead_code)]
 pub trait NtuRelation {
     /// Calculate the [NTU](Ntu) for an arrangement given the
     /// [effectiveness](Effectiveness) and [capacity ratio](CapacityRatio).
@@ -130,6 +131,7 @@ pub(super) fn effectiveness_via(
     Effectiveness::new(fn_raw(ntu, cr)).expect("ntu should always yield valid effectiveness")
 }
 
+#[allow(dead_code)]
 #[inline]
 pub(super) fn ntu_via(
     effectiveness: Effectiveness,
