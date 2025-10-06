@@ -35,16 +35,12 @@ impl CapacityRatio {
     /// Create a [`CapacityRatio`] from the [capacitance rates](CapacitanceRate)
     /// of the two streams.
     ///
-    /// # Errors
-    ///
-    /// Returns `Err` if the ratio of the supplied capacitance rates falls
-    /// outside the interval [0, 1].
-    pub fn from_capacitance_rates(
-        capacitance_rates: [CapacitanceRate; 2],
-    ) -> ConstraintResult<Self> {
+    #[must_use]
+    pub(super) fn from_capacitance_rates(capacitance_rates: [CapacitanceRate; 2]) -> Self {
         let [first, second] = capacitance_rates;
 
         Self::from_quantity(first.min(*second) / first.max(*second))
+            .expect("capacitance rates should always be positive")
     }
 }
 
@@ -70,7 +66,7 @@ mod tests {
             CapacitanceRate::new::<watt_per_kelvin>(20.)?,
         ];
 
-        let capacity_ratio = CapacityRatio::from_capacitance_rates(capacitance_rates)?;
+        let capacity_ratio = CapacityRatio::from_capacitance_rates(capacitance_rates);
 
         assert_relative_eq!(capacity_ratio.get::<ratio>(), 0.5);
         Ok(())
