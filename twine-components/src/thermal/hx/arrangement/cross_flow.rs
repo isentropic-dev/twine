@@ -1,11 +1,11 @@
 //! Cross-flow effectiveness-NTU relationships.
 
+use std::marker::PhantomData;
+
 use crate::thermal::hx::{
     CapacitanceRate, Effectiveness, Ntu,
     effectiveness_ntu::{EffectivenessRelation, NtuRelation, effectiveness_via, ntu_via},
 };
-
-use std::marker::PhantomData;
 
 /// Cross-flow heat exchanger arrangement.
 #[derive(Debug, Clone, Copy, Default)]

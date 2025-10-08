@@ -7,22 +7,22 @@ use crate::thermal::hx::{
 
 /// Shell-and-tube heat exchanger arrangement.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ShellAndTube<const S: i32, const T: i32> {
+pub struct ShellAndTube<const S: u16, const T: u16> {
     _marker: PhantomData<()>,
 }
 
-impl<const S: i32, const T: i32> ShellAndTube<S, T> {
+impl<const S: u16, const T: u16> ShellAndTube<S, T> {
     const fn validate() -> Result<(), ShellAndTubeConfigError> {
-        if S <= 0 {
+        if S == 0 {
             return Err(ShellAndTubeConfigError::ZeroShellPasses);
         }
-        if S > i32::MAX / 2 {
+        if S > u16::MAX / 2 {
             return Err(ShellAndTubeConfigError::ShellPassOverflow);
         }
         if T < 2 * S {
             return Err(ShellAndTubeConfigError::InsufficientTubePasses);
         }
-        if T % (2 * S) != 0 {
+        if !T.is_multiple_of(2 * S) {
             return Err(ShellAndTubeConfigError::TubePassesNotMultiple);
         }
         Ok(())
@@ -46,7 +46,7 @@ impl<const S: i32, const T: i32> ShellAndTube<S, T> {
     }
 }
 
-impl<const S: i32, const T: i32> EffectivenessRelation for ShellAndTube<S, T> {
+impl<const S: u16, const T: u16> EffectivenessRelation for ShellAndTube<S, T> {
     fn effectiveness(&self, ntu: Ntu, capacitance_rates: [CapacitanceRate; 2]) -> Effectiveness {
         let eff_1: fn(f64, f64) -> f64 = |ntu_1, cr| {
             2. / (1.
@@ -62,8 +62,8 @@ impl<const S: i32, const T: i32> EffectivenessRelation for ShellAndTube<S, T> {
                 let eff_1 = eff_1(ntu_1, cr);
 
                 if cr < 1. {
-                    (((1. - eff_1 * cr) / (1. - eff_1)).powi(S) - 1.)
-                        / (((1. - eff_1 * cr) / (1. - eff_1)).powi(S) - cr)
+                    (((1. - eff_1 * cr) / (1. - eff_1)).powi(S.into()) - 1.)
+                        / (((1. - eff_1 * cr) / (1. - eff_1)).powi(S.into()) - cr)
                 } else {
                     // cr == 1
                     (f64::from(S) * eff_1) / (1. + eff_1 * (f64::from(S) - 1.))
@@ -73,7 +73,7 @@ impl<const S: i32, const T: i32> EffectivenessRelation for ShellAndTube<S, T> {
     }
 }
 
-impl<const S: i32, const T: i32> NtuRelation for ShellAndTube<S, T> {
+impl<const S: u16, const T: u16> NtuRelation for ShellAndTube<S, T> {
     fn ntu(&self, effectiveness: Effectiveness, capacitance_rates: [CapacitanceRate; 2]) -> Ntu {
         let ntu_1: fn(f64, f64) -> f64 = |eff_1, cr| {
             let e = (2. - eff_1 * (1. + cr)) / (eff_1 * (1. + cr.powi(2)).sqrt());
@@ -119,7 +119,7 @@ mod tests {
 
     use super::*;
 
-    fn roundtrip_for<const N: i32, const T: i32>() -> ConstraintResult<()> {
+    fn roundtrip_for<const N: u16, const T: u16>() -> ConstraintResult<()> {
         let arrangement =
             ShellAndTube::<N, T>::new().expect("shell-and-tube configuration should be valid");
 
@@ -145,7 +145,7 @@ mod tests {
 
     #[test]
     fn validation_outcomes() {
-        const MAX: i32 = i32::MAX;
+        const MAX: u16 = u16::MAX;
 
         assert_eq!(
             ShellAndTube::<0, 2>::new(),
