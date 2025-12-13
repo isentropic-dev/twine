@@ -19,8 +19,8 @@
 //! - [`StrictlyPositive`]: Greater than zero
 //! - [`UnitInterval`]: Closed unit interval `0 ≤ x ≤ 1`
 //! - [`UnitIntervalOpen`]: Open unit interval `0 < x < 1`
-//! - [`UnitIntervalLeftOpen`]: Left-open unit interval `0 < x ≤ 1`
-//! - [`UnitIntervalRightOpen`]: Right-open unit interval `0 ≤ x < 1`
+//! - [`UnitIntervalLowerOpen`]: Lower-open unit interval `0 < x ≤ 1`
+//! - [`UnitIntervalUpperOpen`]: Upper-open unit interval `0 ≤ x < 1`
 //!
 //! Each marker can be used with the generic [`Constrained<T, C>`] wrapper,
 //! where `C` is the marker type implementing [`Constraint<T>`].
@@ -51,7 +51,7 @@ pub use non_zero::NonZero;
 pub use strictly_negative::StrictlyNegative;
 pub use strictly_positive::StrictlyPositive;
 pub use unit_interval::{
-    UnitBounds, UnitInterval, UnitIntervalLeftOpen, UnitIntervalOpen, UnitIntervalRightOpen,
+    UnitBounds, UnitInterval, UnitIntervalLowerOpen, UnitIntervalOpen, UnitIntervalUpperOpen,
 };
 
 /// A trait for enforcing numeric invariants at construction time.

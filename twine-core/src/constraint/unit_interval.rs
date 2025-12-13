@@ -1,14 +1,14 @@
 mod closed;
-mod left_open;
+mod lower_open;
 mod open;
-mod right_open;
+mod upper_open;
 
 use uom::si::{f64::Ratio, ratio::ratio};
 
 pub use closed::UnitInterval;
-pub use left_open::UnitIntervalLeftOpen;
+pub use lower_open::UnitIntervalLowerOpen;
 pub use open::UnitIntervalOpen;
-pub use right_open::UnitIntervalRightOpen;
+pub use upper_open::UnitIntervalUpperOpen;
 
 /// Supplies 0 and 1 for types used in the closed unit interval [0, 1].
 ///
