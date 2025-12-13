@@ -118,7 +118,7 @@ mod tests {
             Err(ConstraintError::BelowMinimum)
         ));
         assert!(matches!(
-            UnitIntervalLowerOpen::new(1.0000001),
+            UnitIntervalLowerOpen::new(1.000_000_1),
             Err(ConstraintError::AboveMaximum)
         ));
     }
@@ -134,7 +134,9 @@ mod tests {
     #[test]
     #[allow(clippy::float_cmp)]
     fn uom_ratio_valid() {
-        assert!(Constrained::<Ratio, UnitIntervalLowerOpen>::new(Ratio::new::<ratio>(0.01)).is_ok());
+        assert!(
+            Constrained::<Ratio, UnitIntervalLowerOpen>::new(Ratio::new::<ratio>(0.01)).is_ok()
+        );
         assert!(Constrained::<Ratio, UnitIntervalLowerOpen>::new(Ratio::new::<ratio>(1.0)).is_ok());
         assert!(UnitIntervalLowerOpen::new(Ratio::new::<ratio>(0.5)).is_ok());
 

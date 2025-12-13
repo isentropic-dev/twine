@@ -135,7 +135,9 @@ mod tests {
     #[allow(clippy::float_cmp)]
     fn uom_ratio_valid() {
         assert!(Constrained::<Ratio, UnitIntervalUpperOpen>::new(Ratio::new::<ratio>(0.0)).is_ok());
-        assert!(Constrained::<Ratio, UnitIntervalUpperOpen>::new(Ratio::new::<ratio>(0.99)).is_ok());
+        assert!(
+            Constrained::<Ratio, UnitIntervalUpperOpen>::new(Ratio::new::<ratio>(0.99)).is_ok()
+        );
         assert!(UnitIntervalUpperOpen::new(Ratio::new::<ratio>(0.5)).is_ok());
 
         let z = UnitIntervalUpperOpen::zero::<Ratio>();
