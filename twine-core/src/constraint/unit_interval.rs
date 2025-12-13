@@ -1,8 +1,10 @@
 mod closed;
+mod open;
 
 use uom::si::{f64::Ratio, ratio::ratio};
 
 pub use closed::UnitInterval;
+pub use open::UnitIntervalOpen;
 
 /// Supplies 0 and 1 for types used in the closed unit interval [0, 1].
 ///
