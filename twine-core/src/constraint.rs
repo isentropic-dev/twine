@@ -50,7 +50,9 @@ pub use non_positive::NonPositive;
 pub use non_zero::NonZero;
 pub use strictly_negative::StrictlyNegative;
 pub use strictly_positive::StrictlyPositive;
-pub use unit_interval::{UnitBounds, UnitInterval, UnitIntervalOpen};
+pub use unit_interval::{
+    UnitBounds, UnitInterval, UnitIntervalLeftOpen, UnitIntervalOpen, UnitIntervalRightOpen,
+};
 
 /// A trait for enforcing numeric invariants at construction time.
 ///
