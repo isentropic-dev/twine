@@ -24,7 +24,7 @@ use crate::{State, fluid::Stateless};
 /// A blanket implementation is provided for all [`Stateless`] fluids using
 /// `(ThermodynamicTemperature, MassDensity)` as the input.
 pub trait StateFrom<Fluid, Input> {
-    type Error;
+    type Error: std::error::Error + Send + Sync + 'static;
 
     /// Returns a `State<Fluid>` based on the provided generic `Input`.
     ///
