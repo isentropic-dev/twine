@@ -4,6 +4,7 @@ use uom::{
     ConstZero,
     si::{
         f64::{MassDensity, Pressure, SpecificHeatCapacity, ThermodynamicTemperature},
+        ratio::ratio,
         temperature_interval, thermodynamic_temperature,
     },
 };
@@ -223,6 +224,59 @@ impl<F: IdealGasFluid + Stateless> StateFrom<F, (Pressure, MassDensity)> for Ide
     }
 }
 
+/// Enables state creation from pressure and specific enthalpy for any [`Stateless`] fluid.
+impl<F: IdealGasFluid + Stateless> StateFrom<F, (Pressure, SpecificEnthalpy)> for IdealGas {
+    type Error = Infallible;
+
+    fn state_from(
+        &self,
+        (pressure, enthalpy): (Pressure, SpecificEnthalpy),
+    ) -> Result<State<F>, Self::Error> {
+        let fluid = F::default();
+
+        let cp = fluid.cp();
+        let t_ref = fluid.reference_temperature();
+        let h_ref = fluid.reference_enthalpy();
+
+        let temperature = t_ref + (enthalpy - h_ref) / cp;
+        let density = IdealGas::density(temperature, pressure, fluid.gas_constant());
+
+        Ok(State {
+            temperature,
+            density,
+            fluid,
+        })
+    }
+}
+
+/// Enables state creation from pressure and specific entropy for any [`Stateless`] fluid.
+impl<F: IdealGasFluid + Stateless> StateFrom<F, (Pressure, SpecificEntropy)> for IdealGas {
+    type Error = Infallible;
+
+    fn state_from(
+        &self,
+        (pressure, entropy): (Pressure, SpecificEntropy),
+    ) -> Result<State<F>, Self::Error> {
+        let fluid = F::default();
+
+        let cp = fluid.cp();
+        let r = fluid.gas_constant();
+        let t_ref = fluid.reference_temperature();
+        let p_ref = fluid.reference_pressure();
+        let s_ref = fluid.reference_entropy();
+
+        let exponent = ((entropy - s_ref) + r * (pressure / p_ref).ln()) / cp;
+        let temperature = t_ref * exponent.get::<ratio>().exp();
+        let density = IdealGas::density(temperature, pressure, r);
+
+        Ok(State {
+            temperature,
+            density,
+            fluid,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -232,7 +286,7 @@ mod tests {
         mass_density::pound_per_cubic_foot,
         pressure::{atmosphere, kilopascal, pascal, psi},
         specific_heat_capacity::joule_per_kilogram_kelvin,
-        thermodynamic_temperature::degree_celsius,
+        thermodynamic_temperature::{degree_celsius, kelvin},
     };
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -313,6 +367,48 @@ mod tests {
         let s_a = IdealGas.entropy(&state_a)?;
         let s_b = IdealGas.entropy(&state_b)?;
         assert!(s_b < s_a);
+
+        Ok(())
+    }
+
+    #[test]
+    fn state_from_pressure_enthalpy_roundtrip() -> Result<(), PropertyError> {
+        let temp_in = ThermodynamicTemperature::new::<degree_celsius>(120.0);
+        let pres_in = Pressure::new::<kilopascal>(250.0);
+        let state_in: State<MockGas> = IdealGas.state_from((temp_in, pres_in)).unwrap();
+
+        let h = IdealGas.enthalpy(&state_in)?;
+        let state_out: State<MockGas> = IdealGas.state_from((pres_in, h)).unwrap();
+
+        assert_relative_eq!(
+            state_out.temperature.get::<kelvin>(),
+            temp_in.get::<kelvin>(),
+        );
+        assert_relative_eq!(
+            IdealGas.pressure(&state_out)?.get::<pascal>(),
+            pres_in.get::<pascal>(),
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn state_from_pressure_entropy_roundtrip() -> Result<(), PropertyError> {
+        let temp_in = ThermodynamicTemperature::new::<degree_celsius>(80.0);
+        let pres_in = Pressure::new::<kilopascal>(180.0);
+        let state_in: State<MockGas> = IdealGas.state_from((temp_in, pres_in)).unwrap();
+
+        let s = IdealGas.entropy(&state_in)?;
+        let state_out: State<MockGas> = IdealGas.state_from((pres_in, s)).unwrap();
+
+        assert_relative_eq!(
+            state_out.temperature.get::<kelvin>(),
+            temp_in.get::<kelvin>(),
+        );
+        assert_relative_eq!(
+            IdealGas.pressure(&state_out)?.get::<pascal>(),
+            pres_in.get::<pascal>(),
+        );
 
         Ok(())
     }
