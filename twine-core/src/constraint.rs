@@ -10,13 +10,17 @@
 //!
 //! # Provided Constraints
 //!
-//! The following marker types represent the most common numeric invariants:
+//! The following marker types are available:
 //!
 //! - [`NonNegative`]: Zero or greater
 //! - [`NonPositive`]: Zero or less
 //! - [`NonZero`]: Not equal to zero
 //! - [`StrictlyNegative`]: Less than zero
 //! - [`StrictlyPositive`]: Greater than zero
+//! - [`UnitInterval`]: Closed unit interval `0 ≤ x ≤ 1`
+//! - [`UnitIntervalOpen`]: Open unit interval `0 < x < 1`
+//! - [`UnitIntervalLowerOpen`]: Lower-open unit interval `0 < x ≤ 1`
+//! - [`UnitIntervalUpperOpen`]: Upper-open unit interval `0 ≤ x < 1`
 //!
 //! Each marker can be used with the generic [`Constrained<T, C>`] wrapper,
 //! where `C` is the marker type implementing [`Constraint<T>`].
@@ -46,7 +50,9 @@ pub use non_positive::NonPositive;
 pub use non_zero::NonZero;
 pub use strictly_negative::StrictlyNegative;
 pub use strictly_positive::StrictlyPositive;
-pub use unit_interval::{UnitBounds, UnitInterval};
+pub use unit_interval::{
+    UnitBounds, UnitInterval, UnitIntervalLowerOpen, UnitIntervalOpen, UnitIntervalUpperOpen,
+};
 
 /// A trait for enforcing numeric invariants at construction time.
 ///
