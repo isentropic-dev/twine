@@ -86,8 +86,9 @@ impl ExpansionWork {
 mod tests {
     use super::*;
 
-    use crate::turbomachinery::test_utils::enth_si;
     use twine_core::constraint::NonNegative;
+
+    use crate::turbomachinery::test_utils::enth_si;
 
     #[test]
     fn compression_work_rejects_negative() {

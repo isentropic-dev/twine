@@ -21,7 +21,7 @@ use uom::si::{
     thermodynamic_temperature::kelvin,
 };
 
-/// Ideal-gas test fluid with `k = 1.4` and a convenient reference state.
+/// Ideal gas test fluid with `k = 1.4` and a convenient reference state.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct MockGas;
 
