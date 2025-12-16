@@ -1,0 +1,424 @@
+//! Isentropic compressor model.
+//!
+//! Computes an outlet state at a target pressure using an isentropic efficiency `eta`.
+//!
+//! Given an inlet state and a target outlet pressure, the model:
+//! 1. computes an ideal (isentropic) outlet at constant entropy: `(p_out, s_in)`,
+//! 2. evaluates the ideal enthalpy rise `Δh_s = h_out,s − h_in`,
+//! 3. maps to an actual enthalpy rise using `η = Δh_s / Δh` ⇒ `Δh = Δh_s / η`,
+//! 4. requests an outlet state from `(p_out, h_out)` and reports the required work.
+
+use twine_core::constraint::{Constrained, UnitIntervalLowerOpen};
+use twine_thermo::{
+    State,
+    model::{StateFrom, ThermodynamicProperties},
+    units::{SpecificEnthalpy, SpecificEntropy},
+};
+use uom::si::f64::{Pressure, Ratio};
+
+use crate::turbomachinery::{
+    compressor::{CompressionError, CompressionResult},
+    work::CompressionWork,
+};
+
+/// Computes the compressor outlet state and required work using an isentropic efficiency model.
+///
+/// `eta` is an isentropic efficiency constrained to `(0, 1]`.
+/// Values near zero represent extremely inefficient compression and result in
+/// very large work.
+///
+/// The returned [`CompressionResult::work`] is the target enthalpy rise
+/// `h_out − h_in`, reported as a [`CompressionWork`]. If the thermodynamic
+/// model returns the outlet state via inverse-solving or interpolation,
+/// `thermo.enthalpy(&outlet)` may differ slightly from the target.
+///
+/// # Errors
+///
+/// Returns [`CompressionError`] if the thermodynamic model fails, `p_out < p_in`,
+/// or the resulting work is non-physical.
+pub fn isentropic<Fluid, M>(
+    inlet: &State<Fluid>,
+    p_out: Pressure,
+    eta: Constrained<Ratio, UnitIntervalLowerOpen>,
+    thermo: &M,
+) -> Result<CompressionResult<Fluid>, CompressionError<Fluid>>
+where
+    M: ThermodynamicProperties<Fluid>
+        + StateFrom<Fluid, (Pressure, SpecificEntropy)>
+        + StateFrom<Fluid, (Pressure, SpecificEnthalpy)>,
+{
+    let p_in = thermo
+        .pressure(inlet)
+        .map_err(CompressionError::inlet_pressure_failed)?;
+
+    let h_in = thermo
+        .enthalpy(inlet)
+        .map_err(CompressionError::inlet_enthalpy_failed)?;
+
+    let s_in = thermo
+        .entropy(inlet)
+        .map_err(CompressionError::inlet_entropy_failed)?;
+
+    isentropic_core(p_in, h_in, s_in, p_out, eta, thermo)
+}
+
+/// Core isentropic compression model.
+///
+/// This function assumes `p_in`, `h_in`, and `s_in` are internally consistent
+/// and were produced using the provided `thermo` model instance.
+///
+/// # Errors
+///
+/// Returns [`CompressionError`] if the thermodynamic model fails, `p_out < p_in`,
+/// or the resulting work is non-physical.
+pub(crate) fn isentropic_core<Fluid, M>(
+    p_in: Pressure,
+    h_in: SpecificEnthalpy,
+    s_in: SpecificEntropy,
+    p_out: Pressure,
+    eta: Constrained<Ratio, UnitIntervalLowerOpen>,
+    thermo: &M,
+) -> Result<CompressionResult<Fluid>, CompressionError<Fluid>>
+where
+    M: ThermodynamicProperties<Fluid>
+        + StateFrom<Fluid, (Pressure, SpecificEntropy)>
+        + StateFrom<Fluid, (Pressure, SpecificEnthalpy)>,
+{
+    if p_out < p_in {
+        return Err(CompressionError::OutletPressureLessThanInlet { p_in, p_out });
+    }
+
+    let isentropic_outlet = thermo.state_from((p_out, s_in)).map_err(|source| {
+        CompressionError::ideal_outlet_state_from_pressure_entropy_failed(p_out, s_in, source)
+    })?;
+
+    let h_out_s = thermo
+        .enthalpy(&isentropic_outlet)
+        .map_err(CompressionError::ideal_outlet_enthalpy_failed)?;
+
+    let dh_s = h_out_s - h_in;
+    let dh_actual = dh_s / eta.into_inner();
+    let h_out_target = h_in + dh_actual;
+
+    let outlet = thermo.state_from((p_out, h_out_target)).map_err(|source| {
+        CompressionError::outlet_state_from_pressure_enthalpy_failed(p_out, h_out_target, source)
+    })?;
+
+    let raw_work = h_out_target - h_in;
+
+    match CompressionWork::new(raw_work) {
+        Ok(work) => Ok(CompressionResult { outlet, work }),
+        Err(_) => Err(CompressionError::NonPhysicalWork { outlet, raw_work }),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use approx::assert_relative_eq;
+    use thiserror::Error;
+    use twine_core::constraint::UnitIntervalLowerOpen;
+    use twine_thermo::{
+        PropertyError,
+        fluid::Stateless,
+        model::ideal_gas::{IdealGas, IdealGasFluid},
+        units::{SpecificGasConstant, SpecificInternalEnergy},
+    };
+    use uom::si::{
+        energy::joule,
+        f64::{
+            Energy, Mass, MassDensity, Pressure, Ratio, SpecificHeatCapacity,
+            ThermodynamicTemperature,
+        },
+        mass::kilogram,
+        mass_density::kilogram_per_cubic_meter,
+        pressure::{kilopascal, pascal},
+        ratio::ratio,
+        specific_heat_capacity::joule_per_kilogram_kelvin,
+        thermodynamic_temperature::kelvin,
+    };
+
+    #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+    struct MockGas;
+
+    impl Stateless for MockGas {}
+
+    impl IdealGasFluid for MockGas {
+        fn gas_constant(&self) -> SpecificGasConstant {
+            // Choose R so that k = cp/(cp-R) is exactly 1.4.
+            SpecificGasConstant::new::<joule_per_kilogram_kelvin>(2000.0 / 7.0)
+        }
+
+        fn cp(&self) -> SpecificHeatCapacity {
+            SpecificHeatCapacity::new::<joule_per_kilogram_kelvin>(1000.0)
+        }
+
+        fn reference_temperature(&self) -> ThermodynamicTemperature {
+            ThermodynamicTemperature::new::<kelvin>(300.0)
+        }
+
+        fn reference_pressure(&self) -> Pressure {
+            Pressure::new::<kilopascal>(100.0)
+        }
+    }
+
+    #[test]
+    fn normal_compression_matches_expected_work() {
+        let thermo = IdealGas;
+
+        let p_in = Pressure::new::<kilopascal>(100.0);
+        let t_in = ThermodynamicTemperature::new::<kelvin>(300.0);
+        let inlet: State<MockGas> = thermo.state_from((t_in, p_in)).unwrap();
+
+        // Pick `p2/p1 = 2^7` so that `T2s = T1*(p2/p1)^((k-1)/k) = T1*(2^7)^(2/7) = 4*T1`.
+        let p_out = Pressure::new::<kilopascal>(12_800.0);
+        let eta = UnitIntervalLowerOpen::new(Ratio::new::<ratio>(0.9)).unwrap();
+
+        let result = isentropic(&inlet, p_out, eta, &thermo).unwrap();
+
+        // Expected output for an ideal gas:
+        // ```
+        // k = cp/(cp-R) = 1.4
+        // T2s = 4*T1 = 1200 K
+        // w = cp*(T2s - T1)/eta = 1_000_000 J/kg
+        // ```
+        let expected_work_j_per_kg = 1_000_000.0;
+        assert_relative_eq!(result.work.quantity().value, expected_work_j_per_kg);
+
+        // The outlet state is computed from (p_out, h_out_target),
+        // so for an ideal gas: `T2 = T1 + w/cp = 300 K + 1_000_000/1000 = 1300 K`.
+        assert_relative_eq!(result.outlet.temperature.get::<kelvin>(), 1300.0);
+    }
+
+    #[test]
+    fn outlet_pressure_less_than_inlet_is_an_error() {
+        let inlet = State {
+            temperature: ThermodynamicTemperature::new::<kelvin>(300.0),
+            density: MassDensity::new::<kilogram_per_cubic_meter>(1.0),
+            fluid: MockGas,
+        };
+        let p_in = IdealGas.pressure(&inlet).unwrap();
+        let p_out = p_in - Pressure::new::<pascal>(1.0);
+
+        let err = isentropic(&inlet, p_out, UnitIntervalLowerOpen::one(), &IdealGas).unwrap_err();
+
+        match err {
+            CompressionError::OutletPressureLessThanInlet {
+                p_in: reported_p_in,
+                p_out: reported_p_out,
+            } => {
+                assert_eq!(reported_p_in, p_in);
+                assert_eq!(reported_p_out, p_out);
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    /// Minimal thermodynamic model used to exercise error paths and wrapper behavior.
+    ///
+    /// The production code wraps failures from either property evaluation or state
+    /// construction into [`CompressionError::ThermodynamicModelFailed`], and reports
+    /// [`CompressionError::NonPhysicalWork`] when the computed work would be negative.
+    /// `FakeThermo` provides controllable failure modes to test those branches without
+    /// relying on behavior of a real fluid model.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum FakeMode {
+        FailPs,
+        FailPh,
+        FailEnthalpy,
+        NonPhysical,
+    }
+
+    #[derive(Debug, Clone, Copy)]
+    struct FakeThermo {
+        mode: FakeMode,
+    }
+
+    #[derive(Debug, Error)]
+    #[error("fake state_from failure")]
+    struct FakeStateFromError;
+
+    impl ThermodynamicProperties<MockGas> for FakeThermo {
+        fn pressure(&self, _state: &State<MockGas>) -> Result<Pressure, PropertyError> {
+            Err(PropertyError::NotImplemented {
+                property: "pressure",
+                context: None,
+            })
+        }
+
+        fn internal_energy(
+            &self,
+            _state: &State<MockGas>,
+        ) -> Result<SpecificInternalEnergy, PropertyError> {
+            Err(PropertyError::NotImplemented {
+                property: "internal_energy",
+                context: None,
+            })
+        }
+
+        fn enthalpy(&self, _state: &State<MockGas>) -> Result<SpecificEnthalpy, PropertyError> {
+            match self.mode {
+                FakeMode::FailEnthalpy => Err(PropertyError::Calculation("fake".into())),
+                FakeMode::NonPhysical => Ok(enth_si(-1.0)),
+                _ => Ok(enth_si(1.0)),
+            }
+        }
+
+        fn entropy(&self, _state: &State<MockGas>) -> Result<SpecificEntropy, PropertyError> {
+            Err(PropertyError::NotImplemented {
+                property: "entropy",
+                context: None,
+            })
+        }
+
+        fn cp(&self, _state: &State<MockGas>) -> Result<SpecificHeatCapacity, PropertyError> {
+            Err(PropertyError::NotImplemented {
+                property: "cp",
+                context: None,
+            })
+        }
+
+        fn cv(&self, _state: &State<MockGas>) -> Result<SpecificHeatCapacity, PropertyError> {
+            Err(PropertyError::NotImplemented {
+                property: "cv",
+                context: None,
+            })
+        }
+    }
+
+    impl StateFrom<MockGas, (Pressure, SpecificEntropy)> for FakeThermo {
+        type Error = FakeStateFromError;
+
+        fn state_from(
+            &self,
+            _input: (Pressure, SpecificEntropy),
+        ) -> Result<State<MockGas>, Self::Error> {
+            match self.mode {
+                FakeMode::FailPs => Err(FakeStateFromError),
+                _ => Ok(State {
+                    temperature: ThermodynamicTemperature::new::<kelvin>(1.0),
+                    density: MassDensity::new::<kilogram_per_cubic_meter>(1.0),
+                    fluid: MockGas,
+                }),
+            }
+        }
+    }
+
+    impl StateFrom<MockGas, (Pressure, SpecificEnthalpy)> for FakeThermo {
+        type Error = FakeStateFromError;
+
+        fn state_from(
+            &self,
+            _input: (Pressure, SpecificEnthalpy),
+        ) -> Result<State<MockGas>, Self::Error> {
+            match self.mode {
+                FakeMode::FailPh => Err(FakeStateFromError),
+                _ => Ok(State {
+                    temperature: ThermodynamicTemperature::new::<kelvin>(1.0),
+                    density: MassDensity::new::<kilogram_per_cubic_meter>(1.0),
+                    fluid: MockGas,
+                }),
+            }
+        }
+    }
+
+    fn enth_si(value: f64) -> SpecificEnthalpy {
+        Energy::new::<joule>(value) / Mass::new::<kilogram>(1.0)
+    }
+
+    fn core_inputs() -> (
+        Pressure,
+        SpecificEnthalpy,
+        SpecificEntropy,
+        Pressure,
+        Constrained<Ratio, UnitIntervalLowerOpen>,
+    ) {
+        let p_in = Pressure::new::<kilopascal>(100.0);
+        let h_in = enth_si(0.0);
+        let s_in = SpecificEntropy::new::<joule_per_kilogram_kelvin>(0.0);
+        let p_out = Pressure::new::<kilopascal>(200.0);
+        let eta = UnitIntervalLowerOpen::one();
+        (p_in, h_in, s_in, p_out, eta)
+    }
+
+    #[test]
+    fn core_state_from_pressure_entropy_failure_is_wrapped() {
+        let thermo = FakeThermo {
+            mode: FakeMode::FailPs,
+        };
+        let (p_in, h_in, s_in, p_out, eta) = core_inputs();
+
+        let err = isentropic_core(p_in, h_in, s_in, p_out, eta, &thermo).unwrap_err();
+
+        match err {
+            CompressionError::ThermodynamicModelFailed { context, source: _ } => {
+                assert!(context.contains("ideal_outlet_state_from("));
+                assert!(context.contains("p_out="));
+                assert!(context.contains("s_in="));
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn core_state_from_pressure_enthalpy_failure_is_wrapped() {
+        let thermo = FakeThermo {
+            mode: FakeMode::FailPh,
+        };
+        let (p_in, h_in, s_in, p_out, eta) = core_inputs();
+
+        let err = isentropic_core(p_in, h_in, s_in, p_out, eta, &thermo).unwrap_err();
+
+        match err {
+            CompressionError::ThermodynamicModelFailed { context, source: _ } => {
+                assert!(context.contains("outlet_state_from("));
+                assert!(context.contains("p_out="));
+                assert!(context.contains("h_out_target="));
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn core_property_failure_is_wrapped() {
+        let thermo = FakeThermo {
+            mode: FakeMode::FailEnthalpy,
+        };
+        let (p_in, h_in, s_in, p_out, eta) = core_inputs();
+
+        let err = isentropic_core(p_in, h_in, s_in, p_out, eta, &thermo).unwrap_err();
+
+        match err {
+            CompressionError::ThermodynamicModelFailed { context, source } => {
+                assert_eq!(context, "enthalpy(ideal outlet)");
+                let source = source
+                    .downcast_ref::<PropertyError>()
+                    .expect("expected PropertyError source");
+                assert!(matches!(source, PropertyError::Calculation(_)));
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn core_non_physical_work_returns_outlet_state() {
+        let thermo = FakeThermo {
+            mode: FakeMode::NonPhysical,
+        };
+        let (p_in, h_in, s_in, p_out, eta) = core_inputs();
+
+        let err = isentropic_core(p_in, h_in, s_in, p_out, eta, &thermo).unwrap_err();
+
+        match err {
+            CompressionError::NonPhysicalWork {
+                outlet: _,
+                raw_work,
+                ..
+            } => {
+                assert!(raw_work.value < 0.0);
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+}
