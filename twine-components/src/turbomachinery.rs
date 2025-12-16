@@ -6,6 +6,10 @@
 //! rather than a signed value with a convention-dependent meaning.
 
 pub mod compressor;
+pub mod turbine;
 mod work;
 
 pub use work::{CompressionWork, ExpansionWork};
+
+#[cfg(test)]
+pub(crate) mod test_utils;

@@ -86,17 +86,8 @@ impl ExpansionWork {
 mod tests {
     use super::*;
 
+    use crate::turbomachinery::test_utils::enth_si;
     use twine_core::constraint::NonNegative;
-    use uom::si::{
-        energy::joule,
-        f64::{Energy, Mass},
-        mass::kilogram,
-    };
-
-    /// Constructs a specific enthalpy in SI units (J/kg).
-    fn enth_si(value: f64) -> SpecificEnthalpy {
-        Energy::new::<joule>(value) / Mass::new::<kilogram>(1.0)
-    }
 
     #[test]
     fn compression_work_rejects_negative() {
