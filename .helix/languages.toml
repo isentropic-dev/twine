@@ -6,6 +6,9 @@ auto-format = true
 command = "clippy"
 extraArgs = ["--", "-W", "clippy::pedantic"]
 
+[language-server.rust-analyzer.config.cargo]
+features = ["coolprop"]
+
 [[language]]
 name = "toml"
 auto-format = true
