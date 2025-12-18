@@ -13,6 +13,11 @@ keywords = ["twine", "framework", "modeling", "thermodynamics", "fluid"]
 twine-core = { version = "0.3.0", path = "../twine-core" }
 thiserror = { workspace = true }
 uom = { workspace = true }
+rfluids = { version = "0.2.1", optional = true }
+
+[features]
+default = []
+coolprop = ["dep:rfluids"]
 
 [dev-dependencies]
 approx = { workspace = true }

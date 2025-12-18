@@ -43,3 +43,9 @@ impl IdealGasFluid for CarbonDioxide {
         Pressure::new::<atmosphere>(1.0)
     }
 }
+
+#[cfg(feature = "coolprop")]
+impl crate::model::coolprop::CoolPropFluid for CarbonDioxide {
+    const BACKEND: &'static str = "HEOS";
+    const NAME: &'static str = "CarbonDioxide";
+}
