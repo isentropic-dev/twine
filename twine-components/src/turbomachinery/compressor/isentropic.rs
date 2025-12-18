@@ -11,12 +11,13 @@
 use twine_core::constraint::{Constrained, UnitIntervalLowerOpen};
 use twine_thermo::{
     State,
-    model::{StateFrom, ThermodynamicProperties},
+    capability::{HasEnthalpy, HasEntropy, HasPressure, StateFrom, ThermoModel},
     units::{SpecificEnthalpy, SpecificEntropy},
 };
 use uom::si::f64::{Pressure, Ratio};
 
 use crate::turbomachinery::{
+    InletProperties,
     compressor::{CompressionError, CompressionResult},
     work::CompressionWork,
 };
@@ -36,16 +37,20 @@ use crate::turbomachinery::{
 ///
 /// Returns [`CompressionError`] if the thermodynamic model fails, `p_out < p_in`,
 /// or the resulting work is non-physical.
-pub fn isentropic<Fluid, M>(
+pub fn isentropic<Fluid, Model>(
     inlet: &State<Fluid>,
     p_out: Pressure,
     eta: Constrained<Ratio, UnitIntervalLowerOpen>,
-    thermo: &M,
+    thermo: &Model,
 ) -> Result<CompressionResult<Fluid>, CompressionError<Fluid>>
 where
-    M: ThermodynamicProperties<Fluid>
-        + StateFrom<Fluid, (Pressure, SpecificEntropy)>
-        + StateFrom<Fluid, (Pressure, SpecificEnthalpy)>,
+    Fluid: Clone,
+    Model: ThermoModel<Fluid = Fluid>
+        + HasPressure
+        + HasEnthalpy
+        + HasEntropy
+        + StateFrom<(Fluid, Pressure, SpecificEnthalpy)>
+        + StateFrom<(Fluid, Pressure, SpecificEntropy)>,
 {
     let p_in = thermo
         .pressure(inlet)
@@ -59,36 +64,47 @@ where
         .entropy(inlet)
         .map_err(CompressionError::inlet_entropy_failed)?;
 
-    isentropic_core(p_in, h_in, s_in, p_out, eta, thermo)
+    let inlet_props = InletProperties {
+        thermo,
+        fluid: inlet.fluid.clone(),
+        p_in,
+        h_in,
+        s_in,
+    };
+    isentropic_core(inlet_props, p_out, eta)
 }
 
 /// Core isentropic compression model.
-///
-/// This function assumes `p_in`, `h_in`, and `s_in` are internally consistent
-/// and were produced using the provided `thermo` model instance.
 ///
 /// # Errors
 ///
 /// Returns [`CompressionError`] if the thermodynamic model fails, `p_out < p_in`,
 /// or the resulting work is non-physical.
-pub(crate) fn isentropic_core<Fluid, M>(
-    p_in: Pressure,
-    h_in: SpecificEnthalpy,
-    s_in: SpecificEntropy,
+#[allow(clippy::needless_pass_by_value)]
+pub(crate) fn isentropic_core<Fluid, Model>(
+    inlet_props: InletProperties<'_, Fluid, Model>,
     p_out: Pressure,
     eta: Constrained<Ratio, UnitIntervalLowerOpen>,
-    thermo: &M,
 ) -> Result<CompressionResult<Fluid>, CompressionError<Fluid>>
 where
-    M: ThermodynamicProperties<Fluid>
-        + StateFrom<Fluid, (Pressure, SpecificEntropy)>
-        + StateFrom<Fluid, (Pressure, SpecificEnthalpy)>,
+    Model: ThermoModel<Fluid = Fluid>
+        + HasEnthalpy
+        + StateFrom<(Fluid, Pressure, SpecificEnthalpy)>
+        + StateFrom<(Fluid, Pressure, SpecificEntropy)>,
 {
+    let InletProperties {
+        thermo,
+        fluid,
+        p_in,
+        h_in,
+        s_in,
+    } = inlet_props;
+
     if p_out < p_in {
         return Err(CompressionError::OutletPressureLessThanInlet { p_in, p_out });
     }
 
-    let isentropic_outlet = thermo.state_from((p_out, s_in)).map_err(|source| {
+    let isentropic_outlet = thermo.state_from((fluid, p_out, s_in)).map_err(|source| {
         CompressionError::ideal_outlet_state_from_pressure_entropy_failed(p_out, s_in, source)
     })?;
 
@@ -96,13 +112,21 @@ where
         .enthalpy(&isentropic_outlet)
         .map_err(CompressionError::ideal_outlet_enthalpy_failed)?;
 
+    let State { fluid, .. } = isentropic_outlet;
+
     let dh_s = h_out_s - h_in;
     let dh_actual = dh_s / eta.into_inner();
     let h_out_target = h_in + dh_actual;
 
-    let outlet = thermo.state_from((p_out, h_out_target)).map_err(|source| {
-        CompressionError::outlet_state_from_pressure_enthalpy_failed(p_out, h_out_target, source)
-    })?;
+    let outlet = thermo
+        .state_from((fluid, p_out, h_out_target))
+        .map_err(|source| {
+            CompressionError::outlet_state_from_pressure_enthalpy_failed(
+                p_out,
+                h_out_target,
+                source,
+            )
+        })?;
 
     let raw_work = h_out_target - h_in;
 
@@ -118,7 +142,7 @@ mod tests {
 
     use approx::assert_relative_eq;
     use twine_core::constraint::UnitIntervalLowerOpen;
-    use twine_thermo::{PropertyError, model::ideal_gas::IdealGas};
+    use twine_thermo::{PropertyError, capability::HasPressure};
     use uom::si::{
         f64::{MassDensity, Pressure, Ratio, ThermodynamicTemperature},
         mass_density::kilogram_per_cubic_meter,
@@ -128,11 +152,13 @@ mod tests {
         thermodynamic_temperature::kelvin,
     };
 
-    use crate::turbomachinery::test_utils::{FakeMode, FakeThermo, MockGas, enth_si};
+    use crate::turbomachinery::test_utils::{
+        FakeMode, FakeThermo, MockGas, enth_si, mock_gas_model,
+    };
 
     #[test]
     fn normal_compression_matches_expected_work() {
-        let thermo = IdealGas;
+        let thermo = mock_gas_model();
 
         let p_in = Pressure::new::<kilopascal>(100.0);
         let t_in = ThermodynamicTemperature::new::<kelvin>(300.0);
@@ -160,15 +186,17 @@ mod tests {
 
     #[test]
     fn outlet_pressure_less_than_inlet_is_an_error() {
+        let thermo = mock_gas_model();
+
         let inlet = State {
             temperature: ThermodynamicTemperature::new::<kelvin>(300.0),
             density: MassDensity::new::<kilogram_per_cubic_meter>(1.0),
             fluid: MockGas,
         };
-        let p_in = IdealGas.pressure(&inlet).unwrap();
+        let p_in = thermo.pressure(&inlet).unwrap();
         let p_out = p_in - Pressure::new::<pascal>(1.0);
 
-        let err = isentropic(&inlet, p_out, UnitIntervalLowerOpen::one(), &IdealGas).unwrap_err();
+        let err = isentropic(&inlet, p_out, UnitIntervalLowerOpen::one(), &thermo).unwrap_err();
 
         match err {
             CompressionError::OutletPressureLessThanInlet {
@@ -205,7 +233,14 @@ mod tests {
         };
         let (p_in, h_in, s_in, p_out, eta) = core_inputs();
 
-        let err = isentropic_core(p_in, h_in, s_in, p_out, eta, &thermo).unwrap_err();
+        let inlet_props = InletProperties {
+            thermo: &thermo,
+            fluid: MockGas,
+            p_in,
+            h_in,
+            s_in,
+        };
+        let err = isentropic_core(inlet_props, p_out, eta).unwrap_err();
 
         match err {
             CompressionError::ThermodynamicModelFailed { context, source: _ } => {
@@ -224,7 +259,14 @@ mod tests {
         };
         let (p_in, h_in, s_in, p_out, eta) = core_inputs();
 
-        let err = isentropic_core(p_in, h_in, s_in, p_out, eta, &thermo).unwrap_err();
+        let inlet_props = InletProperties {
+            thermo: &thermo,
+            fluid: MockGas,
+            p_in,
+            h_in,
+            s_in,
+        };
+        let err = isentropic_core(inlet_props, p_out, eta).unwrap_err();
 
         match err {
             CompressionError::ThermodynamicModelFailed { context, source: _ } => {
@@ -243,7 +285,14 @@ mod tests {
         };
         let (p_in, h_in, s_in, p_out, eta) = core_inputs();
 
-        let err = isentropic_core(p_in, h_in, s_in, p_out, eta, &thermo).unwrap_err();
+        let inlet_props = InletProperties {
+            thermo: &thermo,
+            fluid: MockGas,
+            p_in,
+            h_in,
+            s_in,
+        };
+        let err = isentropic_core(inlet_props, p_out, eta).unwrap_err();
 
         match err {
             CompressionError::ThermodynamicModelFailed { context, source } => {
@@ -251,7 +300,7 @@ mod tests {
                 let source = source
                     .downcast_ref::<PropertyError>()
                     .expect("expected PropertyError source");
-                assert!(matches!(source, PropertyError::Calculation(_)));
+                assert!(matches!(source, PropertyError::Calculation { .. }));
             }
             other => panic!("unexpected error: {other:?}"),
         }
@@ -264,7 +313,14 @@ mod tests {
         };
         let (p_in, h_in, s_in, p_out, eta) = core_inputs();
 
-        let err = isentropic_core(p_in, h_in, s_in, p_out, eta, &thermo).unwrap_err();
+        let inlet_props = InletProperties {
+            thermo: &thermo,
+            fluid: MockGas,
+            p_in,
+            h_in,
+            s_in,
+        };
+        let err = isentropic_core(inlet_props, p_out, eta).unwrap_err();
 
         match err {
             CompressionError::NonPhysicalWork {

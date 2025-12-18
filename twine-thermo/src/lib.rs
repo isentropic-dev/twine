@@ -6,6 +6,7 @@ mod flow;
 mod state;
 mod stream;
 
+pub mod capability;
 pub mod fluid;
 pub mod model;
 pub mod units;

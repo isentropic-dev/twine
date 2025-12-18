@@ -10,7 +10,7 @@ use uom::si::f64::{MassDensity, ThermodynamicTemperature, Time};
 /// [`Water`], or a structured type containing additional data, such as mixture
 /// composition or particle concentration.
 ///
-/// `State` is the primary input to [`ThermodynamicProperties`] models for
+/// `State` is the primary input to capability-based thermodynamic models for
 /// calculating pressure, enthalpy, entropy, and related quantities.
 ///
 /// # Example

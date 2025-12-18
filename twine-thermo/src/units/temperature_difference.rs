@@ -1,6 +1,7 @@
-use uom::si::f64::{TemperatureInterval, ThermodynamicTemperature};
 use uom::si::{
-    temperature_interval::kelvin as delta_kelvin, thermodynamic_temperature::kelvin as abs_kelvin,
+    f64::{TemperatureInterval, ThermodynamicTemperature},
+    temperature_interval::kelvin as delta_kelvin,
+    thermodynamic_temperature::kelvin as abs_kelvin,
 };
 
 /// Extension method for `ThermodynamicTemperature` to compute a temperature difference.
