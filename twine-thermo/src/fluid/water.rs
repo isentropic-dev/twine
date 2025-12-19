@@ -11,19 +11,19 @@ use crate::model::incompressible::{IncompressibleFluid, IncompressibleParameters
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Water;
 
+impl TimeIntegrable for Water {
+    type Derivative = ();
+
+    fn step(self, _derivative: Self::Derivative, _dt: Time) -> Self {
+        self
+    }
+}
+
 impl IncompressibleFluid for Water {
     fn parameters() -> IncompressibleParameters {
         IncompressibleParameters::new(
             SpecificHeatCapacity::new::<kilojoule_per_kilogram_kelvin>(4.184),
             MassDensity::new::<kilogram_per_cubic_meter>(997.047),
         )
-    }
-}
-
-impl TimeIntegrable for Water {
-    type Derivative = ();
-
-    fn step(self, _derivative: Self::Derivative, _dt: Time) -> Self {
-        self
     }
 }
