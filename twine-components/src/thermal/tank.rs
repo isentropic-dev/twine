@@ -6,7 +6,8 @@ use twine_core::{
 };
 use twine_thermo::{
     BoundaryFlow, ControlVolume, HeatFlow, MassFlow, PropertyError, State, StateDerivative, Stream,
-    model::ThermodynamicProperties, units::TemperatureDifference,
+    capability::{HasCv, HasEnthalpy, HasInternalEnergy, ThermoModel},
+    units::TemperatureDifference,
 };
 use uom::si::f64::{Area, HeatTransfer, ThermodynamicTemperature, Volume};
 
@@ -23,7 +24,7 @@ use uom::si::f64::{Area, HeatTransfer, ThermodynamicTemperature, Volume};
 /// - Auxiliary heat addition or extraction (e.g., via a heater or chiller)
 /// - Heat loss (or gain) with ambient via a U·A·ΔT model
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Tank<'a, Fluid, Model: ThermodynamicProperties<Fluid>> {
+pub struct Tank<'a, Fluid, Model> {
     pub area: Constrained<Area, StrictlyPositive>,
     pub u_value: Constrained<HeatTransfer, NonNegative>,
     pub volume: Constrained<Volume, StrictlyPositive>,
@@ -31,7 +32,7 @@ pub struct Tank<'a, Fluid, Model: ThermodynamicProperties<Fluid>> {
     _marker: PhantomData<Fluid>,
 }
 
-impl<'a, Fluid, Model: ThermodynamicProperties<Fluid>> Tank<'a, Fluid, Model> {
+impl<'a, Fluid, Model> Tank<'a, Fluid, Model> {
     /// Creates a new `Tank` from configuration and a model.
     ///
     /// # Errors
@@ -94,10 +95,10 @@ pub struct TankOutput<Fluid: TimeIntegrable> {
     pub state_derivative: StateDerivative<Fluid>,
 }
 
-impl<Fluid, Model> Tank<'_, Fluid, Model>
+impl<Model> Tank<'_, Model::Fluid, Model>
 where
-    Model: ThermodynamicProperties<Fluid>,
-    Fluid: TimeIntegrable<Derivative = ()>,
+    Model: ThermoModel + HasCv + HasEnthalpy + HasInternalEnergy,
+    Model::Fluid: TimeIntegrable<Derivative = ()>,
 {
     /// Call the tank component.
     ///
@@ -108,7 +109,10 @@ where
     /// # Panics
     ///
     /// Panics if `U·A·ΔT` is not finite.
-    pub fn call(&self, input: TankInput<Fluid>) -> Result<TankOutput<Fluid>, PropertyError> {
+    pub fn call(
+        &self,
+        input: TankInput<Model::Fluid>,
+    ) -> Result<TankOutput<Model::Fluid>, PropertyError> {
         let TankInput {
             ambient_temperature,
             aux_heat_flow,
@@ -154,8 +158,7 @@ mod tests {
     use approx::assert_relative_eq;
     use twine_core::TimeDerivative;
     use twine_thermo::{
-        fluid::Water,
-        model::{StateFrom, incompressible::Incompressible},
+        capability::StateFrom, fluid::Water, model::incompressible::Incompressible,
     };
     use uom::{
         ConstZero,
@@ -173,14 +176,14 @@ mod tests {
     /// Returns a default tank filled with water.
     ///
     /// Uses volume, surface area, and U-value typical of a residential water heater.
-    fn water_tank() -> Tank<'static, Water, Incompressible> {
+    fn water_tank(model: &Incompressible<Water>) -> Tank<'_, Water, Incompressible<Water>> {
         Tank::new(
             TankConfig {
                 volume: Volume::new::<gallon>(80.0),
                 area: Area::new::<square_foot>(9.0),
                 u_value: HeatTransfer::new::<watt_per_square_meter_kelvin>(0.1),
             },
-            &Incompressible,
+            model,
         )
         .unwrap()
     }
@@ -192,9 +195,9 @@ mod tests {
     /// - Tank and ambient temperatures are 20°C
     /// - No auxiliary heat input
     /// - No inflow
-    fn equilibrium_input() -> TankInput<Water> {
+    fn equilibrium_input(model: &Incompressible<Water>) -> TankInput<Water> {
         let t_ambient = ThermodynamicTemperature::new::<degree_celsius>(20.0);
-        let state = Incompressible.state_from(t_ambient).unwrap();
+        let state = model.state_from(t_ambient).unwrap();
 
         TankInput {
             ambient_temperature: t_ambient,
@@ -206,8 +209,9 @@ mod tests {
 
     #[test]
     fn nothing_happens_at_equilibrium() {
-        let tank = water_tank();
-        let input = equilibrium_input();
+        let thermo = Incompressible::<Water>::new().unwrap();
+        let tank = water_tank(&thermo);
+        let input = equilibrium_input(&thermo);
         let output = tank.call(input).unwrap();
 
         assert_eq!(output.ambient_heat_flow.signed(), Power::ZERO);
@@ -223,12 +227,13 @@ mod tests {
 
     #[test]
     fn tank_loses_heat_when_hotter_than_ambient() {
-        let tank = water_tank();
+        let thermo = Incompressible::<Water>::new().unwrap();
+        let tank = water_tank(&thermo);
         let input = TankInput {
-            state: Incompressible
+            state: thermo
                 .state_from(ThermodynamicTemperature::new::<degree_celsius>(50.0))
                 .unwrap(),
-            ..equilibrium_input()
+            ..equilibrium_input(&thermo)
         };
         let output = tank.call(input).unwrap();
 
@@ -245,11 +250,12 @@ mod tests {
 
     #[test]
     fn tank_with_aux_heating_heats_without_flow_and_cools_with_flow() {
-        let tank = water_tank();
+        let thermo = Incompressible::<Water>::new().unwrap();
+        let tank = water_tank(&thermo);
 
         let input_without_draw = TankInput {
             aux_heat_flow: HeatFlow::from_signed(Power::new::<kilowatt>(4.5)).unwrap(),
-            ..equilibrium_input()
+            ..equilibrium_input(&thermo)
         };
 
         let output = tank.call(input_without_draw).unwrap();
@@ -262,7 +268,7 @@ mod tests {
             inflow: Some(
                 Stream::new(
                     MassRate::new::<kilogram_per_second>(0.4),
-                    Incompressible
+                    thermo
                         .state_from(ThermodynamicTemperature::new::<degree_celsius>(10.0))
                         .unwrap(),
                 )

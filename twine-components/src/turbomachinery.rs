@@ -7,8 +7,11 @@
 
 pub mod compressor;
 pub mod turbine;
+
+mod inlet_properties;
 mod work;
 
+pub(crate) use inlet_properties::InletProperties;
 pub use work::{CompressionWork, ExpansionWork};
 
 #[cfg(test)]

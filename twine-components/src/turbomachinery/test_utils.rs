@@ -6,44 +6,35 @@
 use thiserror::Error;
 use twine_thermo::{
     PropertyError, State,
-    fluid::Stateless,
-    model::ideal_gas::IdealGasFluid,
-    model::{StateFrom, ThermodynamicProperties},
-    units::{SpecificEnthalpy, SpecificEntropy, SpecificGasConstant, SpecificInternalEnergy},
+    capability::{HasEnthalpy, StateFrom, ThermoModel},
+    model::perfect_gas::{PerfectGas, PerfectGasFluid, PerfectGasParameters},
+    units::{SpecificEnthalpy, SpecificEntropy, SpecificGasConstant},
 };
 use uom::si::{
     energy::joule,
     f64::{Energy, Mass, MassDensity, Pressure, SpecificHeatCapacity, ThermodynamicTemperature},
     mass::kilogram,
     mass_density::kilogram_per_cubic_meter,
-    pressure::kilopascal,
     specific_heat_capacity::joule_per_kilogram_kelvin,
     thermodynamic_temperature::kelvin,
 };
 
-/// Ideal gas test fluid with `k = 1.4` and a convenient reference state.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+/// Perfect gas test fluid with `k = 1.4`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) struct MockGas;
 
-impl Stateless for MockGas {}
-
-impl IdealGasFluid for MockGas {
-    fn gas_constant(&self) -> SpecificGasConstant {
+impl PerfectGasFluid for MockGas {
+    fn parameters() -> PerfectGasParameters {
         // Choose R so that k = cp/(cp-R) is exactly 1.4.
-        SpecificGasConstant::new::<joule_per_kilogram_kelvin>(2000.0 / 7.0)
+        PerfectGasParameters::new(
+            SpecificGasConstant::new::<joule_per_kilogram_kelvin>(2000.0 / 7.0),
+            SpecificHeatCapacity::new::<joule_per_kilogram_kelvin>(1000.0),
+        )
     }
+}
 
-    fn cp(&self) -> SpecificHeatCapacity {
-        SpecificHeatCapacity::new::<joule_per_kilogram_kelvin>(1000.0)
-    }
-
-    fn reference_temperature(&self) -> ThermodynamicTemperature {
-        ThermodynamicTemperature::new::<kelvin>(300.0)
-    }
-
-    fn reference_pressure(&self) -> Pressure {
-        Pressure::new::<kilopascal>(100.0)
-    }
+pub(crate) fn mock_gas_model() -> PerfectGas<MockGas> {
+    PerfectGas::<MockGas>::new().expect("mock gas parameters must be physically valid")
 }
 
 /// Constructs a specific enthalpy in SI units (J/kg).
@@ -87,60 +78,28 @@ fn fake_state() -> State<MockGas> {
     }
 }
 
-impl ThermodynamicProperties<MockGas> for FakeThermo {
-    fn pressure(&self, _state: &State<MockGas>) -> Result<Pressure, PropertyError> {
-        Err(PropertyError::NotImplemented {
-            property: "pressure",
-            context: None,
-        })
-    }
+impl ThermoModel for FakeThermo {
+    type Fluid = MockGas;
+}
 
-    fn internal_energy(
-        &self,
-        _state: &State<MockGas>,
-    ) -> Result<SpecificInternalEnergy, PropertyError> {
-        Err(PropertyError::NotImplemented {
-            property: "internal_energy",
-            context: None,
-        })
-    }
-
+impl HasEnthalpy for FakeThermo {
     fn enthalpy(&self, _state: &State<MockGas>) -> Result<SpecificEnthalpy, PropertyError> {
         match self.mode {
-            FakeMode::FailEnthalpy => Err(PropertyError::Calculation("fake".into())),
+            FakeMode::FailEnthalpy => Err(PropertyError::Calculation {
+                context: "fake".into(),
+            }),
             FakeMode::FixedEnthalpy(value) => Ok(value),
             _ => Ok(enth_si(1.0)),
         }
     }
-
-    fn entropy(&self, _state: &State<MockGas>) -> Result<SpecificEntropy, PropertyError> {
-        Err(PropertyError::NotImplemented {
-            property: "entropy",
-            context: None,
-        })
-    }
-
-    fn cp(&self, _state: &State<MockGas>) -> Result<SpecificHeatCapacity, PropertyError> {
-        Err(PropertyError::NotImplemented {
-            property: "cp",
-            context: None,
-        })
-    }
-
-    fn cv(&self, _state: &State<MockGas>) -> Result<SpecificHeatCapacity, PropertyError> {
-        Err(PropertyError::NotImplemented {
-            property: "cv",
-            context: None,
-        })
-    }
 }
 
-impl StateFrom<MockGas, (Pressure, SpecificEntropy)> for FakeThermo {
+impl StateFrom<(MockGas, Pressure, SpecificEntropy)> for FakeThermo {
     type Error = FakeStateFromError;
 
     fn state_from(
         &self,
-        _input: (Pressure, SpecificEntropy),
+        (_fluid, _p, _s): (MockGas, Pressure, SpecificEntropy),
     ) -> Result<State<MockGas>, Self::Error> {
         match self.mode {
             FakeMode::FailStateFromPressureEntropy => Err(FakeStateFromError),
@@ -149,12 +108,12 @@ impl StateFrom<MockGas, (Pressure, SpecificEntropy)> for FakeThermo {
     }
 }
 
-impl StateFrom<MockGas, (Pressure, SpecificEnthalpy)> for FakeThermo {
+impl StateFrom<(MockGas, Pressure, SpecificEnthalpy)> for FakeThermo {
     type Error = FakeStateFromError;
 
     fn state_from(
         &self,
-        _input: (Pressure, SpecificEnthalpy),
+        (_fluid, _p, _h): (MockGas, Pressure, SpecificEnthalpy),
     ) -> Result<State<MockGas>, Self::Error> {
         match self.mode {
             FakeMode::FailStateFromPressureEnthalpy => Err(FakeStateFromError),

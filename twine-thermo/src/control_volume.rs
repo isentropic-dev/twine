@@ -10,7 +10,7 @@ use uom::{
 
 use crate::{
     HeatFlow, MassFlow, PropertyError, State, StateDerivative, WorkFlow,
-    model::ThermodynamicProperties,
+    capability::{HasCv, HasEnthalpy, HasInternalEnergy, ThermoModel},
 };
 
 /// A finite control volume representing a well-mixed region of fluid.
@@ -89,7 +89,7 @@ impl<Fluid> ControlVolume<Fluid> {
         model: &Model,
     ) -> Result<Power, PropertyError>
     where
-        Model: ThermodynamicProperties<Fluid>,
+        Model: ThermoModel<Fluid = Fluid> + HasEnthalpy,
         I: IntoIterator<Item = &'a BoundaryFlow<Fluid>>,
         Fluid: 'a,
     {
@@ -177,7 +177,7 @@ where
         model: &Model,
     ) -> Result<StateDerivative<Fluid>, PropertyError>
     where
-        Model: ThermodynamicProperties<Fluid>,
+        Model: ThermoModel<Fluid = Fluid> + HasCv + HasEnthalpy + HasInternalEnergy,
     {
         let volume = self.volume.into_inner();
         let heat_capacity = volume * self.state.density * model.cv(&self.state)?;
@@ -211,24 +211,23 @@ mod tests {
     use super::*;
 
     use approx::assert_relative_eq;
+    use twine_core::TimeIntegrable;
     use twine_core::constraint::Constrained;
     use uom::si::{
         f64::{
-            MassDensity, MassRate, Pressure, SpecificHeatCapacity, ThermodynamicTemperature, Time,
-            Volume,
+            MassDensity, MassRate, SpecificHeatCapacity, ThermodynamicTemperature, Time, Volume,
         },
         mass_density::kilogram_per_cubic_meter,
         mass_rate::kilogram_per_second,
         power::watt,
-        pressure::atmosphere,
         specific_heat_capacity::joule_per_kilogram_kelvin,
-        thermodynamic_temperature::{degree_celsius, kelvin},
+        thermodynamic_temperature::kelvin,
         volume::cubic_meter,
     };
 
     use crate::{
         BoundaryFlow, ControlVolume, HeatFlow, MassFlow, State, Stream, WorkFlow,
-        model::ideal_gas::{IdealGas, IdealGasFluid},
+        model::perfect_gas::{PerfectGas, PerfectGasFluid, PerfectGasParameters},
         units::SpecificGasConstant,
     };
 
@@ -243,26 +242,23 @@ mod tests {
         }
     }
 
-    impl IdealGasFluid for MockGas {
-        fn gas_constant(&self) -> SpecificGasConstant {
-            SpecificGasConstant::new::<joule_per_kilogram_kelvin>(400.0)
+    impl PerfectGasFluid for MockGas {
+        fn parameters() -> PerfectGasParameters {
+            PerfectGasParameters::new(
+                SpecificGasConstant::new::<joule_per_kilogram_kelvin>(400.0),
+                SpecificHeatCapacity::new::<joule_per_kilogram_kelvin>(1000.0),
+            )
         }
+    }
 
-        fn cp(&self) -> SpecificHeatCapacity {
-            SpecificHeatCapacity::new::<joule_per_kilogram_kelvin>(1000.0)
-        }
-
-        fn reference_temperature(&self) -> ThermodynamicTemperature {
-            ThermodynamicTemperature::new::<degree_celsius>(0.0)
-        }
-
-        fn reference_pressure(&self) -> Pressure {
-            Pressure::new::<atmosphere>(1.0)
-        }
+    fn mock_gas_model() -> PerfectGas<MockGas> {
+        PerfectGas::<MockGas>::new().expect("mock gas parameters must be physically valid")
     }
 
     #[test]
     fn equal_inflow_and_outflow_conserves_mass_and_energy() {
+        let thermo = mock_gas_model();
+
         let volume = Volume::new::<cubic_meter>(2.0);
 
         let state = State::new(
@@ -283,7 +279,7 @@ mod tests {
             .unwrap()
             .state_derivative(
                 &[BoundaryFlow::Mass(inflow), BoundaryFlow::Mass(outflow)],
-                &IdealGas,
+                &thermo,
             )
             .unwrap();
 
@@ -300,6 +296,8 @@ mod tests {
 
     #[test]
     fn adiabatic_outflow_decreases_temperature_and_density() {
+        let thermo = mock_gas_model();
+
         let volume = Volume::new::<cubic_meter>(2.0);
 
         let state = State::new(
@@ -312,7 +310,7 @@ mod tests {
 
         let derivative = ControlVolume::new(volume, state)
             .unwrap()
-            .state_derivative(&[BoundaryFlow::Mass(MassFlow::Out(m_dot))], &IdealGas)
+            .state_derivative(&[BoundaryFlow::Mass(MassFlow::Out(m_dot))], &thermo)
             .unwrap();
 
         // Mass balance:
@@ -327,6 +325,8 @@ mod tests {
 
     #[test]
     fn heat_input_without_mass_flow_increases_temperature() {
+        let thermo = mock_gas_model();
+
         let volume = Volume::new::<cubic_meter>(1.0);
 
         let state = State::new(
@@ -341,7 +341,7 @@ mod tests {
                 &[BoundaryFlow::Heat(
                     HeatFlow::incoming(Power::new::<watt>(600.0)).unwrap(),
                 )],
-                &IdealGas,
+                &thermo,
             )
             .unwrap();
 
@@ -354,6 +354,8 @@ mod tests {
 
     #[test]
     fn net_power_out_without_mass_flow_decreases_temperature() {
+        let thermo = mock_gas_model();
+
         let volume = Volume::new::<cubic_meter>(3.0);
 
         let state = State::new(
@@ -369,7 +371,7 @@ mod tests {
                     BoundaryFlow::Heat(HeatFlow::incoming(Power::new::<watt>(60.0)).unwrap()),
                     BoundaryFlow::Work(WorkFlow::outgoing(Power::new::<watt>(5460.0)).unwrap()),
                 ],
-                &IdealGas,
+                &thermo,
             )
             .unwrap();
 

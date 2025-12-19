@@ -1,7 +1,10 @@
 use twine_core::constraint::{Constrained, ConstraintError, StrictlyPositive};
 use uom::si::f64::{MassRate, Power};
 
-use crate::{PropertyError, State, model::ThermodynamicProperties};
+use crate::{
+    PropertyError, State,
+    capability::{HasEnthalpy, ThermoModel},
+};
 
 /// A stream of fluid at a thermodynamic state.
 ///
@@ -45,7 +48,7 @@ impl<Fluid> Stream<Fluid> {
     /// Returns a [`PropertyError`] if enthalpy cannot be computed.
     pub fn enthalpy_flow<Model>(&self, model: &Model) -> Result<Power, PropertyError>
     where
-        Model: ThermodynamicProperties<Fluid>,
+        Model: ThermoModel<Fluid = Fluid> + HasEnthalpy,
     {
         let m_dot = self.rate.into_inner();
         let h = model.enthalpy(&self.state)?;

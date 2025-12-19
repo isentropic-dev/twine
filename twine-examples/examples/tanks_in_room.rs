@@ -39,12 +39,7 @@ use twine_core::{
 };
 use twine_plot::PlotApp;
 use twine_thermo::{
-    HeatFlow, Stream,
-    fluid::Water,
-    model::{
-        StateFrom,
-        incompressible::{Incompressible, IncompressibleFluid},
-    },
+    HeatFlow, Stream, capability::StateFrom, fluid::Water, model::incompressible::Incompressible,
 };
 use uom::{
     ConstZero,
@@ -88,8 +83,9 @@ const ELEMENT_KW: f64 = 4.5;
 /// enabling simulation of usage patterns such as residential hot water demand.
 #[derive(Debug)]
 struct TanksInRoom<'a> {
-    first_tank: Tank<'a, Water, Incompressible>,
-    second_tank: Tank<'a, Water, Incompressible>,
+    thermo: &'a Incompressible<Water>,
+    first_tank: Tank<'a, Water, Incompressible<Water>>,
+    second_tank: Tank<'a, Water, Incompressible<Water>>,
     daily_draw_schedule: StepSchedule<Time, VolumeRate>,
 }
 
@@ -113,16 +109,18 @@ struct Output {
     second_tank: TankOutput<Water>,
 }
 
-impl TanksInRoom<'_> {
+impl<'a> TanksInRoom<'a> {
     /// Creates a new two-tank system.
     fn new(
+        thermo: &'a Incompressible<Water>,
         first_tank_config: TankConfig,
         second_tank_config: TankConfig,
         daily_draw_schedule: StepSchedule<Time, VolumeRate>,
     ) -> Self {
         Self {
-            first_tank: Tank::new(first_tank_config, &Incompressible).unwrap(),
-            second_tank: Tank::new(second_tank_config, &Incompressible).unwrap(),
+            thermo,
+            first_tank: Tank::new(first_tank_config, thermo).unwrap(),
+            second_tank: Tank::new(second_tank_config, thermo).unwrap(),
             daily_draw_schedule,
         }
     }
@@ -139,7 +137,7 @@ impl Model for TanksInRoom<'_> {
             .daily_draw_schedule
             .value_at(&input.datetime.time())
             .map(|&draw| {
-                let m_dot = draw * Water.reference_density();
+                let m_dot = draw * self.thermo.reference_density();
                 Constrained::new(m_dot).unwrap()
             });
 
@@ -163,10 +161,10 @@ impl Model for TanksInRoom<'_> {
                     }
                 },
                 inflow: draw.map(|m_dot| {
-                    let state = Incompressible.state_from(input.t_ground).unwrap();
+                    let state = self.thermo.state_from(input.t_ground).unwrap();
                     Stream::from_constrained(m_dot, state)
                 }),
-                state: Incompressible.state_from(input.t_first_tank).unwrap(),
+                state: self.thermo.state_from(input.t_first_tank).unwrap(),
             })
             .unwrap();
 
@@ -177,10 +175,10 @@ impl Model for TanksInRoom<'_> {
                 ambient_temperature: input.t_room,
                 aux_heat_flow: HeatFlow::None,
                 inflow: draw.map(|m_dot| {
-                    let state = Incompressible.state_from(input.t_first_tank).unwrap();
+                    let state = self.thermo.state_from(input.t_first_tank).unwrap();
                     Stream::from_constrained(m_dot, state)
                 }),
-                state: Incompressible.state_from(input.t_second_tank).unwrap(),
+                state: self.thermo.state_from(input.t_second_tank).unwrap(),
             })
             .unwrap();
 
@@ -275,8 +273,11 @@ impl PlotSeries {
 
 /// Runs the two-tank simulation and displays a temperature plot over time.
 fn main() {
+    let thermo = Incompressible::<Water>::new().unwrap();
+
     // Set the model parameters.
     let model = TanksInRoom::new(
+        &thermo,
         TankConfig {
             volume: Volume::new::<gallon>(80.0),
             area: Area::new::<square_foot>(15.0),

@@ -4,6 +4,8 @@ use rfluids::{io::FluidTrivialParam, native::AbstractState};
 use thiserror::Error;
 use uom::si::{f64::MolarMass, molar_mass::kilogram_per_mole};
 
+use crate::capability::ThermoModel;
+
 /// Trait used to mark fluids as usable with the [`CoolProp`] model.
 ///
 /// Implementors provide the backend and fluid identifiers needed to construct a
@@ -27,6 +29,10 @@ pub enum CoolPropError {
 pub struct CoolProp<F: CoolPropFluid> {
     state: Mutex<AbstractState>,
     _f: PhantomData<F>,
+}
+
+impl<F: CoolPropFluid> ThermoModel for CoolProp<F> {
+    type Fluid = F;
 }
 
 impl<F: CoolPropFluid> CoolProp<F> {
