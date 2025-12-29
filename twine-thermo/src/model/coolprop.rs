@@ -64,8 +64,8 @@ impl<F: CoolPropFluid> CoolProp<F> {
     ///
     /// Returns [`CoolPropError`] if the call fails.
     pub fn molar_mass(&self) -> Result<MolarMass, CoolPropError> {
-        let state = self.state.lock()?;
-        let molar_mass = state.keyed_output(FluidTrivialParam::MolarMass)?;
+        let abstract_state = self.state.lock()?;
+        let molar_mass = abstract_state.keyed_output(FluidTrivialParam::MolarMass)?;
         Ok(MolarMass::new::<kilogram_per_mole>(molar_mass))
     }
 
@@ -74,20 +74,20 @@ impl<F: CoolPropFluid> CoolProp<F> {
         &self,
         state: &State<F>,
     ) -> Result<MutexGuard<'_, AbstractState>, CoolPropError> {
-        let mut coolprop_state = self.state.lock()?;
-        coolprop_state.update(
+        let mut abstract_state = self.state.lock()?;
+        abstract_state.update(
             FluidInputPair::DMassT,
             state.density.get::<kilogram_per_cubic_meter>(),
             state.temperature.get::<kelvin>(),
         )?;
-        Ok(coolprop_state)
+        Ok(abstract_state)
     }
 }
 
 impl<F: CoolPropFluid> HasPressure for CoolProp<F> {
     fn pressure(&self, state: &State<Self::Fluid>) -> Result<Pressure, PropertyError> {
-        let coolprop_state = self.lock_with_state(state)?;
-        let pressure = coolprop_state
+        let abstract_state = self.lock_with_state(state)?;
+        let pressure = abstract_state
             .keyed_output(FluidParam::P)
             .map_err(CoolPropError::Rfluids)?;
         Ok(Pressure::new::<pascal>(pressure))
