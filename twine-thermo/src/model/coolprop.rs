@@ -1,10 +1,28 @@
-use std::{marker::PhantomData, sync::Mutex};
+mod error;
 
-use rfluids::{io::FluidTrivialParam, native::AbstractState};
-use thiserror::Error;
-use uom::si::{f64::MolarMass, molar_mass::kilogram_per_mole};
+use std::{
+    marker::PhantomData,
+    sync::{Mutex, MutexGuard},
+};
 
-use crate::capability::ThermoModel;
+use rfluids::{
+    io::{FluidInputPair, FluidParam, FluidTrivialParam},
+    native::AbstractState,
+};
+use uom::si::{
+    f64::{MolarMass, Pressure},
+    mass_density::kilogram_per_cubic_meter,
+    molar_mass::kilogram_per_mole,
+    pressure::pascal,
+    thermodynamic_temperature::kelvin,
+};
+
+use crate::{
+    PropertyError, State,
+    capability::{HasPressure, ThermoModel},
+};
+
+pub use error::CoolPropError;
 
 /// Trait used to mark fluids as usable with the [`CoolProp`] model.
 ///
@@ -13,16 +31,6 @@ use crate::capability::ThermoModel;
 pub trait CoolPropFluid: Default + Send + Sync + 'static {
     const BACKEND: &'static str;
     const NAME: &'static str;
-}
-
-/// Errors returned by the [`CoolProp`] model.
-#[derive(Debug, Error)]
-#[non_exhaustive]
-pub enum CoolPropError {
-    #[error(transparent)]
-    Rfluids(#[from] rfluids::native::CoolPropError),
-    #[error("CoolProp state mutex poisoned")]
-    Poisoned,
 }
 
 /// A fluid property model backed by `CoolProp`.
@@ -56,9 +64,33 @@ impl<F: CoolPropFluid> CoolProp<F> {
     ///
     /// Returns [`CoolPropError`] if the call fails.
     pub fn molar_mass(&self) -> Result<MolarMass, CoolPropError> {
-        let state = self.state.lock().map_err(|_| CoolPropError::Poisoned)?;
-        let molar_mass = state.keyed_output(FluidTrivialParam::MolarMass)?;
+        let abstract_state = self.state.lock()?;
+        let molar_mass = abstract_state.keyed_output(FluidTrivialParam::MolarMass)?;
         Ok(MolarMass::new::<kilogram_per_mole>(molar_mass))
+    }
+
+    /// Locks the underlying `AbstractState` and updates it from `state`.
+    fn lock_with_state(
+        &self,
+        state: &State<F>,
+    ) -> Result<MutexGuard<'_, AbstractState>, CoolPropError> {
+        let mut abstract_state = self.state.lock()?;
+        abstract_state.update(
+            FluidInputPair::DMassT,
+            state.density.get::<kilogram_per_cubic_meter>(),
+            state.temperature.get::<kelvin>(),
+        )?;
+        Ok(abstract_state)
+    }
+}
+
+impl<F: CoolPropFluid> HasPressure for CoolProp<F> {
+    fn pressure(&self, state: &State<Self::Fluid>) -> Result<Pressure, PropertyError> {
+        let abstract_state = self.lock_with_state(state)?;
+        let pressure = abstract_state
+            .keyed_output(FluidParam::P)
+            .map_err(CoolPropError::Rfluids)?;
+        Ok(Pressure::new::<pascal>(pressure))
     }
 }
 
@@ -67,7 +99,13 @@ mod tests {
     use super::*;
 
     use approx::assert_relative_eq;
-    use uom::si::molar_mass::gram_per_mole;
+    use uom::si::{
+        f64::{MassDensity, ThermodynamicTemperature},
+        mass_density::kilogram_per_cubic_meter,
+        molar_mass::gram_per_mole,
+        pressure::megapascal,
+        thermodynamic_temperature::degree_celsius,
+    };
 
     use crate::fluid::CarbonDioxide;
 
@@ -76,5 +114,17 @@ mod tests {
         let model = CoolProp::<CarbonDioxide>::new().unwrap();
         let molar_mass = model.molar_mass().unwrap();
         assert_relative_eq!(molar_mass.get::<gram_per_mole>(), 44.0098);
+    }
+
+    #[test]
+    fn coolprop_co2_pressure_valid_state() {
+        let model = CoolProp::<CarbonDioxide>::new().unwrap();
+        let state = State::new(
+            ThermodynamicTemperature::new::<degree_celsius>(42.0),
+            MassDensity::new::<kilogram_per_cubic_meter>(670.0),
+            CarbonDioxide,
+        );
+        let pressure = model.pressure(&state).unwrap();
+        assert_relative_eq!(pressure.get::<megapascal>(), 11.3362, epsilon = 1e-4);
     }
 }
