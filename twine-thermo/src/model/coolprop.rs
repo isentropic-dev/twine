@@ -192,13 +192,86 @@ impl<F: CoolPropFluid> StateFrom<(F, ThermodynamicTemperature, Pressure)> for Co
             temperature.get::<kelvin>(),
         )?;
 
-        let density = MassDensity::new::<kilogram_per_cubic_meter>(
-            abstract_state.keyed_output(FluidParam::DMass)?,
-        );
+        let density = abstract_state.keyed_output(FluidParam::DMass)?;
 
         Ok(State {
             temperature,
-            density,
+            density: MassDensity::new::<kilogram_per_cubic_meter>(density),
+            fluid,
+        })
+    }
+}
+
+impl<F: CoolPropFluid> StateFrom<(F, Pressure, SpecificEnthalpy)> for CoolProp<F> {
+    type Error = CoolPropError;
+
+    fn state_from(
+        &self,
+        (fluid, pressure, enthalpy): (F, Pressure, SpecificEnthalpy),
+    ) -> Result<State<F>, Self::Error> {
+        let mut abstract_state = self.state.lock()?;
+        abstract_state.update(
+            FluidInputPair::HMassP,
+            enthalpy.get::<joule_per_kilogram>(),
+            pressure.get::<pascal>(),
+        )?;
+
+        let temperature = abstract_state.keyed_output(FluidParam::T)?;
+        let density = abstract_state.keyed_output(FluidParam::DMass)?;
+
+        Ok(State {
+            temperature: ThermodynamicTemperature::new::<kelvin>(temperature),
+            density: MassDensity::new::<kilogram_per_cubic_meter>(density),
+            fluid,
+        })
+    }
+}
+
+impl<F: CoolPropFluid> StateFrom<(F, Pressure, SpecificEntropy)> for CoolProp<F> {
+    type Error = CoolPropError;
+
+    fn state_from(
+        &self,
+        (fluid, pressure, entropy): (F, Pressure, SpecificEntropy),
+    ) -> Result<State<F>, Self::Error> {
+        let mut abstract_state = self.state.lock()?;
+        abstract_state.update(
+            FluidInputPair::PSMass,
+            pressure.get::<pascal>(),
+            entropy.get::<joule_per_kilogram_kelvin>(),
+        )?;
+
+        let temperature = abstract_state.keyed_output(FluidParam::T)?;
+        let density = abstract_state.keyed_output(FluidParam::DMass)?;
+
+        Ok(State {
+            temperature: ThermodynamicTemperature::new::<kelvin>(temperature),
+            density: MassDensity::new::<kilogram_per_cubic_meter>(density),
+            fluid,
+        })
+    }
+}
+
+impl<F: CoolPropFluid> StateFrom<(F, SpecificEnthalpy, SpecificEntropy)> for CoolProp<F> {
+    type Error = CoolPropError;
+
+    fn state_from(
+        &self,
+        (fluid, enthalpy, entropy): (F, SpecificEnthalpy, SpecificEntropy),
+    ) -> Result<State<F>, Self::Error> {
+        let mut abstract_state = self.state.lock()?;
+        abstract_state.update(
+            FluidInputPair::HMassSMass,
+            enthalpy.get::<joule_per_kilogram>(),
+            entropy.get::<joule_per_kilogram_kelvin>(),
+        )?;
+
+        let temperature = abstract_state.keyed_output(FluidParam::T)?;
+        let density = abstract_state.keyed_output(FluidParam::DMass)?;
+
+        Ok(State {
+            temperature: ThermodynamicTemperature::new::<kelvin>(temperature),
+            density: MassDensity::new::<kilogram_per_cubic_meter>(density),
             fluid,
         })
     }
@@ -216,10 +289,10 @@ mod tests {
         molar_mass::gram_per_mole,
         pressure::megapascal,
         specific_heat_capacity::{joule_per_kilogram_kelvin, kilojoule_per_kilogram_kelvin},
-        thermodynamic_temperature::degree_celsius,
+        thermodynamic_temperature::{degree_celsius, kelvin},
     };
 
-    use crate::fluid::CarbonDioxide;
+    use crate::fluid::{CarbonDioxide, Water};
 
     fn co2_model() -> CoolProp<CarbonDioxide> {
         CoolProp::<CarbonDioxide>::new().unwrap()
@@ -230,6 +303,18 @@ mod tests {
             ThermodynamicTemperature::new::<degree_celsius>(42.0),
             MassDensity::new::<kilogram_per_cubic_meter>(670.0),
             CarbonDioxide,
+        )
+    }
+
+    fn water_model() -> CoolProp<Water> {
+        CoolProp::<Water>::new().unwrap()
+    }
+
+    fn water_state() -> State<Water> {
+        State::new(
+            ThermodynamicTemperature::new::<degree_celsius>(25.0),
+            MassDensity::new::<kilogram_per_cubic_meter>(1000.0),
+            Water,
         )
     }
 
@@ -309,19 +394,80 @@ mod tests {
     }
 
     #[test]
-    fn co2_state_from_temperature_density_roundtrips_via_temperature_pressure() {
+    fn co2_state_from_temperature_pressure_roundtrips_from_temperature_density() {
         let model = co2_model();
 
-        let temperature = ThermodynamicTemperature::new::<degree_celsius>(100.0);
-        let density = MassDensity::new::<kilogram_per_cubic_meter>(10.0);
-
-        let state = model.state_from((temperature, density)).unwrap();
+        let state = co2_state();
         let pressure = model.pressure(&state).unwrap();
-        let roundtrip = model.state_from((temperature, pressure)).unwrap();
+        let roundtrip = model.state_from((state.temperature, pressure)).unwrap();
 
         assert_relative_eq!(
             roundtrip.density.get::<kilogram_per_cubic_meter>(),
-            density.get::<kilogram_per_cubic_meter>()
+            state.density.get::<kilogram_per_cubic_meter>(),
+            max_relative = 1e-9
+        );
+    }
+
+    #[test]
+    fn water_state_from_pressure_enthalpy_roundtrips_from_temperature_density() {
+        let model = water_model();
+
+        let state = water_state();
+        let pressure = model.pressure(&state).unwrap();
+        let enthalpy = model.enthalpy(&state).unwrap();
+        let roundtrip = model.state_from((pressure, enthalpy)).unwrap();
+
+        assert_relative_eq!(
+            roundtrip.temperature.get::<kelvin>(),
+            state.temperature.get::<kelvin>(),
+            max_relative = 1e-9
+        );
+        assert_relative_eq!(
+            roundtrip.density.get::<kilogram_per_cubic_meter>(),
+            state.density.get::<kilogram_per_cubic_meter>(),
+            max_relative = 1e-9
+        );
+    }
+
+    #[test]
+    fn water_state_from_pressure_entropy_roundtrips_from_temperature_density() {
+        let model = water_model();
+
+        let state = water_state();
+        let pressure = model.pressure(&state).unwrap();
+        let entropy = model.entropy(&state).unwrap();
+        let roundtrip = model.state_from((pressure, entropy)).unwrap();
+
+        assert_relative_eq!(
+            roundtrip.temperature.get::<kelvin>(),
+            state.temperature.get::<kelvin>(),
+            max_relative = 1e-9
+        );
+        assert_relative_eq!(
+            roundtrip.density.get::<kilogram_per_cubic_meter>(),
+            state.density.get::<kilogram_per_cubic_meter>(),
+            max_relative = 1e-9
+        );
+    }
+
+    #[test]
+    fn water_state_from_enthalpy_entropy_roundtrips_from_temperature_density() {
+        let model = water_model();
+
+        let state = water_state();
+        let enthalpy = model.enthalpy(&state).unwrap();
+        let entropy = model.entropy(&state).unwrap();
+        let roundtrip = model.state_from((enthalpy, entropy)).unwrap();
+
+        assert_relative_eq!(
+            roundtrip.temperature.get::<kelvin>(),
+            state.temperature.get::<kelvin>(),
+            max_relative = 1e-9
+        );
+        assert_relative_eq!(
+            roundtrip.density.get::<kilogram_per_cubic_meter>(),
+            state.density.get::<kilogram_per_cubic_meter>(),
+            max_relative = 1e-9
         );
     }
 }
