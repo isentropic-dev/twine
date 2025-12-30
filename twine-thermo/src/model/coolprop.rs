@@ -309,7 +309,7 @@ mod tests {
     }
 
     #[test]
-    fn state_from_temperature_density_roundtrips_via_temperature_pressure() {
+    fn co2_state_from_temperature_density_roundtrips_via_temperature_pressure() {
         let model = co2_model();
 
         let temperature = ThermodynamicTemperature::new::<degree_celsius>(100.0);
