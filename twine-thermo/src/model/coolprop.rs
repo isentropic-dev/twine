@@ -11,7 +11,7 @@ use rfluids::{
 };
 use uom::si::{
     available_energy::joule_per_kilogram,
-    f64::{MolarMass, Pressure, SpecificHeatCapacity},
+    f64::{MassDensity, MolarMass, Pressure, SpecificHeatCapacity, ThermodynamicTemperature},
     mass_density::kilogram_per_cubic_meter,
     molar_mass::kilogram_per_mole,
     pressure::pascal,
@@ -22,7 +22,8 @@ use uom::si::{
 use crate::{
     PropertyError, State,
     capability::{
-        HasCp, HasCv, HasEnthalpy, HasEntropy, HasInternalEnergy, HasPressure, ThermoModel,
+        HasCp, HasCv, HasEnthalpy, HasEntropy, HasInternalEnergy, HasPressure, StateFrom,
+        ThermoModel,
     },
     units::{SpecificEnthalpy, SpecificEntropy, SpecificInternalEnergy},
 };
@@ -154,6 +155,55 @@ impl<F: CoolPropFluid> HasCv for CoolProp<F> {
     }
 }
 
+impl<F: CoolPropFluid> StateFrom<(F, ThermodynamicTemperature, MassDensity)> for CoolProp<F> {
+    type Error = CoolPropError;
+
+    fn state_from(
+        &self,
+        (fluid, temperature, density): (F, ThermodynamicTemperature, MassDensity),
+    ) -> Result<State<F>, Self::Error> {
+        let mut abstract_state = self.state.lock()?;
+        // Update CoolProp to validate the T-D state and surface invalid inputs early.
+        abstract_state.update(
+            FluidInputPair::DMassT,
+            density.get::<kilogram_per_cubic_meter>(),
+            temperature.get::<kelvin>(),
+        )?;
+
+        Ok(State {
+            temperature,
+            density,
+            fluid,
+        })
+    }
+}
+
+impl<F: CoolPropFluid> StateFrom<(F, ThermodynamicTemperature, Pressure)> for CoolProp<F> {
+    type Error = CoolPropError;
+
+    fn state_from(
+        &self,
+        (fluid, temperature, pressure): (F, ThermodynamicTemperature, Pressure),
+    ) -> Result<State<F>, Self::Error> {
+        let mut abstract_state = self.state.lock()?;
+        abstract_state.update(
+            FluidInputPair::PT,
+            pressure.get::<pascal>(),
+            temperature.get::<kelvin>(),
+        )?;
+
+        let density = MassDensity::new::<kilogram_per_cubic_meter>(
+            abstract_state.keyed_output(FluidParam::DMass)?,
+        );
+
+        Ok(State {
+            temperature,
+            density,
+            fluid,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -184,14 +234,14 @@ mod tests {
     }
 
     #[test]
-    fn coolprop_co2_molar_mass_matches_expected() {
+    fn co2_molar_mass_matches_expected() {
         let model = co2_model();
         let molar_mass = model.molar_mass().unwrap();
         assert_relative_eq!(molar_mass.get::<gram_per_mole>(), 44.0098);
     }
 
     #[test]
-    fn coolprop_co2_pressure_matches_expected() {
+    fn co2_pressure_matches_expected() {
         let model = co2_model();
         let state = co2_state();
         let pressure = model.pressure(&state).unwrap();
@@ -199,7 +249,7 @@ mod tests {
     }
 
     #[test]
-    fn coolprop_co2_internal_energy_matches_expected() {
+    fn co2_internal_energy_matches_expected() {
         let model = co2_model();
         let state = co2_state();
         let internal_energy = model.internal_energy(&state).unwrap();
@@ -211,7 +261,7 @@ mod tests {
     }
 
     #[test]
-    fn coolprop_co2_enthalpy_matches_expected() {
+    fn co2_enthalpy_matches_expected() {
         let model = co2_model();
         let state = co2_state();
         let enthalpy = model.enthalpy(&state).unwrap();
@@ -223,7 +273,7 @@ mod tests {
     }
 
     #[test]
-    fn coolprop_co2_entropy_matches_expected() {
+    fn co2_entropy_matches_expected() {
         let model = co2_model();
         let state = co2_state();
         let entropy = model.entropy(&state).unwrap();
@@ -235,7 +285,7 @@ mod tests {
     }
 
     #[test]
-    fn coolprop_co2_cp_matches_expected() {
+    fn co2_cp_matches_expected() {
         let model = co2_model();
         let state = co2_state();
         let cp = model.cp(&state).unwrap();
@@ -247,7 +297,7 @@ mod tests {
     }
 
     #[test]
-    fn coolprop_co2_cv_matches_expected() {
+    fn co2_cv_matches_expected() {
         let model = co2_model();
         let state = co2_state();
         let cv = model.cv(&state).unwrap();
@@ -255,6 +305,23 @@ mod tests {
             cv.get::<joule_per_kilogram_kelvin>(),
             980.5326,
             epsilon = 1e-4
+        );
+    }
+
+    #[test]
+    fn co2_state_from_temperature_density_roundtrips_via_temperature_pressure() {
+        let model = co2_model();
+
+        let temperature = ThermodynamicTemperature::new::<degree_celsius>(100.0);
+        let density = MassDensity::new::<kilogram_per_cubic_meter>(10.0);
+
+        let state = model.state_from((temperature, density)).unwrap();
+        let pressure = model.pressure(&state).unwrap();
+        let roundtrip = model.state_from((temperature, pressure)).unwrap();
+
+        assert_relative_eq!(
+            roundtrip.density.get::<kilogram_per_cubic_meter>(),
+            density.get::<kilogram_per_cubic_meter>()
         );
     }
 }
