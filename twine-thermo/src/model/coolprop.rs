@@ -1,3 +1,5 @@
+//! CoolProp-backed fluid property model.
+
 mod error;
 
 use std::{
@@ -34,12 +36,14 @@ pub use error::CoolPropError;
 ///
 /// Implementors provide the backend and fluid identifiers needed to construct a
 /// `CoolProp` `AbstractState`.
+#[cfg_attr(docsrs, doc(cfg(feature = "coolprop")))]
 pub trait CoolPropFluid: Default + Send + Sync + 'static {
     const BACKEND: &'static str;
     const NAME: &'static str;
 }
 
 /// A fluid property model backed by `CoolProp`.
+#[cfg_attr(docsrs, doc(cfg(feature = "coolprop")))]
 pub struct CoolProp<F: CoolPropFluid> {
     state: Mutex<AbstractState>,
     _f: PhantomData<F>,

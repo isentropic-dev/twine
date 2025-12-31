@@ -9,7 +9,7 @@ use crate::{
     units::SpecificGasConstant,
 };
 
-/// Marker type for carbon dioxide.
+/// Canonical identifier for carbon dioxide.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct CarbonDioxide;
 

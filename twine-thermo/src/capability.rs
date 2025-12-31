@@ -1,3 +1,5 @@
+//! Capability traits used to query and construct thermodynamic states.
+
 mod base;
 mod properties;
 mod state_from;

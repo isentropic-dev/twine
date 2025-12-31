@@ -8,8 +8,9 @@ use crate::{
 
 /// A stream of fluid at a thermodynamic state.
 ///
-/// A `Stream` represents steady-state transport of mass and energy without storing either.
-/// For transient systems with mass or energy storage, use a [`ControlVolume`].
+/// A `Stream` represents steady-state transport of mass and energy without
+/// storing either. For transient systems with mass or energy storage, use a
+/// [`ControlVolume`](crate::ControlVolume).
 ///
 /// Zero-flow streams are not physically meaningful.
 /// Use `Option<Stream<Fluid>>` to represent an optional or inactive stream.

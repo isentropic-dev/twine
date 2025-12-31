@@ -9,7 +9,7 @@ use crate::{
     units::SpecificGasConstant,
 };
 
-/// Marker type for dry air.
+/// Canonical identifier for dry air.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Air;
 
