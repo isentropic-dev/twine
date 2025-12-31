@@ -23,6 +23,7 @@
 
 use std::{convert::Infallible, marker::PhantomData};
 
+use thiserror::Error;
 use uom::{
     ConstZero,
     si::{
@@ -32,10 +33,6 @@ use uom::{
         thermodynamic_temperature::degree_celsius,
     },
 };
-
-use thiserror::Error;
-
-use super::ideal_gas_eos;
 
 use crate::{
     PropertyError, State,
@@ -48,6 +45,8 @@ use crate::{
         TemperatureDifference,
     },
 };
+
+use super::ideal_gas_eos;
 
 #[derive(Debug, Error, Clone, PartialEq)]
 pub enum PerfectGasParametersError {
@@ -270,6 +269,21 @@ impl<Fluid> HasCv for PerfectGas<Fluid> {
     }
 }
 
+impl<Fluid> StateFrom<(Fluid, ThermodynamicTemperature, MassDensity)> for PerfectGas<Fluid> {
+    type Error = Infallible;
+
+    fn state_from(
+        &self,
+        (fluid, temperature, density): (Fluid, ThermodynamicTemperature, MassDensity),
+    ) -> Result<State<Fluid>, Self::Error> {
+        Ok(State {
+            temperature,
+            density,
+            fluid,
+        })
+    }
+}
+
 impl<Fluid> StateFrom<(Fluid, ThermodynamicTemperature, Pressure)> for PerfectGas<Fluid> {
     type Error = Infallible;
 
@@ -351,6 +365,33 @@ impl<Fluid> StateFrom<(Fluid, Pressure, SpecificEntropy)> for PerfectGas<Fluid> 
     }
 }
 
+impl<Fluid> StateFrom<(Fluid, SpecificEnthalpy, SpecificEntropy)> for PerfectGas<Fluid> {
+    type Error = Infallible;
+
+    fn state_from(
+        &self,
+        (fluid, enthalpy, entropy): (Fluid, SpecificEnthalpy, SpecificEntropy),
+    ) -> Result<State<Fluid>, Self::Error> {
+        let r = self.r;
+        let cp = self.cp;
+        let t_ref = self.t_ref;
+        let p_ref = self.p_ref;
+        let h_ref = self.h_ref;
+        let s_ref = self.s_ref;
+
+        let temperature = t_ref + (enthalpy - h_ref) / cp;
+        let exponent = (cp * (temperature / t_ref).ln() + s_ref - entropy) / r;
+        let pressure = p_ref * exponent.get::<ratio>().exp();
+        let density = ideal_gas_eos::density(temperature, pressure, r);
+
+        Ok(State {
+            temperature,
+            density,
+            fluid,
+        })
+    }
+}
+
 /// Returns `true` if `value` is not `NaN` and greater than zero.
 fn is_strictly_positive(value: f64) -> bool {
     !value.is_nan() && value > 0.0
@@ -361,13 +402,11 @@ mod tests {
     use super::*;
 
     use approx::assert_relative_eq;
-    use uom::si::pressure::kilopascal;
-    use uom::si::thermodynamic_temperature::kelvin;
     use uom::si::{
         mass_density::pound_per_cubic_foot,
-        pressure::{atmosphere, pascal, psi},
+        pressure::{atmosphere, kilopascal, pascal, psi},
         specific_heat_capacity::joule_per_kilogram_kelvin,
-        thermodynamic_temperature::degree_celsius,
+        thermodynamic_temperature::{degree_celsius, kelvin},
     };
 
     use crate::fluid::CarbonDioxide;
@@ -487,6 +526,32 @@ mod tests {
         assert_relative_eq!(
             thermo.pressure(&state_out)?.get::<pascal>(),
             pres_in.get::<pascal>(),
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn state_from_enthalpy_entropy_roundtrip() -> Result<(), PropertyError> {
+        let thermo = mock_gas_model();
+
+        let temp_in = ThermodynamicTemperature::new::<degree_celsius>(140.0);
+        let pres_in = Pressure::new::<kilopascal>(220.0);
+        let state_in: State<MockGas> = thermo.state_from((temp_in, pres_in)).unwrap();
+
+        let h = thermo.enthalpy(&state_in)?;
+        let s = thermo.entropy(&state_in)?;
+        let state_out: State<MockGas> = thermo.state_from((h, s)).unwrap();
+
+        assert_relative_eq!(
+            state_out.temperature.get::<kelvin>(),
+            temp_in.get::<kelvin>(),
+            epsilon = 1e-10
+        );
+        assert_relative_eq!(
+            thermo.pressure(&state_out)?.get::<pascal>(),
+            pres_in.get::<pascal>(),
+            epsilon = 1e-10
         );
 
         Ok(())
