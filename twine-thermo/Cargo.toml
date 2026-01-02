@@ -14,7 +14,7 @@ features = ["coolprop"]
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
-twine-core = { version = "0.4.0", path = "../twine-core" }
+twine-core = { workspace = true }
 thiserror = { workspace = true }
 uom = { workspace = true }
 rfluids = { version = "0.2.1", optional = true }
