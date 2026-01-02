@@ -7,7 +7,7 @@ use uom::si::{
 
 use crate::model::incompressible::{IncompressibleFluid, IncompressibleParameters};
 
-/// Marker type for liquid water.
+/// Canonical identifier for water.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Water;
 

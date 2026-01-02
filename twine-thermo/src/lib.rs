@@ -1,3 +1,5 @@
+#![cfg_attr(docsrs, feature(doc_cfg))]
+
 //! Thermodynamic and fluid property modeling for the Twine framework.
 
 mod control_volume;

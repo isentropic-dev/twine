@@ -6,9 +6,10 @@ use uom::si::f64::{MassDensity, ThermodynamicTemperature, Time};
 /// A `State<Fluid>` captures the thermodynamic state of a specific fluid,
 /// including its temperature, density, and any fluid-specific data.
 ///
-/// The `Fluid` type parameter can be a simple marker type, such as [`Air`] or
-/// [`Water`], or a structured type containing additional data, such as mixture
-/// composition or particle concentration.
+/// The `Fluid` type parameter can be a simple marker type,
+/// such as [`Air`](crate::fluid::Air) or [`Water`](crate::fluid::Water),
+/// or a structured type containing additional data, such as mixture composition
+/// or particle concentration.
 ///
 /// `State` is the primary input to capability-based thermodynamic models for
 /// calculating pressure, enthalpy, entropy, and related quantities.

@@ -14,7 +14,8 @@ use uom::{ConstZero, si::f64::Power};
 /// **Note:** Some thermodynamic texts define work as positive when **done by**
 /// the system (i.e., flowing *out*).
 /// This crate uses the opposite convention: **positive = into the system**,
-/// for consistency with [`HeatFlow`] and [`MassFlow`] sign conventions.
+/// for consistency with [`HeatFlow`](crate::HeatFlow) and
+/// [`MassFlow`](crate::MassFlow) sign conventions.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum WorkFlow {
     /// Work flowing into the system.
