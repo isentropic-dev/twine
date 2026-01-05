@@ -1,4 +1,4 @@
-use twine_thermo::HeatFlow;
+use twine_thermo::{HeatFlow, units::TemperatureDifference};
 use uom::si::f64::ThermodynamicTemperature;
 
 use crate::thermal::hx::capacitance_rate::CapacitanceRate;
@@ -62,6 +62,54 @@ pub struct Stream {
     pub heat_flow: HeatFlow,
 }
 
+impl Stream {
+    pub fn new_from_heat_flow(
+        capacitance_rate: CapacitanceRate,
+        inlet_temperature: ThermodynamicTemperature,
+        heat_flow: HeatFlow,
+    ) -> Self {
+        Self {
+            capacitance_rate,
+            inlet_temperature,
+            outlet_temperature: match heat_flow {
+                HeatFlow::In(heat_rate) => {
+                    inlet_temperature + heat_rate.into_inner() / *capacitance_rate
+                }
+                HeatFlow::Out(heat_rate) => {
+                    inlet_temperature - heat_rate.into_inner() / *capacitance_rate
+                }
+                HeatFlow::None => inlet_temperature,
+            },
+            heat_flow,
+        }
+    }
+
+    pub fn new_from_outlet_temperature(
+        capacitance_rate: CapacitanceRate,
+        inlet_temperature: ThermodynamicTemperature,
+        outlet_temperature: ThermodynamicTemperature,
+    ) -> Self {
+        let heat_rate_magnitude =
+            *capacitance_rate * inlet_temperature.minus(outlet_temperature).abs();
+
+        Self {
+            capacitance_rate,
+            inlet_temperature,
+            outlet_temperature,
+            heat_flow: match inlet_temperature
+                .partial_cmp(&outlet_temperature)
+                .expect("temperatures to be comparable")
+            {
+                std::cmp::Ordering::Less => HeatFlow::incoming(heat_rate_magnitude)
+                    .expect("heat rate magnitude should always be positive"),
+                std::cmp::Ordering::Equal => HeatFlow::None,
+                std::cmp::Ordering::Greater => HeatFlow::outgoing(heat_rate_magnitude)
+                    .expect("heat rate magnitude should always be positive"),
+            },
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use twine_core::constraint::ConstraintResult;
@@ -73,7 +121,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn with_heat_flow() -> ConstraintResult<()> {
+    fn stream_inlet_with_heat_flow() -> ConstraintResult<()> {
         let capacitance_rate = CapacitanceRate::new::<watt_per_kelvin>(10.)?;
         let inlet_temperature = ThermodynamicTemperature::new::<kelvin>(300.);
         let heat_rate = Power::new::<watt>(20.);
@@ -109,6 +157,52 @@ mod tests {
                 inlet_temperature,
                 outlet_temperature: ThermodynamicTemperature::new::<kelvin>(298.),
                 heat_flow: HeatFlow::outgoing(heat_rate)?
+            }
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn stream_new_from_heat_rate() -> ConstraintResult<()> {
+        let capacitance_rate = CapacitanceRate::new::<watt_per_kelvin>(10.)?;
+        let inlet_temperature = ThermodynamicTemperature::new::<kelvin>(300.);
+        let heat_flow = HeatFlow::incoming(Power::new::<watt>(20.))?;
+
+        let stream = Stream::new_from_heat_flow(capacitance_rate, inlet_temperature, heat_flow);
+
+        assert_eq!(
+            stream,
+            Stream {
+                capacitance_rate,
+                inlet_temperature,
+                outlet_temperature: ThermodynamicTemperature::new::<kelvin>(302.),
+                heat_flow
+            }
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn stream_new_from_outlet_temperature() -> ConstraintResult<()> {
+        let capacitance_rate = CapacitanceRate::new::<watt_per_kelvin>(10.)?;
+        let inlet_temperature = ThermodynamicTemperature::new::<kelvin>(300.);
+        let outlet_temperature = ThermodynamicTemperature::new::<kelvin>(302.);
+
+        let stream = Stream::new_from_outlet_temperature(
+            capacitance_rate,
+            inlet_temperature,
+            outlet_temperature,
+        );
+
+        assert_eq!(
+            stream,
+            Stream {
+                capacitance_rate,
+                inlet_temperature,
+                outlet_temperature,
+                heat_flow: HeatFlow::incoming(Power::new::<watt>(20.))?
             }
         );
 
