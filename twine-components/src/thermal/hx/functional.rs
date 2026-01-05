@@ -8,7 +8,9 @@ use uom::{
 };
 
 use crate::thermal::hx::{
-    Effectiveness, Ntu, StreamInlet, effectiveness_ntu::EffectivenessRelation, stream::Stream,
+    Effectiveness, Ntu, StreamInlet,
+    effectiveness_ntu::{EffectivenessRelation, NtuRelation},
+    stream::Stream,
 };
 
 /// Analyze a heat exchanger when its conductance and inlet conditions are
@@ -63,7 +65,7 @@ pub fn known_conductance_and_inlets(
     arrangement: &impl EffectivenessRelation,
     ua: ThermalConductance,
     inlets: [StreamInlet; 2],
-) -> ConstraintResult<KnownConductanceAndInletsResult> {
+) -> ConstraintResult<KnownConductanceResult> {
     let streams_with_max_heat = calculate_max_heat_flow(inlets)?;
     let capacitance_rates = [inlets[0].capacitance_rate, inlets[1].capacitance_rate];
     let effectiveness = arrangement.effectiveness(
@@ -71,7 +73,7 @@ pub fn known_conductance_and_inlets(
         capacitance_rates,
     );
 
-    Ok(KnownConductanceAndInletsResult {
+    Ok(KnownConductanceResult {
         streams: [
             inlets[0].with_heat_flow(HeatFlow::from_signed(
                 *effectiveness * streams_with_max_heat[0].heat_flow.signed(),
@@ -86,11 +88,55 @@ pub fn known_conductance_and_inlets(
 
 /// Resolved exchanger state returned from [`known_conductance_and_inlets`].
 #[derive(Debug, Clone, Copy)]
-pub struct KnownConductanceAndInletsResult {
+pub struct KnownConductanceResult {
     /// Final state for each stream after traversing the exchanger (same order as the inputs).
     pub streams: [Stream; 2],
     /// Overall effectiveness computed for the scenario.
     pub effectiveness: Effectiveness,
+}
+
+/// Analyze a heat exchanger when its heat rate and inlet conditions are
+/// known.
+///
+/// Given the heat rate of the heat exchanger and inlet conditions as
+/// [`StreamInlet`], the fully resolved [streams](Stream), [UA](ThermalConductance) and
+/// [NTU](Ntu) will be returned.
+fn known_heat_rate_and_inlets(
+    arrangement: &impl NtuRelation,
+    heat_rate: Power,
+    inlets: [StreamInlet; 2],
+) -> ConstraintResult<KnownConditionsResult> {
+    let streams_with_max_heat = calculate_max_heat_flow(inlets)?;
+    let capacitance_rates = [inlets[0].capacitance_rate, inlets[1].capacitance_rate];
+
+    let max_heat_flow = streams_with_max_heat[0].heat_flow.signed().abs();
+    let effectiveness = Effectiveness::from_quantity(heat_rate.abs() / max_heat_flow)?;
+
+    let ntu = arrangement.ntu(effectiveness, capacitance_rates);
+
+    Ok(KnownConditionsResult {
+        streams: [
+            inlets[0].with_heat_flow(HeatFlow::from_signed(
+                *effectiveness * streams_with_max_heat[0].heat_flow.signed(),
+            )?),
+            inlets[1].with_heat_flow(HeatFlow::from_signed(
+                *effectiveness * streams_with_max_heat[1].heat_flow.signed(),
+            )?),
+        ],
+        ua: *ntu * capacitance_rates[0].min(*capacitance_rates[1]),
+        ntu,
+    })
+}
+
+/// Resolved exchanger state returned from [`known_heat_rate_and_inlets`]
+#[derive(Debug, Clone, Copy)]
+pub struct KnownConditionsResult {
+    /// Final state for each stream after traversing the exchanger (same order as the inputs).
+    pub streams: [Stream; 2],
+    /// Heat exchanger conductance.
+    pub ua: ThermalConductance,
+    /// Overall NTU.
+    pub ntu: Ntu,
 }
 
 fn calculate_max_heat_flow(inlets: [StreamInlet; 2]) -> ConstraintResult<[Stream; 2]> {
@@ -147,12 +193,47 @@ mod tests {
             ],
         )?;
 
-        let KnownConductanceAndInletsResult {
+        let KnownConductanceResult {
             streams,
             effectiveness,
         } = result;
 
         assert_relative_eq!(effectiveness.get::<ratio>(), 2. / 3.);
+        assert!(matches!(streams[0].heat_flow, HeatFlow::In(_)));
+        assert!(matches!(streams[1].heat_flow, HeatFlow::Out(_)));
+        for stream in streams {
+            assert_relative_eq!(
+                stream.heat_flow.signed().get::<kilowatt>().abs(),
+                60.,
+                max_relative = 1e-15
+            );
+            assert_relative_eq!(stream.outlet_temperature.get::<degree_celsius>(), 70.);
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn known_heat_flow_and_inlets() -> ConstraintResult<()> {
+        let result = super::known_heat_rate_and_inlets(
+            &CounterFlow,
+            Power::new::<kilowatt>(60.),
+            [
+                StreamInlet::new(
+                    CapacitanceRate::new::<kilowatt_per_kelvin>(3.)?,
+                    ThermodynamicTemperature::new::<degree_celsius>(50.),
+                ),
+                StreamInlet::new(
+                    CapacitanceRate::new::<kilowatt_per_kelvin>(6.)?,
+                    ThermodynamicTemperature::new::<degree_celsius>(80.),
+                ),
+            ],
+        )?;
+
+        let KnownConditionsResult { streams, ua, ntu } = result;
+
+        assert_relative_eq!(ua.get::<kilowatt_per_kelvin>(), 3. * 4.0_f64.ln());
+        assert_relative_eq!(ntu.get::<ratio>(), 4.0_f64.ln());
         assert!(matches!(streams[0].heat_flow, HeatFlow::In(_)));
         assert!(matches!(streams[1].heat_flow, HeatFlow::Out(_)));
         for stream in streams {

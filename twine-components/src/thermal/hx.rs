@@ -21,7 +21,7 @@ use twine_core::constraint::ConstraintResult;
 use uom::si::f64::ThermalConductance;
 
 use crate::thermal::hx::{
-    effectiveness_ntu::EffectivenessRelation, functional::KnownConductanceAndInletsResult,
+    effectiveness_ntu::EffectivenessRelation, functional::KnownConductanceResult,
 };
 
 /// High-level entry point for solving heat exchanger scenarios with a chosen
@@ -83,7 +83,7 @@ impl<T: EffectivenessRelation> Hx<T> {
         &self,
         ua: ThermalConductance,
         inlets: [StreamInlet; 2],
-    ) -> ConstraintResult<KnownConductanceAndInletsResult> {
+    ) -> ConstraintResult<KnownConductanceResult> {
         functional::known_conductance_and_inlets(&self.0, ua, inlets)
     }
 }
@@ -120,7 +120,7 @@ mod tests {
             ],
         )?;
 
-        let KnownConductanceAndInletsResult {
+        let KnownConductanceResult {
             streams,
             effectiveness,
         } = result;
