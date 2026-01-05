@@ -114,6 +114,7 @@ pub fn known_heat_rate_and_inlets(
     let streams_with_max_heat = calculate_max_heat_flow(inlets)?;
     let capacitance_rates = [inlets[0].capacitance_rate, inlets[1].capacitance_rate];
 
+    // Doesn't matter which stream we use to get max heat flow. Magnitude is the same.
     let max_heat_flow = streams_with_max_heat[0].heat_flow.signed().abs();
     let effectiveness = Effectiveness::from_quantity(heat_rate.abs() / max_heat_flow)?;
 
