@@ -14,7 +14,6 @@ pub trait EffectivenessRelation {
     fn effectiveness(&self, ntu: Ntu, capacitance_rates: [CapacitanceRate; 2]) -> Effectiveness;
 }
 
-#[allow(dead_code)]
 pub trait NtuRelation {
     /// Calculate the [NTU](Ntu) for an arrangement given the
     /// [effectiveness](Effectiveness) and [capacity ratio](CapacityRatio).
