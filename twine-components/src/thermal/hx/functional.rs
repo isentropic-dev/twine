@@ -95,6 +95,32 @@ pub struct KnownConductanceResult {
     pub effectiveness: Effectiveness,
 }
 
+pub fn known_conditions_and_inlets(
+    arrangement: &impl NtuRelation,
+    streams: (StreamInlet, Stream),
+) -> ConstraintResult<KnownConditionsResult> {
+    let streams_with_max_heat = calculate_max_heat_flow([streams.0, streams.1.into()])?;
+    let capacitance_rates = [streams.0.capacitance_rate, streams.1.capacitance_rate];
+
+    // Doesn't matter which stream we use to get max heat flow. Magnitude is the same.
+    let max_heat_flow = streams_with_max_heat[0].heat_flow.signed().abs();
+    let effectiveness =
+        Effectiveness::from_quantity(streams.1.heat_flow.signed().abs() / max_heat_flow)?;
+
+    let ntu = arrangement.ntu(effectiveness, capacitance_rates);
+
+    Ok(KnownConditionsResult {
+        streams: [
+            streams.0.with_heat_flow(HeatFlow::from_signed(
+                *effectiveness * streams_with_max_heat[0].heat_flow.signed(),
+            )?),
+            streams.1,
+        ],
+        ua: *ntu * capacitance_rates[0].min(*capacitance_rates[1]),
+        ntu,
+    })
+}
+
 /// Analyze a heat exchanger when its heat rate and inlet conditions are
 /// known.
 ///
@@ -220,20 +246,20 @@ mod tests {
     }
 
     #[test]
-    fn known_heat_flow_and_inlets() -> ConstraintResult<()> {
-        let result = super::known_heat_rate_and_inlets(
+    fn known_conditions_and_inlets() -> ConstraintResult<()> {
+        let result = super::known_conditions_and_inlets(
             &CounterFlow,
-            Power::new::<kilowatt>(60.),
-            [
+            (
                 StreamInlet::new(
                     CapacitanceRate::new::<kilowatt_per_kelvin>(3.)?,
                     ThermodynamicTemperature::new::<degree_celsius>(50.),
                 ),
-                StreamInlet::new(
+                Stream::new_from_heat_flow(
                     CapacitanceRate::new::<kilowatt_per_kelvin>(6.)?,
                     ThermodynamicTemperature::new::<degree_celsius>(80.),
+                    HeatFlow::outgoing(Power::new::<kilowatt>(60.))?,
                 ),
-            ],
+            ),
         )?;
 
         let KnownConditionsResult { streams, ua, ntu } = result;

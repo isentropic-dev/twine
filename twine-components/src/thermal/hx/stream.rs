@@ -110,6 +110,15 @@ impl Stream {
     }
 }
 
+impl From<Stream> for StreamInlet {
+    fn from(stream: Stream) -> Self {
+        Self {
+            capacitance_rate: stream.capacitance_rate,
+            temperature: stream.inlet_temperature,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use twine_core::constraint::ConstraintResult;
