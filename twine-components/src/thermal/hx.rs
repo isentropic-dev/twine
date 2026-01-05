@@ -18,10 +18,11 @@ pub use capacity_ratio::CapacityRatio;
 pub use effectiveness_ntu::{Effectiveness, Ntu};
 pub use stream::StreamInlet;
 use twine_core::constraint::ConstraintResult;
-use uom::si::f64::ThermalConductance;
+use uom::si::f64::{Power, ThermalConductance};
 
 use crate::thermal::hx::{
-    effectiveness_ntu::EffectivenessRelation, functional::KnownConductanceResult,
+    effectiveness_ntu::{EffectivenessRelation, NtuRelation},
+    functional::{KnownConditionsResult, KnownConductanceResult},
 };
 
 /// High-level entry point for solving heat exchanger scenarios with a chosen
@@ -73,7 +74,7 @@ impl<T> Hx<T> {
 
 impl<T: EffectivenessRelation> Hx<T> {
     /// Resolve outlet conditions for both streams using a known conductance and
-    /// inlet states, returning a [`KnownConductanceAndInletsResult`].
+    /// inlet states, returning a [`KnownConductanceResult`].
     ///
     /// # Errors
     ///
@@ -85,6 +86,27 @@ impl<T: EffectivenessRelation> Hx<T> {
         inlets: [StreamInlet; 2],
     ) -> ConstraintResult<KnownConductanceResult> {
         functional::known_conductance_and_inlets(&self.0, ua, inlets)
+    }
+}
+
+impl<T: NtuRelation> Hx<T> {
+    /// Analyze a heat exchanger when its heat rate and inlet conditions are
+    /// known.
+    ///
+    /// Given the heat rate of the heat exchanger and inlet conditions as
+    /// [`StreamInlet`], the fully resolved [streams](Stream), [UA](ThermalConductance) and
+    /// [NTU](Ntu) will be returned.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any of the supplied thermodynamic quantities violate
+    /// their constraints (for example, a non-positive capacitance rate).
+    pub fn known_heat_rate_and_inlets(
+        &self,
+        heat_rate: Power,
+        inlets: [StreamInlet; 2],
+    ) -> ConstraintResult<KnownConditionsResult> {
+        functional::known_heat_rate_and_inlets(&self.0, heat_rate, inlets)
     }
 }
 

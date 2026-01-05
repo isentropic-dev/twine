@@ -101,7 +101,12 @@ pub struct KnownConductanceResult {
 /// Given the heat rate of the heat exchanger and inlet conditions as
 /// [`StreamInlet`], the fully resolved [streams](Stream), [UA](ThermalConductance) and
 /// [NTU](Ntu) will be returned.
-fn known_heat_rate_and_inlets(
+///
+/// # Errors
+///
+/// Returns an error if any of the supplied thermodynamic quantities violate
+/// their constraints (for example, a non-positive capacitance rate).
+pub fn known_heat_rate_and_inlets(
     arrangement: &impl NtuRelation,
     heat_rate: Power,
     inlets: [StreamInlet; 2],
