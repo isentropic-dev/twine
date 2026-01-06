@@ -63,6 +63,44 @@ pub struct Stream {
 }
 
 impl Stream {
+    /// Construct a fully-resolved stream from a known heat flow.
+    ///
+    /// Given the stream's inlet temperature, capacitance rate, and heat flow,
+    /// this calculates the outlet temperature using the energy balance:
+    /// `Q = C * (T_out - T_in)`.
+    ///
+    /// This constructor is useful when you know the heat transfer rate for a stream
+    /// (for example, from measurements or system specifications) and need to determine
+    /// the resulting outlet temperature.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use twine_core::constraint::ConstraintResult;
+    /// use uom::si::{
+    ///     f64::{Power, ThermodynamicTemperature},
+    ///     power::kilowatt,
+    ///     thermal_conductance::kilowatt_per_kelvin,
+    ///     thermodynamic_temperature::degree_celsius,
+    /// };
+    /// use twine_components::thermal::hx::{CapacitanceRate, stream::Stream};
+    /// use twine_thermo::HeatFlow;
+    ///
+    /// # fn main() -> ConstraintResult<()> {
+    /// let stream = Stream::new_from_heat_flow(
+    ///     CapacitanceRate::new::<kilowatt_per_kelvin>(3.)?,
+    ///     ThermodynamicTemperature::new::<degree_celsius>(80.),
+    ///     HeatFlow::outgoing(Power::new::<kilowatt>(60.))?,
+    /// );
+    ///
+    /// // Outlet temperature is calculated automatically
+    /// assert_eq!(
+    ///     stream.outlet_temperature.get::<degree_celsius>(),
+    ///     60.0
+    /// );
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn new_from_heat_flow(
         capacitance_rate: CapacitanceRate,
         inlet_temperature: ThermodynamicTemperature,
@@ -84,6 +122,49 @@ impl Stream {
         }
     }
 
+    /// Construct a fully-resolved stream from known inlet and outlet temperatures.
+    ///
+    /// Given the stream's inlet and outlet temperatures along with its capacitance rate,
+    /// this calculates the heat flow using the energy balance: `Q = C * (T_out - T_in)`.
+    ///
+    /// The heat flow direction is automatically determined from the temperature change:
+    /// - If outlet > inlet, the heat flow is [`HeatFlow::In`]
+    /// - If outlet < inlet, the heat flow is [`HeatFlow::Out`]
+    /// - If outlet = inlet, the heat flow is [`HeatFlow::None`]
+    ///
+    /// This constructor is useful when you know both inlet and outlet temperatures for
+    /// a stream (for example, from measurements) and need to determine the heat transfer
+    /// rate.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use twine_core::constraint::ConstraintResult;
+    /// use uom::si::{
+    ///     f64::ThermodynamicTemperature,
+    ///     power::kilowatt,
+    ///     thermal_conductance::kilowatt_per_kelvin,
+    ///     thermodynamic_temperature::degree_celsius,
+    /// };
+    /// use twine_components::thermal::hx::{CapacitanceRate, stream::Stream};
+    /// use twine_thermo::HeatFlow;
+    ///
+    /// # fn main() -> ConstraintResult<()> {
+    /// let stream = Stream::new_from_outlet_temperature(
+    ///     CapacitanceRate::new::<kilowatt_per_kelvin>(3.)?,
+    ///     ThermodynamicTemperature::new::<degree_celsius>(80.),
+    ///     ThermodynamicTemperature::new::<degree_celsius>(60.),
+    /// );
+    ///
+    /// // Heat flow magnitude is calculated automatically (80°C → 60°C means heat is leaving)
+    /// assert!(matches!(stream.heat_flow, HeatFlow::Out(_)));
+    /// assert_eq!(
+    ///     stream.heat_flow.signed().abs().get::<kilowatt>(),
+    ///     60.0
+    /// );
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn new_from_outlet_temperature(
         capacitance_rate: CapacitanceRate,
         inlet_temperature: ThermodynamicTemperature,
