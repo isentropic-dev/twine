@@ -120,9 +120,9 @@ pub struct KnownConductanceResult {
 /// use twine_components::thermal::hx::{
 ///     arrangement,
 ///     CapacitanceRate,
+///     Stream,
 ///     StreamInlet,
 ///     functional,
-///     stream::Stream,
 /// };
 /// use twine_thermo::HeatFlow;
 ///

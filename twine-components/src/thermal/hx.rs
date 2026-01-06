@@ -16,14 +16,13 @@ mod stream;
 pub use capacitance_rate::CapacitanceRate;
 pub use capacity_ratio::CapacityRatio;
 pub use effectiveness_ntu::{Effectiveness, Ntu};
-pub use stream::StreamInlet;
+pub use stream::{Stream, StreamInlet};
 use twine_core::constraint::ConstraintResult;
 use uom::si::f64::ThermalConductance;
 
 use crate::thermal::hx::{
     effectiveness_ntu::{EffectivenessRelation, NtuRelation},
     functional::{KnownConditionsResult, KnownConductanceResult},
-    stream::Stream,
 };
 
 /// High-level entry point for solving heat exchanger scenarios with a chosen
@@ -119,8 +118,7 @@ impl<T: NtuRelation> Hx<T> {
     ///     thermodynamic_temperature::degree_celsius,
     ///     thermal_conductance::kilowatt_per_kelvin,
     /// };
-    /// use twine_components::thermal::hx::{arrangement, CapacitanceRate, Hx, StreamInlet};
-    /// use twine_components::thermal::hx::stream::Stream;
+    /// use twine_components::thermal::hx::{arrangement, CapacitanceRate, Hx, Stream, StreamInlet};
     /// use twine_thermo::HeatFlow;
     ///
     /// # fn main() -> ConstraintResult<()> {

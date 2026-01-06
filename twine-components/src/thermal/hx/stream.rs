@@ -83,7 +83,7 @@ impl Stream {
     ///     thermal_conductance::kilowatt_per_kelvin,
     ///     thermodynamic_temperature::degree_celsius,
     /// };
-    /// use twine_components::thermal::hx::{CapacitanceRate, stream::Stream};
+    /// use twine_components::thermal::hx::{CapacitanceRate, Stream};
     /// use twine_thermo::HeatFlow;
     ///
     /// # fn main() -> ConstraintResult<()> {
@@ -146,7 +146,7 @@ impl Stream {
     ///     thermal_conductance::kilowatt_per_kelvin,
     ///     thermodynamic_temperature::degree_celsius,
     /// };
-    /// use twine_components::thermal::hx::{CapacitanceRate, stream::Stream};
+    /// use twine_components::thermal::hx::{CapacitanceRate, Stream};
     /// use twine_thermo::HeatFlow;
     ///
     /// # fn main() -> ConstraintResult<()> {
