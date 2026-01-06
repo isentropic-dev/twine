@@ -101,6 +101,7 @@ impl Stream {
     /// # Ok(())
     /// # }
     /// ```
+    #[must_use]
     pub fn new_from_heat_flow(
         capacitance_rate: CapacitanceRate,
         inlet_temperature: ThermodynamicTemperature,
@@ -165,6 +166,12 @@ impl Stream {
     /// # Ok(())
     /// # }
     /// ```
+    ///
+    /// # Panics
+    ///
+    /// Panics if the temperatures cannot be compared (e.g., contain NaN values) or if
+    /// the calculated heat rate magnitude is invalid (which should not occur in normal use).
+    #[must_use]
     pub fn new_from_outlet_temperature(
         capacitance_rate: CapacitanceRate,
         inlet_temperature: ThermodynamicTemperature,
