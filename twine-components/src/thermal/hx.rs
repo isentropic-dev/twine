@@ -23,6 +23,7 @@ use uom::si::f64::{Power, ThermalConductance};
 use crate::thermal::hx::{
     effectiveness_ntu::{EffectivenessRelation, NtuRelation},
     functional::{KnownConditionsResult, KnownConductanceResult},
+    stream::Stream,
 };
 
 /// High-level entry point for solving heat exchanger scenarios with a chosen
@@ -90,23 +91,11 @@ impl<T: EffectivenessRelation> Hx<T> {
 }
 
 impl<T: NtuRelation> Hx<T> {
-    /// Analyze a heat exchanger when its heat rate and inlet conditions are
-    /// known.
-    ///
-    /// Given the heat rate of the heat exchanger and inlet conditions as
-    /// [`StreamInlet`], the fully resolved [streams](Stream), [UA](ThermalConductance) and
-    /// [NTU](Ntu) will be returned.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if any of the supplied thermodynamic quantities violate
-    /// their constraints (for example, a non-positive capacitance rate).
-    pub fn known_heat_rate_and_inlets(
+    pub fn known_conditions_and_inlets(
         &self,
-        heat_rate: Power,
-        inlets: [StreamInlet; 2],
+        streams: (StreamInlet, Stream),
     ) -> ConstraintResult<KnownConditionsResult> {
-        functional::known_heat_rate_and_inlets(&self.0, heat_rate, inlets)
+        functional::known_conditions_and_inlets(&self.0, streams)
     }
 }
 

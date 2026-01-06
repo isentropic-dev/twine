@@ -121,45 +121,6 @@ pub fn known_conditions_and_inlets(
     })
 }
 
-/// Analyze a heat exchanger when its heat rate and inlet conditions are
-/// known.
-///
-/// Given the heat rate of the heat exchanger and inlet conditions as
-/// [`StreamInlet`], the fully resolved [streams](Stream), [UA](ThermalConductance) and
-/// [NTU](Ntu) will be returned.
-///
-/// # Errors
-///
-/// Returns an error if any of the supplied thermodynamic quantities violate
-/// their constraints (for example, a non-positive capacitance rate).
-pub fn known_heat_rate_and_inlets(
-    arrangement: &impl NtuRelation,
-    heat_rate: Power,
-    inlets: [StreamInlet; 2],
-) -> ConstraintResult<KnownConditionsResult> {
-    let streams_with_max_heat = calculate_max_heat_flow(inlets)?;
-    let capacitance_rates = [inlets[0].capacitance_rate, inlets[1].capacitance_rate];
-
-    // Doesn't matter which stream we use to get max heat flow. Magnitude is the same.
-    let max_heat_flow = streams_with_max_heat[0].heat_flow.signed().abs();
-    let effectiveness = Effectiveness::from_quantity(heat_rate.abs() / max_heat_flow)?;
-
-    let ntu = arrangement.ntu(effectiveness, capacitance_rates);
-
-    Ok(KnownConditionsResult {
-        streams: [
-            inlets[0].with_heat_flow(HeatFlow::from_signed(
-                *effectiveness * streams_with_max_heat[0].heat_flow.signed(),
-            )?),
-            inlets[1].with_heat_flow(HeatFlow::from_signed(
-                *effectiveness * streams_with_max_heat[1].heat_flow.signed(),
-            )?),
-        ],
-        ua: *ntu * capacitance_rates[0].min(*capacitance_rates[1]),
-        ntu,
-    })
-}
-
 /// Resolved exchanger state returned from [`known_heat_rate_and_inlets`]
 #[derive(Debug, Clone, Copy)]
 pub struct KnownConditionsResult {
