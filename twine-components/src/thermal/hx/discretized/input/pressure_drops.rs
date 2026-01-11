@@ -21,10 +21,9 @@ impl PressureDrops {
     ///
     /// Returns an error if either pressure drop is negative.
     pub fn new(top: Pressure, bottom: Pressure) -> ConstraintResult<Self> {
-        Ok(Self::from_constrained(
-            Constrained::<Pressure, NonNegative>::new(top)?,
-            Constrained::<Pressure, NonNegative>::new(bottom)?,
-        ))
+        let top = Constrained::<Pressure, NonNegative>::new(top)?;
+        let bottom = Constrained::<Pressure, NonNegative>::new(bottom)?;
+        Ok(Self::from_constrained(top, bottom))
     }
 
     /// Construct pressure drops from pre-validated values.

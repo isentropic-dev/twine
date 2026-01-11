@@ -20,10 +20,9 @@ impl MassFlows {
     ///
     /// Returns an error if either flow rate is not strictly positive.
     pub fn new(top: MassRate, bottom: MassRate) -> ConstraintResult<Self> {
-        Ok(Self::from_constrained(
-            Constrained::<MassRate, StrictlyPositive>::new(top)?,
-            Constrained::<MassRate, StrictlyPositive>::new(bottom)?,
-        ))
+        let top = Constrained::<MassRate, StrictlyPositive>::new(top)?;
+        let bottom = Constrained::<MassRate, StrictlyPositive>::new(bottom)?;
+        Ok(Self::from_constrained(top, bottom))
     }
 
     /// Construct mass flows from pre-validated values.

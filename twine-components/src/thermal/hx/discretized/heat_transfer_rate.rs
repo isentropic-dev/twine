@@ -28,10 +28,8 @@ impl HeatTransferRate {
     ///
     /// Returns an error if `q_dot` is not strictly positive.
     pub fn top_to_bottom(q_dot: Power) -> ConstraintResult<Self> {
-        Ok(Self::top_to_bottom_from_constrained(Constrained::<
-            Power,
-            StrictlyPositive,
-        >::new(q_dot)?))
+        let q_dot = Constrained::<Power, StrictlyPositive>::new(q_dot)?;
+        Ok(Self::top_to_bottom_from_constrained(q_dot))
     }
 
     /// Construct a heat transfer rate from the top stream to the bottom stream
@@ -46,11 +44,9 @@ impl HeatTransferRate {
     /// # Errors
     ///
     /// Returns an error if `q_dot` is not strictly positive.
-    pub fn bottom_to_top(q_dot: Power) -> Result<Self, ConstraintError> {
-        Ok(Self::bottom_to_top_from_constrained(Constrained::<
-            Power,
-            StrictlyPositive,
-        >::new(q_dot)?))
+    pub fn bottom_to_top(q_dot: Power) -> ConstraintResult<Self> {
+        let q_dot = Constrained::<Power, StrictlyPositive>::new(q_dot)?;
+        Ok(Self::bottom_to_top_from_constrained(q_dot))
     }
 
     /// Construct a heat transfer rate from the bottom stream to the top stream
@@ -69,7 +65,7 @@ impl HeatTransferRate {
     /// # Errors
     ///
     /// Returns an error if `q_dot` is not a number.
-    pub fn from_signed_top_to_bottom(q_dot: Power) -> Result<Self, ConstraintError> {
+    pub fn from_signed_top_to_bottom(q_dot: Power) -> ConstraintResult<Self> {
         match q_dot.partial_cmp(&Power::ZERO) {
             Some(Ordering::Greater) => Ok(Self::TopToBottom(q_dot)),
             Some(Ordering::Less) => Ok(Self::BottomToTop(-q_dot)),

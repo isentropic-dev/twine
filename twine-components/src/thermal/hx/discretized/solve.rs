@@ -76,8 +76,7 @@ impl<Arrangement, const N: usize> DiscretizedHx<Arrangement, N> {
     ///
     /// # Errors
     ///
-    /// Returns a [`SolveError`] if the solver fails to converge or violates
-    /// physical constraints.
+    /// Returns a [`SolveError`] on non-physical results or thermodynamic model failures.
     pub fn solve<TopFluid, BottomFluid, TopModel, BottomModel>(
         known: &Known<TopFluid, BottomFluid>,
         given: Given,
@@ -105,8 +104,7 @@ impl<Arrangement, const N: usize> DiscretizedHx<Arrangement, N> {
     ///
     /// # Errors
     ///
-    /// Returns a [`SolveError`] if the solver fails to converge or violates
-    /// physical constraints.
+    /// Returns a [`SolveError`] on non-physical results or thermodynamic model failures.
     pub fn solve_same<Fluid, Model>(
         known: &Known<Fluid, Fluid>,
         given: Given,
@@ -128,8 +126,7 @@ impl<Arrangement, const N: usize> DiscretizedHx<Arrangement, N> {
 ///
 /// # Errors
 ///
-/// Returns a [`SolveError`] if the solver fails to converge or violates
-/// physical constraints.
+/// Returns a [`SolveError`] on non-physical results or thermodynamic model failures.
 ///
 /// # Panics
 ///
