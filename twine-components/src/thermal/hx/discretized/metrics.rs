@@ -113,9 +113,12 @@ where
 }
 
 /// Compute the minimum hot-to-cold temperature difference and its node index.
-pub(super) fn compute_min_delta_t<TopFluid, BottomFluid, const N: usize>(
+pub(super) fn compute_min_delta_t<Arrangement, TopFluid, BottomFluid, const N: usize>(
     nodes: &Nodes<TopFluid, BottomFluid, N>,
-) -> MinDeltaT {
+) -> MinDeltaT
+where
+    Arrangement: DiscretizedArrangement,
+{
     if N == 0 {
         return MinDeltaT {
             value: TemperatureInterval::ZERO,
@@ -124,7 +127,8 @@ pub(super) fn compute_min_delta_t<TopFluid, BottomFluid, const N: usize>(
     }
 
     let top_inlet = nodes.top[0].temperature;
-    let bottom_inlet = nodes.bottom[0].temperature;
+    let bottom_inlet_index = Arrangement::bottom_select(0, N - 1);
+    let bottom_inlet = nodes.bottom[bottom_inlet_index].temperature;
     let top_is_hot = top_inlet >= bottom_inlet;
 
     let mut min_delta_t = TemperatureInterval::new::<delta_kelvin>(f64::INFINITY);
