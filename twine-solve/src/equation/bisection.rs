@@ -1,0 +1,277 @@
+mod config;
+mod error;
+mod solution;
+
+pub use config::Config;
+pub use error::Error;
+pub use solution::{Solution, Status};
+
+use crate::{
+    equation::{EquationProblem, Evaluation},
+    model::{Model, Snapshot},
+};
+
+/// Finds a root of the equation using the bisection method.
+///
+/// # Errors
+///
+/// Returns an error if the bracket is invalid, the config is invalid,
+/// or the model or problem returns an error during evaluation.
+pub fn solve<I, O>(
+    model: &impl Model<Input = I, Output = O>,
+    problem: &impl EquationProblem<1, Input = I, Output = O>,
+    bracket: [f64; 2],
+    config: &Config,
+) -> Result<Solution<I, O>, Error> {
+    config
+        .validate()
+        .map_err(|reason| Error::InvalidConfig { reason })?;
+
+    let (mut left, mut right) = validate_bracket(bracket)?;
+
+    let left_eval = eval(model, problem, left)?;
+    let mut left_residual = left_eval.residuals[0];
+    if left_residual.abs() <= config.residual_tol {
+        return Ok(Solution::from_eval(left_eval, Status::Converged, 0));
+    }
+
+    let right_eval = eval(model, problem, right)?;
+    let right_residual = right_eval.residuals[0];
+    if right_residual.abs() <= config.residual_tol {
+        return Ok(Solution::from_eval(right_eval, Status::Converged, 0));
+    }
+
+    if left_residual.signum() == right_residual.signum() {
+        return Err(Error::NoBracket {
+            left,
+            right,
+            left_residual,
+            right_residual,
+        });
+    }
+
+    let (mut best, mut best_residual) = if left_residual.abs() <= right_residual.abs() {
+        (left_eval, left_residual)
+    } else {
+        (right_eval, right_residual)
+    };
+
+    for iter in 1..=config.max_iters {
+        let mid = 0.5 * (left + right);
+        let mid_eval = eval(model, problem, mid)?;
+        let mid_residual = mid_eval.residuals[0];
+
+        let x_converged = (right - left).abs() <= config.x_abs_tol + config.x_rel_tol * mid.abs();
+        let residual_converged = mid_residual.abs() <= config.residual_tol;
+
+        if x_converged || residual_converged {
+            return Ok(Solution::from_eval(mid_eval, Status::Converged, iter));
+        }
+
+        if mid_residual.abs() < best_residual.abs() {
+            best = mid_eval;
+            best_residual = mid_residual;
+        }
+
+        if left_residual.signum() == mid_residual.signum() {
+            left = mid;
+            left_residual = mid_residual;
+        } else {
+            right = mid;
+        }
+    }
+
+    Ok(Solution::from_eval(
+        best,
+        Status::MaxIters,
+        config.max_iters,
+    ))
+}
+
+/// Validates bracket values and returns them in normalized (left < right) order.
+fn validate_bracket(bracket: [f64; 2]) -> Result<(f64, f64), Error> {
+    let [left, right] = bracket;
+
+    if !left.is_finite() {
+        return Err(Error::NonFiniteBracket { value: left });
+    }
+
+    if !right.is_finite() {
+        return Err(Error::NonFiniteBracket { value: right });
+    }
+
+    #[allow(clippy::float_cmp)]
+    if left == right {
+        return Err(Error::ZeroWidthBracket { value: left });
+    }
+
+    if left < right {
+        Ok((left, right))
+    } else {
+        Ok((right, left))
+    }
+}
+
+/// Evaluates the model at `x` and computes the residual.
+fn eval<I, O>(
+    model: &impl Model<Input = I, Output = O>,
+    problem: &impl EquationProblem<1, Input = I, Output = O>,
+    x: f64,
+) -> Result<Evaluation<I, O, 1>, Error> {
+    let input = problem.input(&[x]).map_err(Error::input)?;
+    let output = model.call(&input).map_err(Error::model)?;
+    let residuals = problem
+        .residuals(&input, &output)
+        .map_err(Error::residual)?;
+
+    if !residuals[0].is_finite() {
+        return Err(Error::NonFiniteResidual {
+            x,
+            residual: residuals[0],
+        });
+    }
+
+    Ok(Evaluation {
+        x: [x],
+        residuals,
+        snapshot: Snapshot::new(input, output),
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use std::convert::Infallible;
+
+    use approx::assert_relative_eq;
+
+    /// Model that returns `x` squared.
+    struct SquareModel;
+
+    impl Model for SquareModel {
+        type Input = f64;
+        type Output = f64;
+        type Error = Infallible;
+
+        fn call(&self, input: &Self::Input) -> Result<Self::Output, Self::Error> {
+            Ok(input * input)
+        }
+    }
+
+    /// Equation problem for `x^2 = target`.
+    struct SqrtProblem {
+        target: f64,
+    }
+
+    impl EquationProblem<1> for SqrtProblem {
+        type Input = f64;
+        type Output = f64;
+        type InputError = Infallible;
+        type ResidualError = Infallible;
+
+        fn input(&self, x: &[f64; 1]) -> Result<Self::Input, Self::InputError> {
+            Ok(x[0])
+        }
+
+        fn residuals(
+            &self,
+            _input: &Self::Input,
+            output: &Self::Output,
+        ) -> Result<[f64; 1], Self::ResidualError> {
+            Ok([output - self.target])
+        }
+    }
+
+    #[test]
+    fn finds_square_root() {
+        let model = SquareModel;
+        let problem = SqrtProblem { target: 9.0 };
+        let config = Config::default();
+
+        let solution = solve(&model, &problem, [0.0, 10.0], &config).expect("should solve");
+
+        assert_eq!(solution.status, Status::Converged);
+        assert_relative_eq!(solution.x, 3.0, epsilon = 1e-10);
+        assert_relative_eq!(solution.snapshot.output, 9.0, epsilon = 1e-10);
+    }
+
+    #[test]
+    fn normalizes_reversed_bracket() {
+        let model = SquareModel;
+        let problem = SqrtProblem { target: 36.0 };
+        let config = Config::default();
+
+        // Bracket is reversed: [10.0, 0.0] instead of [0.0, 10.0]
+        let solution = solve(&model, &problem, [10.0, 0.0], &config)
+            .expect("should solve with reversed bracket");
+
+        assert_eq!(solution.status, Status::Converged);
+        assert_relative_eq!(solution.x, 6.0, epsilon = 1e-10);
+    }
+
+    #[test]
+    fn errors_on_zero_width_bracket() {
+        let model = SquareModel;
+        let problem = SqrtProblem { target: 25.0 };
+
+        let result = solve(&model, &problem, [5.0, 5.0], &Config::default());
+
+        assert!(matches!(result, Err(Error::ZeroWidthBracket { .. })));
+    }
+
+    #[test]
+    fn errors_on_non_finite_bracket() {
+        let model = SquareModel;
+        let problem = SqrtProblem { target: 67.0 };
+
+        let result = solve(&model, &problem, [f64::NAN, 10.0], &Config::default());
+        assert!(matches!(result, Err(Error::NonFiniteBracket { .. })));
+
+        let result = solve(&model, &problem, [0.0, f64::INFINITY], &Config::default());
+        assert!(matches!(result, Err(Error::NonFiniteBracket { .. })));
+    }
+
+    #[test]
+    fn errors_on_no_bracket() {
+        let model = SquareModel;
+        let problem = SqrtProblem { target: 9.0 };
+
+        // Both endpoints are positive (no sign change)
+        let result = solve(&model, &problem, [5.0, 10.0], &Config::default());
+
+        assert!(matches!(result, Err(Error::NoBracket { .. })));
+    }
+
+    #[test]
+    fn errors_on_invalid_config() {
+        let model = SquareModel;
+        let problem = SqrtProblem { target: 4.0 };
+
+        let config = Config {
+            x_abs_tol: -1.0,
+            ..Config::default()
+        };
+        let result = solve(&model, &problem, [0.0, 10.0], &config);
+        assert!(matches!(result, Err(Error::InvalidConfig { .. })));
+    }
+
+    #[test]
+    fn zero_iters_returns_best_endpoint() {
+        let model = SquareModel;
+        let problem = SqrtProblem { target: 9.0 };
+
+        let config = Config {
+            max_iters: 0,
+            ..Config::default()
+        };
+        let solution =
+            solve(&model, &problem, [2.0, 10.0], &config).expect("should return best endpoint");
+
+        assert_eq!(solution.status, Status::MaxIters);
+        assert_eq!(solution.iters, 0);
+        // x=2 gives residual |4-9|=5, x=10 gives |100-9|=91
+        // So best endpoint should be x=2
+        assert_relative_eq!(solution.x, 2.0);
+    }
+}
