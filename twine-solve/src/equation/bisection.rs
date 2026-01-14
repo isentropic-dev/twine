@@ -146,9 +146,8 @@ mod tests {
 
     use approx::assert_relative_eq;
 
-    /// Model that returns `x` squared.
+    /// Model that squares its input.
     struct SquareModel;
-
     impl Model for SquareModel {
         type Input = f64;
         type Output = f64;
@@ -159,12 +158,24 @@ mod tests {
         }
     }
 
-    /// Equation problem for `x^2 = target`.
-    struct SqrtProblem {
-        target: f64,
+    /// Model that cubes its input.
+    struct CubeModel;
+    impl Model for CubeModel {
+        type Input = f64;
+        type Output = f64;
+        type Error = Infallible;
+
+        fn call(&self, input: &Self::Input) -> Result<Self::Output, Self::Error> {
+            Ok(input * input * input)
+        }
     }
 
-    impl EquationProblem<1> for SqrtProblem {
+    /// Equation problem that drives the model output to a target value.
+    /// Residual is `output - target` for any f64→f64 model.
+    struct TargetOutputProblem {
+        target: f64,
+    }
+    impl EquationProblem<1> for TargetOutputProblem {
         type Input = f64;
         type Output = f64;
         type InputError = Infallible;
@@ -186,7 +197,7 @@ mod tests {
     #[test]
     fn finds_square_root() {
         let model = SquareModel;
-        let problem = SqrtProblem { target: 9.0 };
+        let problem = TargetOutputProblem { target: 9.0 };
         let config = Config::default();
 
         let solution = solve(&model, &problem, [0.0, 10.0], &config).expect("should solve");
@@ -199,7 +210,7 @@ mod tests {
     #[test]
     fn normalizes_reversed_bracket() {
         let model = SquareModel;
-        let problem = SqrtProblem { target: 36.0 };
+        let problem = TargetOutputProblem { target: 36.0 };
         let config = Config::default();
 
         // Bracket is reversed: [10.0, 0.0] instead of [0.0, 10.0]
@@ -213,7 +224,7 @@ mod tests {
     #[test]
     fn errors_on_zero_width_bracket() {
         let model = SquareModel;
-        let problem = SqrtProblem { target: 25.0 };
+        let problem = TargetOutputProblem { target: 25.0 };
 
         let result = solve(&model, &problem, [5.0, 5.0], &Config::default());
 
@@ -223,7 +234,7 @@ mod tests {
     #[test]
     fn errors_on_non_finite_bracket() {
         let model = SquareModel;
-        let problem = SqrtProblem { target: 67.0 };
+        let problem = TargetOutputProblem { target: 67.0 };
 
         let result = solve(&model, &problem, [f64::NAN, 10.0], &Config::default());
         assert!(matches!(result, Err(Error::NonFiniteBracket { .. })));
@@ -235,7 +246,7 @@ mod tests {
     #[test]
     fn errors_on_no_bracket() {
         let model = SquareModel;
-        let problem = SqrtProblem { target: 9.0 };
+        let problem = TargetOutputProblem { target: 9.0 };
 
         // Both endpoints are positive (no sign change)
         let result = solve(&model, &problem, [5.0, 10.0], &Config::default());
@@ -246,7 +257,7 @@ mod tests {
     #[test]
     fn errors_on_invalid_config() {
         let model = SquareModel;
-        let problem = SqrtProblem { target: 4.0 };
+        let problem = TargetOutputProblem { target: 4.0 };
 
         let config = Config {
             x_abs_tol: -1.0,
@@ -259,7 +270,7 @@ mod tests {
     #[test]
     fn zero_iters_returns_best_endpoint() {
         let model = SquareModel;
-        let problem = SqrtProblem { target: 9.0 };
+        let problem = TargetOutputProblem { target: 9.0 };
 
         let config = Config {
             max_iters: 0,
@@ -273,5 +284,18 @@ mod tests {
         // x=2 gives residual |4-9|=5, x=10 gives |100-9|=91
         // So best endpoint should be x=2
         assert_relative_eq!(solution.x, 2.0);
+    }
+
+    #[test]
+    fn finds_cube_root() {
+        let model = CubeModel;
+        let problem = TargetOutputProblem { target: 27.0 };
+
+        let solution =
+            solve(&model, &problem, [0.0, 10.0], &Config::default()).expect("should solve");
+
+        assert_eq!(solution.status, Status::Converged);
+        assert_relative_eq!(solution.x, 3.0, epsilon = 1e-10);
+        assert_relative_eq!(solution.snapshot.output, 27.0, epsilon = 1e-10);
     }
 }
