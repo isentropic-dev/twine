@@ -13,11 +13,11 @@ use crate::{
 
 /// Control actions supported by the bisection solver.
 pub enum Action {
-    /// Stop the solver early with a reason.
+    /// Stop the solver early.
     ///
     /// This action is illustrative and may change once solver control
     /// patterns settle.
-    StopEarly { reason: String },
+    StopEarly,
 }
 
 /// Iteration event emitted by the bisection solver.
@@ -116,7 +116,7 @@ where
 
         if let Some(action) = observer.observe(&event) {
             match action {
-                Action::StopEarly { .. } => {
+                Action::StopEarly => {
                     let best_eval = if is_better { mid_eval } else { best };
                     return Ok(Solution::from_eval(
                         best_eval,
@@ -281,9 +281,7 @@ mod tests {
         let observer = |event: &Event<'_, f64, f64>| {
             calls += 1;
             if event.iter >= 3 {
-                Some(Action::StopEarly {
-                    reason: "test stop".to_string(),
-                })
+                Some(Action::StopEarly)
             } else {
                 None
             }
