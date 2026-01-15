@@ -8,7 +8,7 @@ use crate::thermal::hx::{
 };
 
 /// Counter-flow heat exchanger arrangement.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct CounterFlow;
 
 impl EffectivenessRelation for CounterFlow {

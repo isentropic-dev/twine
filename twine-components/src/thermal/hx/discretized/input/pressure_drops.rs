@@ -8,7 +8,7 @@ use uom::si::f64::Pressure;
 ///
 /// The "top" and "bottom" labels refer to the physical stream assignment, not
 /// necessarily the hot/cold side of the heat exchanger.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct PressureDrops {
     top: Pressure,
     bottom: Pressure,
@@ -47,6 +47,12 @@ impl PressureDrops {
     #[must_use]
     pub fn new_unchecked(top: Pressure, bottom: Pressure) -> Self {
         Self { top, bottom }
+    }
+
+    /// Construct zero pressure drops for both streams.
+    #[must_use]
+    pub fn zero() -> Self {
+        Self::default()
     }
 
     /// Returns the pressure drop of the top stream.
