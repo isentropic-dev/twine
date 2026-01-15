@@ -9,6 +9,7 @@
 pub mod arrangement;
 mod capacitance_rate;
 mod capacity_ratio;
+pub mod discretized;
 mod effectiveness_ntu;
 pub mod functional;
 mod stream;

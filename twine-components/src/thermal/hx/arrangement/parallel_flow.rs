@@ -8,7 +8,7 @@ use crate::thermal::hx::{
 };
 
 /// Parallel-flow heat exchanger arrangement.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct ParallelFlow;
 
 impl EffectivenessRelation for ParallelFlow {
