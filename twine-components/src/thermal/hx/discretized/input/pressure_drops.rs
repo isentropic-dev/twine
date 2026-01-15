@@ -15,7 +15,7 @@ pub struct PressureDrops {
 }
 
 impl PressureDrops {
-    /// Construct validated pressure drops.
+    /// Constructs validated pressure drops.
     ///
     /// # Errors
     ///
@@ -26,7 +26,7 @@ impl PressureDrops {
         Ok(Self::from_constrained(top, bottom))
     }
 
-    /// Construct pressure drops from pre-validated values.
+    /// Constructs pressure drops from pre-validated values.
     #[must_use]
     pub fn from_constrained(
         top: Constrained<Pressure, NonNegative>,
@@ -38,7 +38,7 @@ impl PressureDrops {
         }
     }
 
-    /// Construct pressure drops without validation.
+    /// Constructs pressure drops without validation.
     ///
     /// # Warning
     ///
@@ -49,7 +49,7 @@ impl PressureDrops {
         Self { top, bottom }
     }
 
-    /// Construct zero pressure drops for both streams.
+    /// Constructs zero pressure drops for both streams.
     #[must_use]
     pub fn zero() -> Self {
         Self::default()

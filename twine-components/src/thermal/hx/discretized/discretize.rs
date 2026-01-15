@@ -25,7 +25,7 @@ pub(super) struct Nodes<TopFluid, BottomFluid, const N: usize> {
 }
 
 impl<TopFluid, BottomFluid, const N: usize> Nodes<TopFluid, BottomFluid, N> {
-    /// Discretize the heat exchanger into N nodes.
+    /// Discretizes the heat exchanger into N nodes.
     ///
     /// This function breaks the heat exchanger into segments and computes node
     /// states from the resolved endpoint conditions.
@@ -75,7 +75,7 @@ struct NodeStates<TopFluid, BottomFluid, const N: usize> {
     bottom: [State<BottomFluid>; N],
 }
 
-/// Compute pressure and enthalpy arrays for all nodes.
+/// Computes pressure and enthalpy arrays for all nodes.
 fn compute_node_arrays<Arrangement, const N: usize>(
     resolved: &Resolved<impl Clone, impl Clone>,
     q_signed: Power,
@@ -109,7 +109,7 @@ where
     }
 }
 
-/// Create array via linear interpolation: `[start, ..., end]` with N evenly-spaced points.
+/// Creates an array via linear interpolation: `[start, ..., end]` with N evenly-spaced points.
 #[inline]
 fn linear_array<T, const N: usize>(start: T, end: T) -> [T; N]
 where
@@ -128,7 +128,7 @@ where
     })
 }
 
-/// Build state arrays from computed node properties.
+/// Builds state arrays from computed node properties.
 fn build_node_states<Arrangement, TopFluid, BottomFluid, const N: usize>(
     resolved: &Resolved<TopFluid, BottomFluid>,
     thermo_top: &impl DiscretizedHxThermoModel<TopFluid>,
@@ -166,7 +166,7 @@ where
     })
 }
 
-/// Build state array from pressure and enthalpy arrays.
+/// Builds a state array from pressure and enthalpy arrays.
 ///
 /// The inlet and outlet states are placed at their respective array positions
 /// based on `inlet_at_start`. All other positions are computed from thermodynamic

@@ -14,7 +14,7 @@ pub struct MassFlows {
 }
 
 impl MassFlows {
-    /// Construct validated mass flows.
+    /// Constructs validated mass flows.
     ///
     /// # Errors
     ///
@@ -25,7 +25,7 @@ impl MassFlows {
         Ok(Self::from_constrained(top, bottom))
     }
 
-    /// Construct mass flows from pre-validated values.
+    /// Constructs mass flows from pre-validated values.
     #[must_use]
     pub fn from_constrained(
         top: Constrained<MassRate, StrictlyPositive>,
@@ -37,7 +37,7 @@ impl MassFlows {
         }
     }
 
-    /// Construct mass flows without validation.
+    /// Constructs mass flows without validation.
     ///
     /// # Warning
     ///

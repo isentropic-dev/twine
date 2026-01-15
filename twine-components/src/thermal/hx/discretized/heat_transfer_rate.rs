@@ -22,7 +22,7 @@ pub enum HeatTransferRate {
 }
 
 impl HeatTransferRate {
-    /// Construct a heat transfer rate from the top stream to the bottom stream.
+    /// Constructs a heat transfer rate from the top stream to the bottom stream.
     ///
     /// # Errors
     ///
@@ -32,14 +32,14 @@ impl HeatTransferRate {
         Ok(Self::top_to_bottom_from_constrained(q_dot))
     }
 
-    /// Construct a heat transfer rate from the top stream to the bottom stream
+    /// Constructs a heat transfer rate from the top stream to the bottom stream
     /// using a pre-validated power.
     #[must_use]
     pub fn top_to_bottom_from_constrained(q_dot: Constrained<Power, StrictlyPositive>) -> Self {
         Self::TopToBottom(q_dot.into_inner())
     }
 
-    /// Construct a heat transfer rate from the bottom stream to the top stream.
+    /// Constructs a heat transfer rate from the bottom stream to the top stream.
     ///
     /// # Errors
     ///
@@ -49,14 +49,14 @@ impl HeatTransferRate {
         Ok(Self::bottom_to_top_from_constrained(q_dot))
     }
 
-    /// Construct a heat transfer rate from the bottom stream to the top stream
+    /// Constructs a heat transfer rate from the bottom stream to the top stream
     /// using a pre-validated power.
     #[must_use]
     pub fn bottom_to_top_from_constrained(q_dot: Constrained<Power, StrictlyPositive>) -> Self {
         Self::BottomToTop(q_dot.into_inner())
     }
 
-    /// Construct a heat transfer rate from a signed quantity.
+    /// Constructs a heat transfer rate from a signed quantity.
     ///
     /// Positive values mean heat flows from the top stream to the bottom stream.
     /// Negative values mean heat flows from the bottom stream to the top stream.

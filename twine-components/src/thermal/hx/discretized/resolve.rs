@@ -79,7 +79,7 @@ impl<Fluid> StreamContext<Fluid> {
 }
 
 impl<TopFluid: Clone, BottomFluid: Clone> ResolveContext<TopFluid, BottomFluid> {
-    /// Extract and cache inlet properties from [`Known`] inputs.
+    /// Extracts and caches inlet properties from [`Known`] inputs.
     ///
     /// This performs all the common setup work: extracting inlet pressures and
     /// enthalpies, computing outlet pressures from pressure drops, and storing
@@ -133,7 +133,7 @@ impl<TopFluid: Clone, BottomFluid: Clone> ResolveContext<TopFluid, BottomFluid> 
         })
     }
 
-    /// Resolve outlets given the top stream outlet temperature.
+    /// Resolves outlets given the top stream outlet temperature.
     fn resolve_from_top_outlet(
         self,
         t_out: ThermodynamicTemperature,
@@ -171,7 +171,7 @@ impl<TopFluid: Clone, BottomFluid: Clone> ResolveContext<TopFluid, BottomFluid> 
         })
     }
 
-    /// Resolve outlets given the bottom stream outlet temperature.
+    /// Resolves outlets given the bottom stream outlet temperature.
     fn resolve_from_bottom_outlet(
         self,
         t_out: ThermodynamicTemperature,
@@ -209,7 +209,7 @@ impl<TopFluid: Clone, BottomFluid: Clone> ResolveContext<TopFluid, BottomFluid> 
         })
     }
 
-    /// Resolve outlets given the heat transfer rate.
+    /// Resolves outlets given the heat transfer rate.
     fn resolve_from_heat_transfer_rate(
         self,
         q_dot: HeatTransferRate,
@@ -237,7 +237,7 @@ impl<TopFluid: Clone, BottomFluid: Clone> ResolveContext<TopFluid, BottomFluid> 
     }
 }
 
-/// Build a heat transfer rate and convert NaN inputs into a Second Law violation.
+/// Builds a heat transfer rate and converts NaN inputs into a Second Law violation.
 fn heat_transfer_rate_from_signed(
     top_inlet_temp: ThermodynamicTemperature,
     bottom_inlet_temp: ThermodynamicTemperature,

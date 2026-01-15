@@ -84,7 +84,7 @@ pub struct DiscretizedHx<Arrangement, const N: usize> {
 }
 
 impl<Arrangement, const N: usize> DiscretizedHx<Arrangement, N> {
-    /// Solve a discretized heat exchanger with a fixed arrangement and node count.
+    /// Solves a discretized heat exchanger with a fixed arrangement and node count.
     ///
     /// # Errors
     ///
@@ -130,7 +130,7 @@ impl<Arrangement, const N: usize> DiscretizedHx<Arrangement, N> {
         })
     }
 
-    /// Solve a discretized heat exchanger when both streams share the same thermo model.
+    /// Solves a discretized heat exchanger when both streams share the same thermo model.
     ///
     /// This is a convenience wrapper around [`DiscretizedHx::solve`].
     ///
@@ -151,7 +151,7 @@ impl<Arrangement, const N: usize> DiscretizedHx<Arrangement, N> {
     }
 }
 
-/// Validate second-law constraints for the resolved solution.
+/// Validates second-law constraints for the resolved solution.
 fn ensure_second_law<Arrangement, const N: usize, TopFluid, BottomFluid>(
     resolved: &Resolved<TopFluid, BottomFluid>,
     nodes: &Nodes<TopFluid, BottomFluid, N>,

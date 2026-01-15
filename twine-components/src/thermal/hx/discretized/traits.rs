@@ -27,7 +27,7 @@ pub trait DiscretizedArrangement: NtuRelation {
     /// False if it flows right-to-left (node N-1 to 0).
     const BOTTOM_FLOWS_LEFT_TO_RIGHT: bool;
 
-    /// Select value based on bottom stream flow direction.
+    /// Selects a value based on bottom stream flow direction.
     ///
     /// Returns `forward` if the bottom stream flows left-to-right, `reverse` otherwise.
     #[inline]

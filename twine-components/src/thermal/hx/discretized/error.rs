@@ -43,7 +43,7 @@ pub enum SolveError {
 }
 
 impl SolveError {
-    /// Create a thermo model failure error with context.
+    /// Creates a thermo model failure error with context.
     pub(super) fn thermo_failed(
         context: impl Into<String>,
         err: impl std::error::Error + Send + Sync + 'static,

@@ -15,7 +15,7 @@ use super::{
     discretize::Nodes, error::SolveError, results::MinDeltaT, traits::DiscretizedArrangement,
 };
 
-/// Compute total UA using a segment-by-segment effectiveness-NTU analysis.
+/// Computes total UA using a segment-by-segment effectiveness-NTU analysis.
 pub(super) fn compute_ua<Arrangement, TopFluid, BottomFluid, const N: usize>(
     arrangement: &Arrangement,
     m_dot_top: MassRate,
@@ -112,7 +112,7 @@ where
     Ok(ua_total)
 }
 
-/// Compute the minimum hot-to-cold temperature difference and its node index.
+/// Computes the minimum hot-to-cold temperature difference and its node index.
 pub(super) fn compute_min_delta_t<Arrangement, TopFluid, BottomFluid, const N: usize>(
     nodes: &Nodes<TopFluid, BottomFluid, N>,
 ) -> MinDeltaT
@@ -153,7 +153,7 @@ where
     }
 }
 
-/// Create a second law violation error for a segment with invalid capacitance rate.
+/// Creates a second law violation error for a segment with invalid capacitance rate.
 fn segment_violation_error<TopFluid, BottomFluid, const N: usize>(
     nodes: &Nodes<TopFluid, BottomFluid, N>,
     q_dot: HeatTransferRate,
