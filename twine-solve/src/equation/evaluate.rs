@@ -13,16 +13,6 @@ pub struct Evaluation<I, O, const N: usize> {
     pub snapshot: Snapshot<I, O>,
 }
 
-/// Type alias for the result of [`evaluate`].
-pub type EvaluateResult<M, P, const N: usize> = Result<
-    Evaluation<<M as Model>::Input, <M as Model>::Output, N>,
-    EvalError<
-        <P as EquationProblem<N>>::InputError,
-        <M as Model>::Error,
-        <P as EquationProblem<N>>::ResidualError,
-    >,
->;
-
 /// Errors that can occur when evaluating a model at a given `x`.
 #[derive(Debug, Error)]
 pub enum EvalError<IE, ME, RE> {
@@ -36,6 +26,16 @@ pub enum EvalError<IE, ME, RE> {
     #[error("failed to compute residual")]
     Residual(#[source] RE),
 }
+
+/// Type alias for the result of [`evaluate`].
+pub type EvaluateResult<M, P, const N: usize> = Result<
+    Evaluation<<M as Model>::Input, <M as Model>::Output, N>,
+    EvalError<
+        <P as EquationProblem<N>>::InputError,
+        <M as Model>::Error,
+        <P as EquationProblem<N>>::ResidualError,
+    >,
+>;
 
 /// Evaluates the model at `x` and computes residuals.
 ///
