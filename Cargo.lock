@@ -3380,6 +3380,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "twine-solve"
+version = "0.4.1"
+dependencies = [
+ "approx",
+ "thiserror 2.0.17",
+]
+
+[[package]]
 name = "twine-thermo"
 version = "0.4.1"
 dependencies = [
