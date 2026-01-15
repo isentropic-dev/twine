@@ -7,8 +7,8 @@ pub use error::Error;
 pub use solution::{Solution, Status};
 
 use crate::{
-    equation::{EquationProblem, Evaluation},
-    model::{Model, Snapshot},
+    equation::{EquationProblem, evaluate},
+    model::Model,
 };
 
 /// Finds a root of the equation using the bisection method.
@@ -29,14 +29,26 @@ pub fn solve<I, O>(
 
     let (mut left, mut right) = validate_bracket(bracket)?;
 
-    let left_eval = eval(model, problem, left)?;
+    let left_eval = evaluate(model, problem, [left])?;
     let mut left_residual = left_eval.residuals[0];
+    if !left_residual.is_finite() {
+        return Err(Error::NonFiniteResidual {
+            x: left,
+            residual: left_residual,
+        });
+    }
     if left_residual.abs() <= config.residual_tol {
         return Ok(Solution::from_eval(left_eval, Status::Converged, 0));
     }
 
-    let right_eval = eval(model, problem, right)?;
+    let right_eval = evaluate(model, problem, [right])?;
     let right_residual = right_eval.residuals[0];
+    if !right_residual.is_finite() {
+        return Err(Error::NonFiniteResidual {
+            x: right,
+            residual: right_residual,
+        });
+    }
     if right_residual.abs() <= config.residual_tol {
         return Ok(Solution::from_eval(right_eval, Status::Converged, 0));
     }
@@ -58,8 +70,15 @@ pub fn solve<I, O>(
 
     for iter in 1..=config.max_iters {
         let mid = 0.5 * (left + right);
-        let mid_eval = eval(model, problem, mid)?;
+        let mid_eval = evaluate(model, problem, [mid])?;
         let mid_residual = mid_eval.residuals[0];
+
+        if !mid_residual.is_finite() {
+            return Err(Error::NonFiniteResidual {
+                x: mid,
+                residual: mid_residual,
+            });
+        }
 
         let x_converged = (right - left).abs() <= config.x_abs_tol + config.x_rel_tol * mid.abs();
         let residual_converged = mid_residual.abs() <= config.residual_tol;
@@ -110,32 +129,6 @@ fn validate_bracket(bracket: [f64; 2]) -> Result<(f64, f64), Error> {
     } else {
         Ok((right, left))
     }
-}
-
-/// Evaluates the model at `x` and computes the residual.
-fn eval<I, O>(
-    model: &impl Model<Input = I, Output = O>,
-    problem: &impl EquationProblem<1, Input = I, Output = O>,
-    x: f64,
-) -> Result<Evaluation<I, O, 1>, Error> {
-    let input = problem.input(&[x]).map_err(Error::input)?;
-    let output = model.call(&input).map_err(Error::model)?;
-    let residuals = problem
-        .residuals(&input, &output)
-        .map_err(Error::residual)?;
-
-    if !residuals[0].is_finite() {
-        return Err(Error::NonFiniteResidual {
-            x,
-            residual: residuals[0],
-        });
-    }
-
-    Ok(Evaluation {
-        x: [x],
-        residuals,
-        snapshot: Snapshot::new(input, output),
-    })
 }
 
 #[cfg(test)]

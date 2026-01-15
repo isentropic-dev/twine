@@ -1,7 +1,7 @@
-mod evaluation;
+mod evaluate;
 mod problem;
 
 pub mod bisection;
 
-pub use evaluation::Evaluation;
+pub use evaluate::{EvalError, Evaluation, evaluate};
 pub use problem::EquationProblem;
