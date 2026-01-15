@@ -7,7 +7,7 @@ pub use error::Error;
 pub use solution::{Solution, Status};
 
 use crate::{
-    equation::{EquationProblem, Observer, evaluate},
+    equation::{EquationProblem, Evaluation, Observer, evaluate},
     model::Model,
 };
 
@@ -27,7 +27,7 @@ pub struct Event<'a, I, O> {
     /// Current search bracket.
     pub bracket: [f64; 2],
     /// Evaluation at the current midpoint.
-    pub eval: &'a crate::equation::Evaluation<I, O, 1>,
+    pub eval: &'a Evaluation<I, O, 1>,
 }
 
 /// Finds a root of the equation using the bisection method.
