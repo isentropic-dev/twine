@@ -7,12 +7,18 @@ pub use error::Error;
 pub use solution::{Solution, Status};
 
 use crate::{
-    equation::{Decision, EquationProblem, Observer, evaluate},
+    equation::{EquationProblem, Observer, evaluate},
     model::Model,
 };
 
 /// Control actions supported by the bisection solver.
-pub enum Action {}
+pub enum Action {
+    /// Stop the solver early with a reason.
+    ///
+    /// This action is illustrative and may change once solver control
+    /// patterns settle.
+    StopEarly { reason: String },
+}
 
 /// Iteration event emitted by the bisection solver.
 pub struct Event<'a, I, O> {
@@ -108,16 +114,16 @@ where
             eval: &mid_eval,
         };
 
-        match observer.observe(&event) {
-            Decision::Continue => {}
-            Decision::Action(action) => match action {},
-            Decision::Stop => {
-                let best_eval = if is_better { mid_eval } else { best };
-                return Ok(Solution::from_eval(
-                    best_eval,
-                    Status::StoppedByObserver,
-                    iter,
-                ));
+        if let Some(action) = observer.observe(&event) {
+            match action {
+                Action::StopEarly { .. } => {
+                    let best_eval = if is_better { mid_eval } else { best };
+                    return Ok(Solution::from_eval(
+                        best_eval,
+                        Status::StoppedByObserver,
+                        iter,
+                    ));
+                }
             }
         }
 
@@ -275,9 +281,11 @@ mod tests {
         let observer = |event: &Event<'_, f64, f64>| {
             calls += 1;
             if event.iter >= 3 {
-                Decision::Stop
+                Some(Action::StopEarly {
+                    reason: "test stop".to_string(),
+                })
             } else {
-                Decision::Continue
+                None
             }
         };
 
