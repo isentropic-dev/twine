@@ -4,7 +4,7 @@
 /// enabling logging, early stopping, or custom control policies.
 ///
 /// The `observe` method returns `Option<A>`, where `Some(action)` requests a
-/// solver-specific action and `None` lets the solver continue unchanged.
+/// solver-specific action and `None` signals the solver should continue unchanged.
 ///
 /// Closures automatically implement `Observer`, and a built-in impl for `()`
 /// provides a no-op observer that always returns `None`.
