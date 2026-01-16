@@ -7,22 +7,46 @@ pub use error::Error;
 pub use solution::{Solution, Status};
 
 use crate::{
-    equation::{EquationProblem, evaluate},
+    equation::{EquationProblem, Evaluation, Observer, evaluate},
     model::Model,
 };
 
+/// Control actions supported by the bisection solver.
+pub enum Action {
+    /// Stop the solver early.
+    ///
+    /// This action is illustrative and may change once solver control
+    /// patterns settle.
+    StopEarly,
+}
+
+/// Iteration event emitted by the bisection solver.
+pub struct Event<'a, I, O> {
+    /// Iteration counter (1-based within the bisection loop).
+    pub iter: usize,
+    /// Current search bracket.
+    pub bracket: [f64; 2],
+    /// Evaluation at the current midpoint.
+    pub eval: &'a Evaluation<I, O, 1>,
+}
+
 /// Finds a root of the equation using the bisection method.
+/// Observers see each iteration's evaluation and bracket state.
 ///
 /// # Errors
 ///
 /// Returns an error if the bracket is invalid, the config is invalid,
 /// or the model or problem returns an error during evaluation.
-pub fn solve<I, O>(
+pub fn solve<I, O, Obs>(
     model: &impl Model<Input = I, Output = O>,
     problem: &impl EquationProblem<1, Input = I, Output = O>,
     bracket: [f64; 2],
     config: &Config,
-) -> Result<Solution<I, O>, Error> {
+    mut observer: Obs,
+) -> Result<Solution<I, O>, Error>
+where
+    Obs: for<'a> Observer<Event<'a, I, O>, Action>,
+{
     config
         .validate()
         .map_err(|reason| Error::InvalidConfig { reason })?;
@@ -82,12 +106,32 @@ pub fn solve<I, O>(
 
         let x_converged = (right - left).abs() <= config.x_abs_tol + config.x_rel_tol * mid.abs();
         let residual_converged = mid_residual.abs() <= config.residual_tol;
+        let is_better = mid_residual.abs() < best_residual.abs();
+
+        let event = Event {
+            iter,
+            bracket: [left, right],
+            eval: &mid_eval,
+        };
+
+        if let Some(action) = observer.observe(&event) {
+            match action {
+                Action::StopEarly => {
+                    let best_eval = if is_better { mid_eval } else { best };
+                    return Ok(Solution::from_eval(
+                        best_eval,
+                        Status::StoppedByObserver,
+                        iter,
+                    ));
+                }
+            }
+        }
 
         if x_converged || residual_converged {
             return Ok(Solution::from_eval(mid_eval, Status::Converged, iter));
         }
 
-        if mid_residual.abs() < best_residual.abs() {
+        if is_better {
             best = mid_eval;
             best_residual = mid_residual;
         }
@@ -105,6 +149,21 @@ pub fn solve<I, O>(
         Status::MaxIters,
         config.max_iters,
     ))
+}
+
+/// Runs bisection without observation.
+///
+/// # Errors
+///
+/// Returns an error if the bracket is invalid, the config is invalid,
+/// or the model or problem returns an error during evaluation.
+pub fn solve_unobserved<I, O>(
+    model: &impl Model<Input = I, Output = O>,
+    problem: &impl EquationProblem<1, Input = I, Output = O>,
+    bracket: [f64; 2],
+    config: &Config,
+) -> Result<Solution<I, O>, Error> {
+    solve(model, problem, bracket, config, ())
 }
 
 /// Validates bracket values and returns them in normalized (left < right) order.
@@ -191,9 +250,9 @@ mod tests {
     fn finds_square_root() {
         let model = SquareModel;
         let problem = TargetOutputProblem { target: 9.0 };
-        let config = Config::default();
 
-        let solution = solve(&model, &problem, [0.0, 10.0], &config).expect("should solve");
+        let solution = solve_unobserved(&model, &problem, [0.0, 10.0], &Config::default())
+            .expect("should solve");
 
         assert_eq!(solution.status, Status::Converged);
         assert_relative_eq!(solution.x, 3.0, epsilon = 1e-10);
@@ -201,13 +260,48 @@ mod tests {
     }
 
     #[test]
+    fn finds_cube_root() {
+        let model = CubeModel;
+        let problem = TargetOutputProblem { target: 27.0 };
+
+        let solution = solve_unobserved(&model, &problem, [0.0, 10.0], &Config::default())
+            .expect("should solve");
+
+        assert_eq!(solution.status, Status::Converged);
+        assert_relative_eq!(solution.x, 3.0, epsilon = 1e-10);
+        assert_relative_eq!(solution.snapshot.output, 27.0, epsilon = 1e-10);
+    }
+
+    #[test]
+    fn observer_can_stop_iteration() {
+        let model = SquareModel;
+        let problem = TargetOutputProblem { target: 9.0 };
+
+        let mut calls = 0usize;
+        let observer = |event: &Event<'_, f64, f64>| {
+            calls += 1;
+            if event.iter >= 3 {
+                Some(Action::StopEarly)
+            } else {
+                None
+            }
+        };
+
+        let solution = solve(&model, &problem, [0.0, 10.0], &Config::default(), observer)
+            .expect("should stop cleanly");
+
+        assert_eq!(solution.status, Status::StoppedByObserver);
+        assert_eq!(solution.iters, 3);
+        assert_eq!(calls, 3);
+    }
+
+    #[test]
     fn normalizes_reversed_bracket() {
         let model = SquareModel;
         let problem = TargetOutputProblem { target: 36.0 };
-        let config = Config::default();
 
         // Bracket is reversed: [10.0, 0.0] instead of [0.0, 10.0]
-        let solution = solve(&model, &problem, [10.0, 0.0], &config)
+        let solution = solve_unobserved(&model, &problem, [10.0, 0.0], &Config::default())
             .expect("should solve with reversed bracket");
 
         assert_eq!(solution.status, Status::Converged);
@@ -219,7 +313,7 @@ mod tests {
         let model = SquareModel;
         let problem = TargetOutputProblem { target: 25.0 };
 
-        let result = solve(&model, &problem, [5.0, 5.0], &Config::default());
+        let result = solve_unobserved(&model, &problem, [5.0, 5.0], &Config::default());
 
         assert!(matches!(result, Err(Error::ZeroWidthBracket { .. })));
     }
@@ -229,10 +323,10 @@ mod tests {
         let model = SquareModel;
         let problem = TargetOutputProblem { target: 67.0 };
 
-        let result = solve(&model, &problem, [f64::NAN, 10.0], &Config::default());
+        let result = solve_unobserved(&model, &problem, [f64::NAN, 10.0], &Config::default());
         assert!(matches!(result, Err(Error::NonFiniteBracket { .. })));
 
-        let result = solve(&model, &problem, [0.0, f64::INFINITY], &Config::default());
+        let result = solve_unobserved(&model, &problem, [0.0, f64::INFINITY], &Config::default());
         assert!(matches!(result, Err(Error::NonFiniteBracket { .. })));
     }
 
@@ -242,7 +336,7 @@ mod tests {
         let problem = TargetOutputProblem { target: 9.0 };
 
         // Both endpoints are positive (no sign change)
-        let result = solve(&model, &problem, [5.0, 10.0], &Config::default());
+        let result = solve_unobserved(&model, &problem, [5.0, 10.0], &Config::default());
 
         assert!(matches!(result, Err(Error::NoBracket { .. })));
     }
@@ -256,7 +350,7 @@ mod tests {
             x_abs_tol: -1.0,
             ..Config::default()
         };
-        let result = solve(&model, &problem, [0.0, 10.0], &config);
+        let result = solve_unobserved(&model, &problem, [0.0, 10.0], &config);
         assert!(matches!(result, Err(Error::InvalidConfig { .. })));
     }
 
@@ -269,26 +363,13 @@ mod tests {
             max_iters: 0,
             ..Config::default()
         };
-        let solution =
-            solve(&model, &problem, [2.0, 10.0], &config).expect("should return best endpoint");
+        let solution = solve_unobserved(&model, &problem, [2.0, 10.0], &config)
+            .expect("should return best endpoint");
 
         assert_eq!(solution.status, Status::MaxIters);
         assert_eq!(solution.iters, 0);
         // x=2 gives residual |4-9|=5, x=10 gives |100-9|=91
         // So best endpoint should be x=2
         assert_relative_eq!(solution.x, 2.0);
-    }
-
-    #[test]
-    fn finds_cube_root() {
-        let model = CubeModel;
-        let problem = TargetOutputProblem { target: 27.0 };
-
-        let solution =
-            solve(&model, &problem, [0.0, 10.0], &Config::default()).expect("should solve");
-
-        assert_eq!(solution.status, Status::Converged);
-        assert_relative_eq!(solution.x, 3.0, epsilon = 1e-10);
-        assert_relative_eq!(solution.snapshot.output, 27.0, epsilon = 1e-10);
     }
 }
