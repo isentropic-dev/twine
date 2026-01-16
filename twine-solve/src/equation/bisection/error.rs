@@ -2,6 +2,8 @@ use std::error::Error as StdError;
 
 use thiserror::Error;
 
+use crate::equation::EvalError;
+
 /// Errors that can occur during bisection solving.
 #[derive(Debug, Error)]
 pub enum Error {
@@ -25,7 +27,7 @@ pub enum Error {
     #[error("failed to compute input")]
     Input(#[source] Box<dyn StdError + Send + Sync>),
 
-    #[error("model evaluation failed")]
+    #[error("model call failed")]
     Model(#[source] Box<dyn StdError + Send + Sync>),
 
     #[error("failed to compute residual")]
@@ -35,19 +37,17 @@ pub enum Error {
     NonFiniteResidual { x: f64, residual: f64 },
 }
 
-impl Error {
-    /// Wraps an error that occurred while computing the input.
-    pub fn input(err: impl StdError + Send + Sync + 'static) -> Self {
-        Self::Input(Box::new(err))
-    }
-
-    /// Wraps an error that occurred during model evaluation.
-    pub fn model(err: impl StdError + Send + Sync + 'static) -> Self {
-        Self::Model(Box::new(err))
-    }
-
-    /// Wraps an error that occurred while computing the residual.
-    pub fn residual(err: impl StdError + Send + Sync + 'static) -> Self {
-        Self::Residual(Box::new(err))
+impl<IE, ME, RE> From<EvalError<IE, ME, RE>> for Error
+where
+    IE: StdError + Send + Sync + 'static,
+    ME: StdError + Send + Sync + 'static,
+    RE: StdError + Send + Sync + 'static,
+{
+    fn from(err: EvalError<IE, ME, RE>) -> Self {
+        match err {
+            EvalError::Input(e) => Self::Input(Box::new(e)),
+            EvalError::Model(e) => Self::Model(Box::new(e)),
+            EvalError::Residual(e) => Self::Residual(Box::new(e)),
+        }
     }
 }
