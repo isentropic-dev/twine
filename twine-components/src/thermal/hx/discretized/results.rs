@@ -37,6 +37,7 @@ pub struct MinDeltaT {
     /// For [`HeatTransferRate::None`], this is the minimum absolute temperature
     /// difference between the streams.
     pub value: TemperatureInterval,
+
     /// Node index where the minimum temperature difference occurs.
     pub node: usize,
 }

@@ -9,19 +9,17 @@ use std::mem::MaybeUninit;
 use twine_thermo::{State, capability::StateFrom, units::SpecificEnthalpy};
 use uom::si::f64::{Power, Pressure};
 
-use super::{
-    error::SolveError,
-    resolve::Resolved,
-    traits::{DiscretizedArrangement, DiscretizedHxThermoModel},
-};
+use crate::thermal::hx::discretized::traits::{DiscretizedArrangement, DiscretizedHxThermoModel};
+
+use super::{Resolved, SolveError};
 
 /// Discretized node arrays for a solved heat exchanger.
 #[derive(Debug)]
-pub(super) struct Nodes<TopFluid, BottomFluid, const N: usize> {
-    pub(super) top: [State<TopFluid>; N],
-    pub(super) bottom: [State<BottomFluid>; N],
-    pub(super) top_enthalpies: [SpecificEnthalpy; N],
-    pub(super) bottom_enthalpies: [SpecificEnthalpy; N],
+pub struct Nodes<TopFluid, BottomFluid, const N: usize> {
+    pub top: [State<TopFluid>; N],
+    pub bottom: [State<BottomFluid>; N],
+    pub top_enthalpies: [SpecificEnthalpy; N],
+    pub bottom_enthalpies: [SpecificEnthalpy; N],
 }
 
 impl<TopFluid, BottomFluid, const N: usize> Nodes<TopFluid, BottomFluid, N> {
@@ -29,7 +27,7 @@ impl<TopFluid, BottomFluid, const N: usize> Nodes<TopFluid, BottomFluid, N> {
     ///
     /// This function breaks the heat exchanger into segments and computes node
     /// states from the resolved endpoint conditions.
-    pub(super) fn new<Arrangement>(
+    pub fn new<Arrangement>(
         resolved: &Resolved<TopFluid, BottomFluid>,
         thermo_top: &impl DiscretizedHxThermoModel<TopFluid>,
         thermo_bottom: &impl DiscretizedHxThermoModel<BottomFluid>,
@@ -236,7 +234,6 @@ mod tests {
         arrangement::CounterFlow,
         discretized::{
             Given, HeatTransferRate, Inlets, Known, MassFlows, PressureDrops,
-            resolve::Resolved,
             test_support::{TestThermoModel, state},
         },
     };
