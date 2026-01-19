@@ -2,6 +2,10 @@ use crate::equation::Evaluation;
 
 use super::{Error, Solution, Status};
 
+/// Tracks the best evaluation encountered so far.
+///
+/// The best evaluation is defined by minimum residual magnitude.
+/// The `Option` lets us represent the state before any successful evaluation.
 pub(super) struct Best<I, O> {
     eval: Option<Evaluation<I, O, 1>>,
 }

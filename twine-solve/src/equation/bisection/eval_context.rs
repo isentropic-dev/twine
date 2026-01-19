@@ -1,12 +1,21 @@
 use crate::{
-    equation::{EquationProblem, EvaluateResult, Evaluation, Observer, evaluate},
+    equation::{EquationProblem, Evaluation, Observer, evaluate},
     model::Model,
 };
 
-use super::{Action, Bracket, Error, Event, decision::Decision};
+use super::{Action, Bracket, Event, decision::Decision};
 
 type EvalOutcome<I, O> = (Option<Evaluation<I, O, 1>>, Decision);
 
+/// Bundles evaluation and observation for a single bisection solve.
+///
+/// This keeps event emission and action handling in one place while leaving the
+/// solver loop to focus on control flow.
+///
+/// Each evaluation is split into a residual result used for decisions and an
+/// optional evaluation used for best tracking.
+/// When the observer assumes a residual sign, the evaluation is dropped so it
+/// does not update the best solution.
 pub(crate) struct EvalContext<'ctx, M, P, Obs> {
     model: &'ctx M,
     problem: &'ctx P,
@@ -21,6 +30,7 @@ where
     P: EquationProblem<1, Input = M::Input, Output = M::Output>,
     Obs: for<'evt> Observer<Event<'evt, M, P>, Action>,
 {
+    /// Creates a new evaluation context.
     pub(crate) fn new(model: &'ctx M, problem: &'ctx P, observer: &'ctx mut Obs) -> Self {
         Self {
             model,
@@ -31,29 +41,39 @@ where
 
     /// Evaluates the left endpoint and returns the observer decision.
     pub(crate) fn left_endpoint(&mut self, x: f64) -> EvalOutcome<M::Input, M::Output> {
-        let (result, action) = self.observe_left(x);
+        let result = evaluate(self.model, self.problem, [x]);
+        let action = self.observer.observe(&Event::Left { x, result: &result });
+
         let (residual, mut eval) = match result {
             Ok(eval) => (Ok(eval.residuals[0]), Some(eval)),
-            Err(error) => (Err(Error::from(error)), None),
+            Err(error) => (Err(error.into()), None),
         };
+
         let decision = Decision::new(action, residual);
+
         if matches!(action, Some(Action::AssumeResidualSign(_))) {
             eval = None;
         }
+
         (eval, decision)
     }
 
     /// Evaluates the right endpoint and returns the observer decision.
     pub(crate) fn right_endpoint(&mut self, x: f64) -> EvalOutcome<M::Input, M::Output> {
-        let (result, action) = self.observe_right(x);
+        let result = evaluate(self.model, self.problem, [x]);
+        let action = self.observer.observe(&Event::Right { x, result: &result });
+
         let (residual, mut eval) = match result {
             Ok(eval) => (Ok(eval.residuals[0]), Some(eval)),
-            Err(error) => (Err(Error::from(error)), None),
+            Err(error) => (Err(error.into()), None),
         };
+
         let decision = Decision::new(action, residual);
+
         if matches!(action, Some(Action::AssumeResidualSign(_))) {
             eval = None;
         }
+
         (eval, decision)
     }
 
@@ -63,53 +83,24 @@ where
         x: f64,
         bracket: &Bracket,
     ) -> EvalOutcome<M::Input, M::Output> {
-        let (result, action) = self.observe_midpoint(x, bracket);
-        let (residual, mut eval) = match result {
-            Ok(eval) => (Ok(eval.residuals[0]), Some(eval)),
-            Err(error) => (Err(Error::from(error)), None),
-        };
-        let decision = Decision::new(action, residual);
-        if matches!(action, Some(Action::AssumeResidualSign(_))) {
-            eval = None;
-        }
-        (eval, decision)
-    }
-
-    fn observe_left(&mut self, x: f64) -> (EvaluateResult<M, P, 1>, Option<Action>) {
-        let model: &M = self.model;
-        let problem: &P = self.problem;
-        let observer: &mut Obs = self.observer;
-        let result = evaluate(model, problem, [x]);
-        let event = Event::Left { x, result: &result };
-        let action = observer.observe(&event);
-        (result, action)
-    }
-
-    fn observe_right(&mut self, x: f64) -> (EvaluateResult<M, P, 1>, Option<Action>) {
-        let model: &M = self.model;
-        let problem: &P = self.problem;
-        let observer: &mut Obs = self.observer;
-        let result = evaluate(model, problem, [x]);
-        let event = Event::Right { x, result: &result };
-        let action = observer.observe(&event);
-        (result, action)
-    }
-
-    fn observe_midpoint(
-        &mut self,
-        x: f64,
-        bracket: &Bracket,
-    ) -> (EvaluateResult<M, P, 1>, Option<Action>) {
-        let model: &M = self.model;
-        let problem: &P = self.problem;
-        let observer: &mut Obs = self.observer;
-        let result = evaluate(model, problem, [x]);
-        let event = Event::Midpoint {
+        let result = evaluate(self.model, self.problem, [x]);
+        let action = self.observer.observe(&Event::Midpoint {
             x,
             bracket,
             result: &result,
+        });
+
+        let (residual, mut eval) = match result {
+            Ok(eval) => (Ok(eval.residuals[0]), Some(eval)),
+            Err(error) => (Err(error.into()), None),
         };
-        let action = observer.observe(&event);
-        (result, action)
+
+        let decision = Decision::new(action, residual);
+
+        if matches!(action, Some(Action::AssumeResidualSign(_))) {
+            eval = None;
+        }
+
+        (eval, decision)
     }
 }
