@@ -1,4 +1,4 @@
-use crate::model::Snapshot;
+use twine_core::model::Snapshot;
 
 /// Indicates whether the solver converged or hit the iteration limit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

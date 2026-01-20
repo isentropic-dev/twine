@@ -34,8 +34,9 @@ use twine_components::{
     thermal::tank::{Tank, TankConfig, TankInput, TankOutput},
 };
 use twine_core::{
-    DurationExt, Model, Simulation, State, TimeIntegrable,
+    DurationExt, Simulation, State, TimeIntegrable,
     constraint::{Constrained, StrictlyPositive},
+    model::Model,
 };
 use twine_plot::PlotApp;
 use twine_thermo::{
@@ -131,7 +132,7 @@ impl Model for TanksInRoom<'_> {
     type Output = Output;
     type Error = Infallible;
 
-    fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
+    fn call(&self, input: &Self::Input) -> Result<Self::Output, Self::Error> {
         // Call the schedule component and convert volumetric draw to a mass flow rate.
         let draw = self
             .daily_draw_schedule

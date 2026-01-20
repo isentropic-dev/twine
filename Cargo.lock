@@ -3385,6 +3385,7 @@ version = "0.4.1"
 dependencies = [
  "approx",
  "thiserror 2.0.17",
+ "twine-core",
 ]
 
 [[package]]

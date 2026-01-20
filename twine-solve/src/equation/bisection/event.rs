@@ -1,7 +1,5 @@
-use crate::{
-    equation::{EquationProblem, EvaluateResult},
-    model::Model,
-};
+use crate::equation::{EquationProblem, EvaluateResult};
+use twine_core::model::Model;
 
 use super::Bracket;
 

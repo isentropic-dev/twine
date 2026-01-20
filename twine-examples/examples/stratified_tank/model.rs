@@ -11,7 +11,7 @@ use twine_components::{
         Environment, PortFlow, StratifiedTank, StratifiedTankInput, StratifiedTankOutput,
     },
 };
-use twine_core::{Model, constraint::Constrained};
+use twine_core::{constraint::Constrained, model::Model};
 use twine_thermo::HeatFlow;
 use uom::si::{
     f64::{Power, TemperatureInterval, ThermodynamicTemperature, VolumeRate},
@@ -51,7 +51,7 @@ impl<const N: usize> Model for TankModel<N> {
     type Output = ModelOutput<N>;
     type Error = Infallible;
 
-    fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
+    fn call(&self, input: &Self::Input) -> Result<Self::Output, Self::Error> {
         // Determine the current draw.
         let draw = Constrained::new(
             self.daily_draw_schedule

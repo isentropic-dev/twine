@@ -11,6 +11,7 @@ keywords = ["twine", "framework", "modeling", "solvers", "numerical"]
 
 [dependencies]
 thiserror = { workspace = true }
+twine-core = { workspace = true }
 
 [dev-dependencies]
 approx = { workspace = true }
