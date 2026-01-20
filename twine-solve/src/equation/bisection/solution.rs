@@ -1,4 +1,4 @@
-use crate::{equation::Evaluation, model::Snapshot};
+use crate::model::Snapshot;
 
 /// Indicates whether the solver converged or hit the iteration limit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -24,17 +24,4 @@ pub struct Solution<I, O> {
     pub snapshot: Snapshot<I, O>,
     /// Iteration count when the solver finished.
     pub iters: usize,
-}
-
-impl<I, O> Solution<I, O> {
-    /// Constructs a solution from an evaluation result.
-    pub(super) fn from_eval(eval: Evaluation<I, O, 1>, status: Status, iters: usize) -> Self {
-        Self {
-            status,
-            x: eval.x[0],
-            residual: eval.residuals[0],
-            snapshot: eval.snapshot,
-            iters,
-        }
-    }
 }
