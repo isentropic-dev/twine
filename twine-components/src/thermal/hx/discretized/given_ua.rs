@@ -35,8 +35,8 @@ use problem::{GivenUaModel, GivenUaProblem};
 ///
 /// # Errors
 ///
-/// Returns [`GivenUaError`] on non-physical results, thermodynamic model
-/// failures, or if the solver fails to converge.
+/// Returns [`GivenUaError`] on non-physical results, thermodynamic model failures,
+/// or if the solver fails to converge.
 pub(super) fn given_ua<Arrangement, TopFluid, BottomFluid, const N: usize>(
     known: &Known<TopFluid, BottomFluid>,
     target_ua: Constrained<ThermalConductance, NonNegative>,

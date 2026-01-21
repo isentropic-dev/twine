@@ -47,7 +47,9 @@ use traits::{DiscretizedArrangement, DiscretizedHxThermoModel};
 /// let _ = DiscretizedHx::<ParallelFlow, 1>::solve(todo!(), todo!(), todo!(), todo!());
 /// ```
 ///
-/// # Example
+/// # Examples
+///
+/// Basic solve with known heat transfer rate:
 ///
 /// ```rust
 /// use twine_components::thermal::hx::{
@@ -77,6 +79,63 @@ use traits::{DiscretizedArrangement, DiscretizedHxThermoModel};
 /// let given = Given::HeatTransferRate(HeatTransferRate::None);
 ///
 /// let _result = DiscretizedHx::<CounterFlow, 20>::solve(&known, given, &thermo, &thermo)?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// Iterative solve to match a target conductance (UA):
+///
+/// ```rust
+/// use twine_components::thermal::hx::{
+///     arrangement::CounterFlow,
+///     discretized::{DiscretizedHx, GivenUaConfig, Inlets, Known, MassFlows, PressureDrops},
+/// };
+/// use twine_core::constraint::NonNegative;
+/// use twine_thermo::{capability::StateFrom, fluid::CarbonDioxide, model::perfect_gas::PerfectGas};
+/// use uom::si::f64::{MassRate, Pressure, ThermalConductance, ThermodynamicTemperature};
+/// use uom::si::{
+///     mass_rate::kilogram_per_second,
+///     pressure::pascal,
+///     thermal_conductance::watt_per_kelvin,
+///     thermodynamic_temperature::kelvin,
+/// };
+///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let thermo = PerfectGas::<CarbonDioxide>::new()?;
+///
+/// // Create inlet states at different temperatures
+/// let p = Pressure::new::<pascal>(101325.0);
+/// let top_inlet = thermo.state_from((
+///     CarbonDioxide,
+///     ThermodynamicTemperature::new::<kelvin>(400.0),
+///     p,
+/// ))?;
+/// let bottom_inlet = thermo.state_from((
+///     CarbonDioxide,
+///     ThermodynamicTemperature::new::<kelvin>(300.0),
+///     p,
+/// ))?;
+///
+/// let known = Known {
+///     inlets: Inlets {
+///         top: top_inlet,
+///         bottom: bottom_inlet,
+///     },
+///     m_dot: MassFlows::new(
+///         MassRate::new::<kilogram_per_second>(1.0),
+///         MassRate::new::<kilogram_per_second>(1.0),
+///     )?,
+///     dp: PressureDrops::zero(),
+/// };
+///
+/// let target_ua = NonNegative::new(ThermalConductance::new::<watt_per_kelvin>(1000.0))?;
+///
+/// let _result = DiscretizedHx::<CounterFlow, 20>::given_ua_same(
+///     &known,
+///     target_ua,
+///     GivenUaConfig::default(),
+///     &thermo,
+/// )?;
 /// # Ok(())
 /// # }
 /// ```
@@ -146,5 +205,27 @@ impl<Arrangement, const N: usize> DiscretizedHx<Arrangement, N> {
         BottomFluid: Clone,
     {
         given_ua::<Arrangement, _, _, N>(known, target_ua, config, thermo_top, thermo_bottom)
+    }
+
+    /// Solves a discretized heat exchanger given a target UA when both streams share the same thermo model.
+    ///
+    /// This is a convenience wrapper around [`DiscretizedHx::given_ua`].
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`GivenUaError`] on non-physical results, thermodynamic model failures,
+    /// or if the solver fails to converge.
+    pub fn given_ua_same<Fluid, Model>(
+        known: &Known<Fluid, Fluid>,
+        target_ua: Constrained<ThermalConductance, NonNegative>,
+        config: GivenUaConfig,
+        thermo: &Model,
+    ) -> Result<Results<Fluid, Fluid, N>, GivenUaError>
+    where
+        Arrangement: DiscretizedArrangement + Default,
+        Fluid: Clone,
+        Model: DiscretizedHxThermoModel<Fluid>,
+    {
+        given_ua::<Arrangement, _, _, N>(known, target_ua, config, thermo, thermo)
     }
 }
