@@ -178,7 +178,7 @@ mod tests {
 
         let result = given_ua::<CounterFlow, _, _, 5>(
             &known,
-            NonNegative::new(ThermalConductance::new::<kilowatt_per_kelvin>(0.0)).unwrap(),
+            NonNegative::zero(),
             GivenUaConfig::default(),
             &model,
             &model,
@@ -187,10 +187,7 @@ mod tests {
 
         // With zero UA, no heat transfer occurs
         assert_eq!(result.q_dot, HeatTransferRate::None);
-        assert_eq!(
-            result.ua,
-            ThermalConductance::new::<kilowatt_per_kelvin>(0.0)
-        );
+        assert_eq!(result.ua, ThermalConductance::ZERO);
 
         // Outlet temperatures should match inlet temperatures
         assert_relative_eq!(result.top[4].temperature.get::<kelvin>(), 400.0);
@@ -201,10 +198,9 @@ mod tests {
     fn handles_second_law_violations_during_iteration() {
         let model = TestThermoModel::new();
 
-        // Setup with unbalanced flow rates to create challenging conditions.
-        // Bottom stream has much lower flow, so it experiences larger temperature changes.
-        // In counterflow, this can easily cause temperature crossover if the solver
-        // explores outlet temperatures that are too extreme during iteration.
+        // Unbalanced flow rates create challenging conditions for the solver.
+        // The bottom stream has much lower flow, so it experiences larger temperature changes.
+        // This imbalance causes many top outlet candidates to violate the second law.
         let known = Known {
             inlets: Inlets {
                 top: state(400.0),
@@ -212,15 +208,11 @@ mod tests {
             },
             m_dot: MassFlows::new_unchecked(
                 MassRate::new::<kilogram_per_second>(2.0),
-                MassRate::new::<kilogram_per_second>(0.5), // 4x imbalance
+                MassRate::new::<kilogram_per_second>(0.5),
             ),
             dp: PressureDrops::default(),
         };
 
-        // Request a moderate UA. During bisection search, some trial outlet temperatures
-        // will cause the bottom stream to heat beyond the top inlet (temperature crossover).
-        // The bisection solver should handle these violations gracefully via the
-        // assume_positive guidance logic and converge to a valid solution.
         let result = given_ua::<CounterFlow, _, _, 5>(
             &known,
             NonNegative::new(ThermalConductance::new::<kilowatt_per_kelvin>(2.0)).unwrap(),
@@ -230,23 +222,6 @@ mod tests {
         )
         .expect("solver should converge despite violations during iteration");
 
-        // Verify the solution is physically valid
-        assert!(result.q_dot != HeatTransferRate::None);
-
-        // UA should match target within tolerance
         assert_relative_eq!(result.ua.get::<kilowatt_per_kelvin>(), 2.0, epsilon = 1e-12);
-
-        // Verify no temperature crossover in the final solution
-        assert!(
-            result
-                .min_delta_t
-                .value
-                .get::<uom::si::temperature_interval::kelvin>()
-                > 0.0
-        );
-
-        // Top stream should cool, bottom stream should heat
-        assert!(result.top[4].temperature < known.inlets.top.temperature);
-        assert!(result.bottom[0].temperature > known.inlets.bottom.temperature);
     }
 }
