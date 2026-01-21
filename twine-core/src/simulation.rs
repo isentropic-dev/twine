@@ -1,23 +1,6 @@
 use std::{iter::FusedIterator, time::Duration};
 
-/// Trait for defining a system model in Twine.
-///
-/// Models represent systems with clear boundaries defined by typed inputs and outputs.
-/// They must be deterministic, always producing the same result for a given input,
-/// which enables time evolution using a [`Simulation`].
-pub trait Model {
-    type Input;
-    type Output;
-    type Error: std::error::Error + Send + Sync + 'static;
-
-    /// Calls the model with the given input and returns a result.
-    ///
-    /// # Errors
-    ///
-    /// Each model defines its own `Error` type, allowing it to determine what
-    /// constitutes a failure within its domain.
-    fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error>;
-}
+use crate::model::Model;
 
 /// Trait for defining a transient simulation in Twine.
 ///
@@ -98,11 +81,8 @@ pub trait Simulation<M: Model>: Sized {
     /// # Errors
     ///
     /// Returns a [`StepError`] if computing the next input or calling the model fails.
-    fn step(&mut self, input: M::Input, dt: Duration) -> Result<State<M>, Self::StepError>
-    where
-        M::Input: Clone,
-    {
-        let output = self.model().call(input.clone())?;
+    fn step(&mut self, input: M::Input, dt: Duration) -> Result<State<M>, Self::StepError> {
+        let output = self.model().call(&input)?;
         let state = State::new(input, output);
 
         self.step_from_state(&state, dt)
@@ -125,12 +105,9 @@ pub trait Simulation<M: Model>: Sized {
         &mut self,
         state: &State<M>,
         dt: Duration,
-    ) -> Result<State<M>, Self::StepError>
-    where
-        M::Input: Clone,
-    {
+    ) -> Result<State<M>, Self::StepError> {
         let input = self.advance_time(state, dt)?;
-        let output = self.model().call(input.clone())?;
+        let output = self.model().call(&input)?;
 
         Ok(State::new(input, output))
     }
@@ -160,20 +137,16 @@ pub trait Simulation<M: Model>: Sized {
         initial_input: M::Input,
         steps: usize,
         dt: Duration,
-    ) -> Result<Vec<State<M>>, Self::StepError>
-    where
-        M::Input: Clone,
-        M::Output: Clone,
-    {
+    ) -> Result<Vec<State<M>>, Self::StepError> {
         let mut results = Vec::with_capacity(steps + 1);
 
-        let output = self.model().call(initial_input.clone())?;
-        let mut current_state = State::new(initial_input, output);
-        results.push(current_state.clone());
+        let output = self.model().call(&initial_input)?;
+        results.push(State::new(initial_input, output));
 
         for _ in 0..steps {
-            current_state = self.step_from_state(&current_state, dt)?;
-            results.push(current_state.clone());
+            let last = results.last().expect("results not empty");
+            let next = self.step_from_state(last, dt)?;
+            results.push(next);
         }
 
         Ok(results)
@@ -309,7 +282,7 @@ where
             },
 
             // Only the input is known - call the model and yield the first state.
-            Known::Input(input) => match self.sim.model().call(input.clone()) {
+            Known::Input(input) => match self.sim.model().call(&input) {
                 Ok(output) => {
                     self.known = Some(Known::State(State::new(input.clone(), output.clone())));
                     let state = State::new(input, output);
@@ -367,7 +340,7 @@ mod tests {
         type Output = Output;
         type Error = Infallible;
 
-        fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
+        fn call(&self, input: &Self::Input) -> Result<Self::Output, Self::Error> {
             let Input {
                 position, velocity, ..
             } = input;
@@ -522,11 +495,11 @@ mod tests {
         type Output = ();
         type Error = CheckInputError;
 
-        fn call(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
-            if input <= self.max_value {
+        fn call(&self, input: &Self::Input) -> Result<Self::Output, Self::Error> {
+            if *input <= self.max_value {
                 Ok(())
             } else {
-                Err(CheckInputError(input, self.max_value))
+                Err(CheckInputError(*input, self.max_value))
             }
         }
     }

@@ -56,7 +56,7 @@ mod tests {
 
     use approx::assert_relative_eq;
 
-    use crate::model::Snapshot;
+    use twine_core::model::Snapshot;
 
     fn eval(x: f64, residual: f64) -> Evaluation<(), (), 1> {
         Evaluation {

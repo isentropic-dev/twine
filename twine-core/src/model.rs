@@ -1,4 +1,8 @@
-/// A callable model that maps an input to an output.
+/// A callable model that maps a typed input to a typed output.
+///
+/// Models must be deterministic, always producing the same result for a given
+/// input, which makes them a stable foundation for solvers, simulations,
+/// caching, and instrumentation.
 pub trait Model {
     type Input;
     type Output;
@@ -8,7 +12,7 @@ pub trait Model {
     ///
     /// # Errors
     ///
-    /// Returns an error if the call fails.
+    /// Each model defines its own `Error` type to represent domain-specific failures.
     fn call(&self, input: &Self::Input) -> Result<Self::Output, Self::Error>;
 }
 

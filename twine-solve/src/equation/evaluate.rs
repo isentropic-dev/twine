@@ -1,9 +1,7 @@
 use thiserror::Error;
 
-use crate::{
-    equation::EquationProblem,
-    model::{Model, Snapshot},
-};
+use crate::equation::EquationProblem;
+use twine_core::model::{Model, Snapshot};
 
 /// The result of evaluating a model at a given `x`.
 #[derive(Debug, Clone)]

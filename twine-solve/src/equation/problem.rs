@@ -1,4 +1,4 @@
-use crate::model::Snapshot;
+use twine_core::model::Snapshot;
 
 /// Defines an equation (root-finding) problem to be solved.
 pub trait EquationProblem<const N: usize> {
