@@ -12,7 +12,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.4.1"
+version = "0.4.2"
 edition = "2024"
 authors = ["Isentropic Development <info@isentropic.dev>"]
 license = "MIT"
@@ -23,9 +23,9 @@ readme = "README.md"
 approx = "0.5.1"
 thiserror = "2.0.12"
 uom = "0.37.0"
-twine-components = { version = "0.4.1", path = "twine-components" }
-twine-core = { version = "0.4.1", path = "twine-core" }
-twine-macros = { version = "0.4.1", path = "twine-macros" }
-twine-plot = { version = "0.4.1", path = "twine-plot" }
-twine-solve = { version = "0.4.1", path = "twine-solve" }
-twine-thermo = { version = "0.4.1", path = "twine-thermo" }
+twine-components = { version = "0.4.2", path = "twine-components" }
+twine-core = { version = "0.4.2", path = "twine-core" }
+twine-macros = { version = "0.4.2", path = "twine-macros" }
+twine-plot = { version = "0.4.2", path = "twine-plot" }
+twine-solve = { version = "0.4.2", path = "twine-solve" }
+twine-thermo = { version = "0.4.2", path = "twine-thermo" }
