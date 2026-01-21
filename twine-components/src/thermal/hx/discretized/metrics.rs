@@ -7,12 +7,12 @@ use uom::{
     si::temperature_interval::kelvin as delta_kelvin,
 };
 
-use crate::thermal::hx::{
-    CapacitanceRate, Stream, StreamInlet, discretized::HeatTransferRate, functional,
-};
+use crate::thermal::hx::{CapacitanceRate, Stream, StreamInlet, functional};
 
 use super::{
-    discretize::Nodes, error::SolveError, results::MinDeltaT, traits::DiscretizedArrangement,
+    HeatTransferRate, MinDeltaT,
+    solve::{Nodes, SolveError},
+    traits::DiscretizedArrangement,
 };
 
 /// Computes total UA using a segment-by-segment effectiveness-NTU analysis.
@@ -126,10 +126,10 @@ where
         };
     }
 
-    let top_inlet = nodes.top[0].temperature;
+    let top_inlet_temp = nodes.top[0].temperature;
     let bottom_inlet_index = Arrangement::bottom_select(0, N - 1);
-    let bottom_inlet = nodes.bottom[bottom_inlet_index].temperature;
-    let top_is_hot = top_inlet >= bottom_inlet;
+    let bottom_inlet_temp = nodes.bottom[bottom_inlet_index].temperature;
+    let top_is_hot = top_inlet_temp >= bottom_inlet_temp;
 
     let mut min_delta_t = TemperatureInterval::new::<delta_kelvin>(f64::INFINITY);
     let mut min_node = 0;
@@ -181,7 +181,7 @@ mod tests {
         arrangement::CounterFlow,
         discretized::{
             Given, HeatTransferRate, Inlets, Known, MassFlows, PressureDrops,
-            resolve::Resolved,
+            solve::Resolved,
             test_support::{TestThermoModel, state},
         },
     };

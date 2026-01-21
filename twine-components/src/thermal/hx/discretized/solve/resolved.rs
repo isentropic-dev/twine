@@ -6,27 +6,31 @@ use twine_thermo::{
 };
 use uom::si::f64::{MassRate, Power, Pressure, ThermodynamicTemperature};
 
-use super::{Given, HeatTransferRate, Known, SolveError, traits::DiscretizedHxThermoModel};
+use crate::thermal::hx::discretized::{
+    Given, HeatTransferRate, Known, traits::DiscretizedHxThermoModel,
+};
+
+use super::SolveError;
 
 /// Resolved boundary conditions and endpoint states for a discretized heat exchanger.
-pub(super) struct Resolved<TopFluid, BottomFluid> {
-    pub(super) top: ResolvedStream<TopFluid>,
-    pub(super) bottom: ResolvedStream<BottomFluid>,
-    pub(super) q_dot: HeatTransferRate,
+pub struct Resolved<TopFluid, BottomFluid> {
+    pub top: ResolvedStream<TopFluid>,
+    pub bottom: ResolvedStream<BottomFluid>,
+    pub q_dot: HeatTransferRate,
 }
 
 /// Stream endpoints and derived values after resolution.
-pub(super) struct ResolvedStream<Fluid> {
-    pub(super) inlet: State<Fluid>,
-    pub(super) outlet: State<Fluid>,
-    pub(super) h_in: SpecificEnthalpy,
-    pub(super) p_in: Pressure,
-    pub(super) p_out: Pressure,
-    pub(super) m_dot: MassRate,
+pub struct ResolvedStream<Fluid> {
+    pub inlet: State<Fluid>,
+    pub outlet: State<Fluid>,
+    pub h_in: SpecificEnthalpy,
+    pub p_in: Pressure,
+    pub p_out: Pressure,
+    pub m_dot: MassRate,
 }
 
 impl<TopFluid: Clone, BottomFluid: Clone> Resolved<TopFluid, BottomFluid> {
-    pub(super) fn new(
+    pub fn new(
         known: &Known<TopFluid, BottomFluid>,
         given: Given,
         thermo_top: &impl DiscretizedHxThermoModel<TopFluid>,

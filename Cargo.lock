@@ -3330,6 +3330,7 @@ dependencies = [
  "serde",
  "thiserror 2.0.17",
  "twine-core",
+ "twine-solve",
  "twine-thermo",
  "uom",
 ]
