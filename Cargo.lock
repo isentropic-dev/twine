@@ -3321,7 +3321,7 @@ checksum = "d2df906b07856748fa3f6e0ad0cbaa047052d4a7dd609e231c4f72cee8c36f31"
 
 [[package]]
 name = "twine-components"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "approx",
  "jiff",
@@ -3337,7 +3337,7 @@ dependencies = [
 
 [[package]]
 name = "twine-core"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "approx",
  "num-traits",
@@ -3348,7 +3348,7 @@ dependencies = [
 
 [[package]]
 name = "twine-examples"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "jiff",
  "serde",
@@ -3362,7 +3362,7 @@ dependencies = [
 
 [[package]]
 name = "twine-macros"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "heck",
  "itertools 0.14.0",
@@ -3374,7 +3374,7 @@ dependencies = [
 
 [[package]]
 name = "twine-plot"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "eframe",
  "egui_plot",
@@ -3382,7 +3382,7 @@ dependencies = [
 
 [[package]]
 name = "twine-solve"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "approx",
  "thiserror 2.0.17",
@@ -3391,7 +3391,7 @@ dependencies = [
 
 [[package]]
 name = "twine-thermo"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "approx",
  "rfluids",
