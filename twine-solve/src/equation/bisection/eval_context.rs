@@ -1,7 +1,11 @@
-use crate::equation::{EquationProblem, Evaluation, Observer, evaluate};
 use twine_core::model::Model;
 
-use super::{Action, Bracket, Event, decision::Decision};
+use crate::{
+    Observer,
+    equation::{EquationProblem, Evaluation, evaluate},
+};
+
+use super::{Action, Bracket, Decision, Event};
 
 type EvalOutcome<I, O> = (Option<Evaluation<I, O, 1>>, Decision);
 
