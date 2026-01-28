@@ -1,7 +1,8 @@
 use thiserror::Error;
 
-use super::EquationProblem;
 use twine_core::model::{Model, Snapshot};
+
+use super::EquationProblem;
 
 /// The result of evaluating an equation problem at a given `x`.
 #[derive(Debug, Clone)]

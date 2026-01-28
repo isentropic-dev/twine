@@ -1,7 +1,8 @@
 use thiserror::Error;
 
-use super::OptimizationProblem;
 use twine_core::model::{Model, Snapshot};
+
+use super::OptimizationProblem;
 
 /// The result of evaluating an optimization problem at a given `x`.
 #[derive(Debug, Clone)]
