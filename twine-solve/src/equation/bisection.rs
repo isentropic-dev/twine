@@ -15,8 +15,11 @@ pub use error::Error;
 pub use event::Event;
 pub use solution::{Solution, Status};
 
-use crate::equation::{EquationProblem, Observer};
 use twine_core::model::Model;
+
+use crate::Observer;
+
+use super::EquationProblem;
 
 use best::Best;
 use bracket::Bounds;
