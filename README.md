@@ -1,36 +1,34 @@
 # Twine
 
-⚠️ **Disclaimer**: Twine is in early development and subject to frequent breaking changes.
+Twine is a functional, strongly typed Rust framework for building, composing, and executing system models.
 
-## What is Twine?
+It is designed for engineers and researchers who want to write explicit, correct, and reusable modeling code, and to run that code using generic solvers, optimizers, and transient simulators.
 
-Twine is an open-source Rust framework for functional and composable system modeling.
-It enables engineers and researchers to build complex system models from simple, reusable building blocks.
-By emphasizing functional purity and strong typing, Twine makes models more reliable, testable, and easier to understand.
+Twine includes a growing set of domain components (thermal storage, heat exchangers, turbomachinery), thermodynamic property libraries, and shared execution tools that work with any model.
 
-## A Functional Approach to System Modeling
+**Status**: Under active development. Core design is stable, but APIs may change between releases.
 
-Twine models systems as compositions of functions with strongly typed inputs and outputs that are deterministic, always returning the same output for the same input.
-This functional approach allows users to build and understand larger systems from simple, reusable parts by ensuring:
+---
 
-- **Testability:** Deterministic functions are easier to test in isolation since they have no hidden state or side effects.
-- **Parallelism:** Independent functions can be executed concurrently without race conditions.
-- **Composability:** System models can be built hierarchically from simple, reusable parts.
-- **Reliability:** Pure functions eliminate side effects and make models more predictable.
+## Crates
 
-## Models and Simulations
+| Crate | Description |
+|-------|-------------|
+| `twine-core` | `Model` trait, `Snapshot`, and invariant helpers (e.g., constrained numeric types) |
+| `twine-units` | Physical units and time vocabulary grounded in `uom` |
+| `twine-solve` | Equation solving, optimization, and transient integration |
+| `twine-components` | Domain components (thermal storage, heat exchangers, turbomachinery, controllers) |
+| `twine-thermo` | Thermodynamic property modeling |
+| `twine-inspect` | Base inspection and extraction utilities |
+| `twine-plot` | Plotting, built on `twine-inspect` |
+| `twine-store` | Persistence and serialization, built on `twine-inspect` |
+| `twine-macros` | Optional macros for common patterns |
+| `twine-examples` | End-to-end examples |
 
-Component functions can be combined into a `Model` that represents a complete system's behavior.
-Twine provides built-in numerical integration to evolve a `Model` over time through a `Simulation`,
-enabling seamless simulation of dynamic systems while preserving functional purity.
+---
 
-## Built-in Components
+## Getting Started
 
-Though still early in development, Twine’s component library is designed to support a broad range of common system modeling needs, including:
-
-- **Controllers:** Thermostats, PID controllers, etc.
-- **Schedules:** Weekly and daily schedules, time-based control, etc.  
-- **Thermal:** Storage tanks, heat exchangers, mixing valves, etc.
-
-Twine also provides a consistent API for thermodynamic and fluid property modeling, designed to integrate with libraries such as REFPROP, CoolProp, and FIT.
-Support for these integrations is coming soon.
+- Browse examples in [`twine-examples`](twine-examples/)
+- Explore crate documentation: `cargo doc --open`
+- Read the design philosophy and architectural boundaries in [`ARCHITECTURE.md`](ARCHITECTURE.md)
