@@ -4,29 +4,33 @@
 
 Twine is a functional, strongly typed Rust framework for building, composing, and executing system models.
 
-This document defines Twine’s **stable architectural boundaries**: the core abstractions, the split between construction and execution, and the responsibility/dependency rules for crates and layers.
+This document defines Twine's **stable architectural boundaries**: the core abstractions and responsibilities that govern the framework's design.
 
-If a proposed feature does not clearly fit within these boundaries, it should be redesigned or placed elsewhere rather than bending the architecture.
+If a proposed feature doesn't cleanly fit within these boundaries, it should be redesigned rather than bending the architecture.
 
 ---
 
-## 1. Core Philosophy
+## 1. Core Philosophy and Fundamental Distinctions
 
 Twine is built around one idea:
 
-> **A model is a deterministic function from a typed input to a typed output, with explicit failure.**
+> **A model is a deterministic, fallible function with a typed input, output, and error.**
 
 From this follow the guiding principles:
 
-- **Determinism**: for a given input (and captured parameters), the observable result is stable.
+- **Determinism**: For a given input (and captured parameters), the result is always the same.
   - Internal caching is allowed if it does not change results.
-  - Randomness, I/O, and time-varying data must be made explicit (e.g., provided through inputs or immutable construction-time parameters) so execution tooling can reason about evaluations.
-- **Explicitness**: inputs, outputs, and failure modes are visible in types.
-- **Correctness via types**: Twine encourages encoding invariants directly in model I/O types (e.g., constrained numeric values and unit-aware quantities) to shift checks from runtime to compile time.
-- **Composability**: larger models can be built from smaller models.
-- **Generic execution**: solvers and simulators implement algorithms; they do not encode domain knowledge.
+  - Randomness, I/O, and time-varying data must be made explicit (provided through inputs or immutable construction-time parameters).
 
-Twine is code-first. Models are ordinary Rust types and functions, not a DSL or a runtime graph engine.
+- **Explicitness**: Inputs, outputs, and failure modes are visible in types.
+
+- **Correctness via types**: Encode invariants directly in model I/O types (e.g., constrained numeric values, unit-aware quantities) to shift checks from runtime to compile time.
+
+- **Composability**: Larger models can be built from smaller models.
+
+- **Generic execution**: Solvers implement algorithms without encoding domain knowledge.
+
+- **Code-first**: Models are ordinary Rust types and functions.
 
 ### Non-goals
 
@@ -37,207 +41,241 @@ Twine is not:
 - A DSL or visual modeling tool
 - A solver library with hard-coded domain assumptions
 
+### Fundamental Distinctions
+
+Twine's architecture is organized around two orthogonal distinctions:
+
+#### Construction vs. Execution
+
+- **Construction**: Building models (composition, wiring, domain implementation)
+- **Execution**: Using models to solve problems (defining scenarios, extracting results)
+
+The `Model` trait forms the boundary between these concerns.
+
+#### Domain-Agnostic vs. Domain-Aware
+
+- **Domain-Agnostic**: Generic algorithms and utilities that work across domains
+- **Domain-Aware**: Specific domain knowledge (e.g., physical principles, user-defined model semantics)
+
+These distinctions create a 2×2 matrix that defines Twine's architecture:
+
+|                    | **Domain-Agnostic**              | **Domain-Aware**                 |
+|--------------------|----------------------------------|----------------------------------|
+| **Construction**   | Generic composition utilities    | Domain components and properties |
+| **Execution**      | Solvers, observers, views        | Domain knowledge via extensions  |
+
+Throughout this document, "domain knowledge" and "domain semantics" encompass two related concepts:
+
+1. **General Domain Knowledge**: Understanding of domain-specific principles such as thermodynamics,
+   fluid dynamics, electrical systems, or financial models.
+
+2. **Model-Specific Knowledge**: User decisions about their specific model, such as which input
+   parameters to vary, which output values are significant, or what criteria determine success.
+
+Both forms of knowledge appear in two key places:
+- Domain-Aware Construction: When building Models through Components and Domain Foundations
+- Extension Points: When defining Problems, Observers, and Views that connect domain knowledge to execution
+
 ---
 
-## 2. The Model Contract (Execution Boundary)
+## 2. The Model Contract
 
-The central abstraction is `Model`:
+The central abstraction is the `Model` trait:
 
 - Maps a concrete `Input` type to a concrete `Output` type
-- Has an explicit error surface
-- Is side-effect free in observable behavior
+- Defines an explicit error type
+- Has no external side effects
 
-This is Twine’s **execution boundary**:
+This is Twine's **execution boundary**:
 
 - Everything **above** `Model` is about **construction** (how you build a model)
 - Everything **below** `Model` is about **execution** (how you run it)
-
-Associated artifacts (e.g., input/output snapshots) exist to support execution and inspection, but do not expand the `Model` contract.
 
 Twine has no special runtime "system" abstraction. A "system" is simply any type that implements `Model`, whether written directly or assembled from other models/components.
 
 ---
 
-## 3. Construction vs Execution
-
-### Construction (user-owned, domain-owned)
-
-Construction is how models are created:
-
-- Wiring components together
-- Adapting, combining, or wrapping models
-- Assembling inputs and conventions
-
-Construction is intentionally **user-driven** and **domain-specific**. Twine provides utilities, but does not require a single construction worldview.
-
-### Execution (Twine-owned, algorithm-owned)
-
-Execution is how models are run:
-
-- Evaluating a model at a point
-- Solving equations
-- Running optimizations
-- Advancing state through time
-
-Execution is intentionally **generic** and **domain-agnostic**.
-
----
-
-## 4. Problems and Solvers
-
-Twine separates **problem semantics** (what the user means) from **numerical algorithms** (how to compute).
+## 3. Problems, Solvers, Observers, and Views
 
 ### Problems
 
-A **Problem** is layered on top of a `Model`. It encodes semantics that solvers cannot infer, such as:
+A `Model` maps inputs to outputs but does not encode what question is being asked. Problems supply that context:
 
-- How solver variables map to model inputs
-- How model outputs are interpreted
-- What constitutes residuals, objectives, constraints, or derivatives
+- Each solver family defines its own Problem trait
+- Users implement these traits to provide domain-specific knowledge
+- Example: `EquationProblem`, `OptimizationProblem`, `TransientProblem`
 
-Problem definitions do **not** describe physics, components, or wiring.
-
-Problem families are extensible. Common examples include equation solving, optimization, and transient simulation; future problem types (e.g., bounded or constrained optimization) fit the same pattern.
-
-#### Transient problems (time integration)
-
-A transient problem defines:
-
-- **State**: what is integrated
-- **Derivatives**: how time derivatives are computed from model evaluations
-- **Input reconstruction**: how an input is produced from state and time
-
-**Continuous vs discrete contract:** to support higher-order and multi-stage integrators correctly:
-
-- **Continuous evolution**: input reconstruction and derivative evaluation may occur multiple times per step (including intermediate stages).
-- **Discrete control/application**: discrete updates (mode switches, thermostats, controller state updates) occur **once per accepted step**, after integration.
-
-This separation prevents hidden discontinuities from invalidating integrator assumptions.
+Problems are how domain knowledge connects to solvers.
 
 ### Solvers
 
-A **Solver** is an algorithm implemented as a function:
-
-- Takes a `Model` and a `Problem`, plus any solver-specific inputs (e.g., bounds, initial guesses, or initial conditions)
-- May accept configuration and observation hooks
-- Runs to completion
-- Returns a result (solution or failure)
+A Solver is an algorithm implemented as a function. It takes a `Model` and a Problem (plus solver-specific inputs such as initial guesses or initial conditions), runs to completion, and returns a result.
 
 Solvers own:
 
-- Iteration/stepping strategy
+- Iteration and stepping strategy
 - Convergence logic
-- Error handling and recovery mechanisms
-- Observation/event hooks
+- Error handling and recovery
+- Observer event and action types
 
 Solvers never encode domain assumptions.
 
----
+### Observers
 
-## 5. Composition, Components, and Domain Foundations
+Observers allow domain-aware code to react to execution events and optionally steer solver behavior. The `Observer` trait is generic over Event and Action types: each solver family defines its own Event (what happened) and Action (what to do about it) types, while the trait interface remains uniform.
 
-Twine distinguishes **domain-agnostic composition mechanics** from **domain-specific modeling building blocks**.
+Observers enable:
 
-### Composition utilities (domain-agnostic)
+- Online monitoring and logging
+- Early stopping or steering based on domain criteria
+- Incremental data capture for Views
 
-Composition utilities create new `Model`s from existing `Model`s. They are:
+Like Problems, Observers are an extension point: solvers define the Event and Action types that parameterize the trait, and users or components provide domain-aware implementations.
 
-- Domain-agnostic
-- Solver-agnostic
-- Purely construction-time tools
+### Views
 
-They may use internal graphs or other data structures as construction artifacts, but runtime execution sees only a `Model`.
+Views define what's meaningful in solutions and how to extract it:
 
-Domain-agnostic composition utilities must not encode physics or component-specific conventions. Such logic belongs in **Components** or **Domain Foundations**.
+- Each view family defines its own trait (e.g., `TimeSeriesView`, `ParametricView`)
+- Users implement these traits to provide domain-specific knowledge
+- Views extract domain-relevant data from execution artifacts
 
-Example: a fluid-network builder (pumps/pipes/tanks) that enforces mass and energy conservation laws across component connections is domain logic, even if it produces a unified `Model`.
+Views can be implemented in two ways:
+1. Post-execution on complete Solution objects
+2. During execution through Observers that capture data incrementally
 
-### Components (domain-specific)
+This flexibility allows efficient handling of both small and large solution sets.
 
-Components are reusable domain building blocks (equipment models, controllers, kernels). They may:
-
-- Implement `Model` directly, or
-- Expose kernels that are wrapped into a `Model`
-
-### Domain foundations (domain-specific, non-component)
-
-Domain foundations are libraries that support components but are not themselves components:
-
-- Property models and data (e.g., thermo properties)
-- Domain types and reusable domain utilities
-
-They are not solvers and not runtime execution frameworks.
-
-Lifecycle guideline: **Domain Foundations** may begin life alongside **Components** while their API stabilizes. When reuse and dependency pressure warrant it, they should be extracted into dedicated crates. If a foundation becomes broadly useful outside Twine, it may be promoted to an external crate with its own versioning and lifecycle.
+Downstream utilities such as plotting and persistence consume View output.
 
 ---
 
-## 6. Inspection and Presentation
+## 4. Architectural Invariants and Dependency Rules
 
-Twine separates:
+### Domain-Agnostic → Domain-Aware
 
-- **Execution**: produces execution artifacts (e.g., model evaluations, solver iterations, solutions)
-- **Inspection**: extracts and derives data from execution artifacts and selects what is of interest for downstream use
-- **Presentation**: formats, stores, and visualizes inspected data
+**Invariant**: Domain-agnostic code must never depend on domain-aware code.
 
-**Inspection** stands on its own. It enables:
+- Generic composition utilities must not encode domain-specific knowledge
+- Core solvers must remain domain-agnostic and work with any `Model`
+- Generic view infrastructure must not depend on domain-specific semantics
+- Platform Foundations should not contain domain-specific knowledge
+- Example: `twine-compose` cannot depend on `twine-components`; `twine-solve` cannot depend on `twine-thermo`
+- Example: a fluid-network builder (pumps/pipes/tanks) that enforces mass and energy conservation laws across component connections is domain logic, even if it produces a unified `Model`. Such logic belongs in Components or Domain Foundations, not in generic composition utilities.
 
-- Online control and steering (early stopping, constraint detection, adaptive stepping)
-- Logging and telemetry without a presentation framework
-- Testing and validation (assertions, invariant checks, regression comparisons)
+### Construction → Execution
 
-**Presentation** (plotting, storage, reports) is one consumer of inspected data, not the only one.
+**Invariant**: Execution layers must depend only on the `Model` interface, not on how models are constructed.
 
-The *core* inspection surface is lightweight and domain-agnostic. Semantic enrichments are allowed as **opt-in** wrappers when useful (e.g., time bases for time-series, units metadata for plotting, named channels). These enrichments must not affect execution semantics.
+- Solvers must accept any `Model` without requiring knowledge of how it was built
+- Core execution mechanisms (solvers, view processing) remain generic
+- Execution algorithms must not depend on component-specific implementation details
+- Example: `twine-solve` depends on `twine-core` but not on the internals of `twine-components`
+
+The reverse direction is allowed:
+
+- Construction code may depend on execution APIs (e.g., Components may depend on solver traits to implement Problems or provide Observers)
+- Problem, Observer, and View implementations are domain-aware code that depends on both execution traits and domain foundations
+- These implementations live in user code or domain-aware crates, not in the generic execution crates
+
+### Extension Points as Clean Interfaces
+
+**Invariant**: Domain knowledge crosses boundaries only through well-defined extension points.
+
+- **Problems**: Domain knowledge informs solvers what to solve
+- **Observers**: Domain knowledge monitors and steers solver execution
+- **Views**: Domain knowledge informs what to extract from solutions
+
+### Component-Solver Relationship
+
+**Invariant**: Components may use solvers internally, but this must be a one-way relationship.
+
+- Components can use solvers during construction or to implement their `Model` interface
+- Components provide domain-specific Problem and Observer implementations to guide solvers
+- Solvers must never contain or depend on component-specific logic
+
+### Core Access
+
+All layers may depend on Core and Platform Foundations. Core contracts and platform utilities are universally available (e.g., all crates may depend on `twine-core` and `twine-units`).
 
 ---
 
-## 7. Layers, Crates, and Dependency Rules
+## 5. Layer Organization
 
-Twine is organized into conceptual layers.
+Twine's architecture follows this layered structure:
 
-**Dependency rule:** a layer may depend only on layers listed **above** it (more foundational), never on layers listed below it.
+```
+┌────────────────────────── FOUNDATION LAYERS ──────────────────────────┐
+│                                                                       │
+│  Core (Model trait)         Platform Foundations (e.g., units, time)  │
+│                                                                       │
+└───────────────────────────────────┬───────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────── CONSTRUCTION ──────────┬─────────── EXECUTION ─────────────┐
+│                                   │                                   │
+│  DOMAIN-AGNOSTIC:                 │  DOMAIN-AGNOSTIC:                 │
+│  • Compose                        │  • Solve (Problems, Observers)    │
+│                                   │  • View (Views)                   │
+│                                   │                                   │
+│  DOMAIN-AWARE:                    │  DOMAIN-AWARE EXTENSIONS:         │
+│  • Domain Foundations             │  • Problem implementations        │
+│  • Components                     │  • Observer implementations       │
+│                                   │  • View implementations           │
+│                                   │                                   │
+└───────────────────────────────────┴───────────────────────────────────┘
+```
 
-The list below is ordered by allowed dependency direction; it is not a runtime call stack. Layers are conceptual boundaries and may be implemented as one crate or many.
+This structure maintains separation between:
+1. Domain-agnostic and domain-aware code
+2. Construction and execution concerns
+3. Core foundations and specialized layers
 
-### Layers
+---
 
-- **Core**: minimal modeling contracts and invariant tools
-- **Platform Foundations**: broadly reusable, non-domain foundations used across domains and by generic tooling (e.g., units/time)
-- **Compose**: construction utilities and model-to-model adapters (construction-time)
-- **Solve**: generic numerical algorithms (execution-time)
-- **Inspect**: inspection and data extraction from executions
-- **Presentation**: plotting, persistence, and reporting built on inspected data
-- **Components**: domain-specific reusable models
-- **Domain Foundations**: domain-specific property/data libraries
+## 6. Layers and Crates
 
-### Layer-specific invariants
+This section describes the primary architectural layers of Twine. Each layer may span multiple crates. The crates mentioned are examples and not an exhaustive list.
 
-The ordering above defines the general dependency direction. The rules below define **layer invariants** (what each layer is allowed to contain).
+### Core Foundations
 
-- **Core** (`twine-core`) must remain small and **ecosystem-agnostic**.
-  - It may include dependency-light invariant tools that are broadly useful when defining model I/O (e.g., constrained numeric wrappers).
-- **Platform Foundations** may depend on external ecosystems to provide shared, non-domain vocabulary and utilities without forcing those choices into **Core**.
-  - Example: `twine-units` defines Twine’s physical-units/time vocabulary grounded in `uom`.
-- **Solve** must remain **domain-agnostic**: solver APIs must not encode domain assumptions or require domain crates. Domain semantics belong in `Problem` definitions and domain layers.
+- **Core** (`twine-core`): The central `Model` trait that defines the execution boundary
+  - Contains the essential contracts and interfaces
+  - Includes lightweight invariant tools for strongly typed interfaces
 
-### Tooling (build-time)
+- **Platform Foundations** (`twine-units`): Broadly reusable, non-domain foundations
+  - Provides shared vocabulary and utilities like units and time representations
+  - Bridges to external ecosystems where appropriate (e.g., `uom` for units)
 
-Build-time tooling is not part of the layer ordering above; any layer may use it.
+### Construction
 
-- Proc-macro tooling (e.g., `twine-macros`) is optional ergonomics and must not introduce required runtime concepts.
-- Tooling may generate construction code (including from connection descriptions/graphs), but the output participates in Twine through the same stable runtime contracts (e.g., `Model`).
+- **Domain-Agnostic Construction**:
+  - **Compose** (`twine-compose`): Generic composition patterns and model adapters
+    - Provides tools for combining and transforming models
+    - Supports construction of larger models from smaller ones
 
-### Representative crates (non-exhaustive examples)
+- **Domain-Aware Construction**:
+  - **Domain Foundations** (`twine-thermo`): Domain-specific property models and utilities
+    - Examples: thermodynamic properties, fluid properties, material data
+    - Available to any domain-aware code, whether in construction (Components) or execution extensions (Problem/Observer implementations)
+    - May evolve from component-adjacent code to dedicated crates, potentially becoming external dependencies
 
-- **`twine-core`** (Core): `Model`, `Snapshot`, and dependency-light invariant helpers for model I/O (e.g., constrained numeric types)
-- **`twine-units`** (Platform Foundations): physical units and time vocabulary (grounded in `uom`, plus Twine-specific additions)
-- **`twine-solve`** (Solve): equation/optimization/transient algorithms
-- **`twine-components`** (Components): reusable domain components built on `Model`
-- **`twine-thermo`** (Domain Foundations): thermodynamic property modeling and related domain utilities
-- **`twine-inspect`** (Inspect): base inspection and extraction utilities
-- **`twine-plot`** (Presentation): plotting, built on `twine-inspect`
-- **`twine-store`** (Presentation): persistence and serialization, built on `twine-inspect`
-- **`twine-macros`** (Tooling): optional proc-macros for ergonomic code generation
-- **`twine-examples`**: end-to-end examples and validation cases
+  - **Components** (`twine-components`): Reusable domain-specific building blocks
+    - Built on Domain Foundations
+    - May implement `Model` directly or provide building blocks for `Model` implementations
 
+### Execution
+
+- **Solve** (`twine-solve`): Generic numerical algorithms and Problem/Observer trait definitions
+  - Implements solvers for different Problem types
+  - Defines Problem and Observer traits as extension points
+
+- **View** (`twine-view`): Generic data extraction and View definitions
+  - Defines View traits as extension points
+  - Downstream crates (e.g., `twine-plot`, `twine-persist`) consume View output for visualization and storage
+
+### Tooling
+
+Proc-macro crates (e.g., `twine-macros`) reduce boilerplate and improve ergonomics but must not introduce required runtime concepts. They may generate construction code (including from connection descriptions or graphs), but the output participates in Twine through the same stable contracts (e.g., `Model`).
+
+Proc-macro crates sit outside the layer ordering; any layer may use them.
