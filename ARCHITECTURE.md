@@ -20,7 +20,7 @@ From this follow the guiding principles:
 
 - **Determinism**: For a given input (and captured parameters), the result is always the same.
   - Internal caching is allowed if it does not change results.
-  - Randomness, I/O, and time-varying data must be made explicit (provided through inputs or immutable construction-time parameters).
+  - Sources of nondeterminism (e.g., randomness) must be explicit and passed in as inputs or fixed at construction time.
 
 - **Explicitness**: Inputs, outputs, and failure modes are visible in types.
 
@@ -74,7 +74,7 @@ Throughout this document, "domain knowledge" and "domain semantics" encompass tw
 
 Both forms of knowledge appear in two key places:
 - Domain-Aware Construction: When building Models through Components and Domain Foundations
-- Extension Points: When defining Problems, Observers, and Views that connect domain knowledge to execution
+- Extension Points: When implementing Problems, Observers, and Views that connect domain knowledge to execution
 
 ---
 
@@ -142,7 +142,7 @@ Views define what's meaningful in solutions and how to extract it:
 
 Views can be implemented in two ways:
 1. Post-execution on complete Solution objects
-2. During execution through Observers that capture data incrementally
+2. During execution through solver-specific Observers that capture data incrementally
 
 This flexibility allows efficient handling of both small and large solution sets.
 
