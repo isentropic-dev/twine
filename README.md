@@ -140,6 +140,4 @@ let solution = bisection::solve(
 
 ## Twine Models
 
-Twine is domain-agnostic by design. It knows nothing about physics, units, or any specific engineering domain.
-
-[Twine Models](https://github.com/isentropic-dev/twine-models) is a companion project that provides useful models and model-building tools.
+Twine is domain-agnostic by design. For opinionated, domain-specific models and model-building tools, see the companion project [Twine Models](https://github.com/isentropic-dev/twine-models).
