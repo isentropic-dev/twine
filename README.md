@@ -2,9 +2,7 @@
 
 Twine is a Rust framework for defining and solving numerical problems.
 
-A numerical model describes behavior, but on its own it only maps inputs to outputs. To solve an equation, optimize a design, or simulate a system, you need to ask the right question. Twine makes models useful by providing Problems to frame the question and Solvers to answer it.
-
-You bring the model. Twine brings the machinery.
+Models are useful for solving problems. Twine ties together your Model, a Problem you want to solve, and a Solver that does the work.
 
 ## How It Works
 
@@ -93,26 +91,55 @@ let solution = golden_section::solve_unobserved(
 // solution.x ≈ 0.0 (same model, different question)
 ```
 
-The model doesn't change. The question does. These examples use a simple polynomial, but the same pattern works with any `Model`, including large, multi-physics engineering systems.
+These examples use a simple polynomial, but the same pattern works with any `Model`, including large, multi-physics engineering systems.
 
 ## Observers
 
-Solvers are domain-agnostic and have no knowledge of what your model represents. Observers bridge that gap. They receive events from the solver during execution and can steer its behavior based on domain knowledge you provide.
+Solvers are domain-agnostic and know nothing about what your model represents. Observers bridge that gap by receiving events during execution and steering solver behavior based on domain knowledge you provide.
 
-For example, an Observer might stop a solve early when a physical constraint is violated or help a solver recover from a model evaluation failure. The solver provides the algorithm; the Observer provides the intelligence.
+```rust
+use twine_core::Observer;
+use twine_observers::{HasResidual, CanStopEarly};
+
+/// Logs each iteration and stops early when the residual is good enough.
+struct GoodEnough { tolerance: f64, min_iters: usize, iter: usize }
+
+impl<E: HasResidual, A: CanStopEarly> Observer<E, A> for GoodEnough {
+    fn observe(&mut self, event: &E) -> Option<A> {
+        self.iter += 1;
+        let r = event.residual();
+        println!("iter {}: residual = {r:.6}", self.iter);
+
+        if self.iter >= self.min_iters && r.abs() < self.tolerance {
+            return Some(A::stop_early());
+        }
+        None
+    }
+}
+
+let observer = GoodEnough { tolerance: 0.1, min_iters: 5, iter: 0 };
+let solution = bisection::solve(
+    &Polynomial, &Target(0.0), [0.0, 5.0], &bisection::Config::default(), observer,
+).unwrap();
+
+// iter 1: residual = 2.500000
+// iter 2: residual = -2.750000
+// iter 3: residual = -0.484375
+// iter 4: residual = 0.785156
+// iter 5: residual = 0.097656
+// solution.status = StoppedByObserver
+```
+
+`GoodEnough` is not tied to bisection. It works with any solver whose events expose a residual and whose actions support early stopping.
 
 ## Crates
 
-- **`twine-core`**: The `Model` trait, Problem traits, and the `Observer` trait. Zero dependencies.
+- **`twine-core`**: The `Model` trait, Problem traits, and the `Observer` trait.
 - **`twine-solvers`**: Solver algorithms organized by problem type (e.g., `equation::bisection`, `optimization::golden_section`).
-- **`twine-observers`**: Ready-to-use `Observer` implementations for plotting, logging, and persistence.
+- **`twine-observers`**: Capability traits for solver events and actions, plus ready-to-use `Observer` implementations for plotting, logging, and persistence.
 
-## Twine Components
+## Twine Models
 
 Twine is domain-agnostic by design. It knows nothing about physics, units, or any specific engineering domain.
 
-[Twine Components](https://github.com/isentropic-dev/twine-components) is a companion project that provides domain-aware building blocks for engineering models: thermodynamic properties, reusable components, and unit-aware types. It depends on Twine but Twine never depends on it.
-
-## Status
-
-Under active development. Core design is stable, but APIs may change between releases.
+[Twine Models](https://github.com/isentropic-dev/twine-models) is a companion project that provides useful models and model-building tools.
