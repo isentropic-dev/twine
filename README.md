@@ -61,16 +61,15 @@ Find the minimum by defining an optimization problem with the same model:
 
 ```rust
 use std::convert::Infallible;
-use twine_core::{OptimizationProblem, Minimize};
+use twine_core::MinimizationProblem;
 use twine_solvers::optimization::golden_section;
 
 /// Minimize the model output.
 struct Minimum;
 
-impl OptimizationProblem<1> for Minimum {
+impl MinimizationProblem<1> for Minimum {
     type Input = f64;
     type Output = f64;
-    type Goal = Minimize;
     type Error = Infallible;
 
     fn input(&self, x: &[f64; 1]) -> Result<f64, Self::Error> {
