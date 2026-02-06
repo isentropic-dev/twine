@@ -1,0 +1,17 @@
+[package]
+name = "twine-solvers"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Numerical solvers for the Twine framework."
+keywords = ["twine", "framework", "modeling", "solvers", "numerical"]
+
+[dependencies]
+thiserror = { workspace = true }
+twine-core = { workspace = true }
+
+[dev-dependencies]
+approx = { workspace = true }
