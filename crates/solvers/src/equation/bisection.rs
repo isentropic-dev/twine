@@ -218,10 +218,9 @@ mod tests {
     impl EquationProblem<1> for TargetOutputProblem {
         type Input = f64;
         type Output = f64;
-        type InputError = Infallible;
-        type ResidualError = Infallible;
+        type Error = Infallible;
 
-        fn input(&self, x: &[f64; 1]) -> Result<Self::Input, Self::InputError> {
+        fn input(&self, x: &[f64; 1]) -> Result<Self::Input, Self::Error> {
             Ok(x[0])
         }
 
@@ -229,7 +228,7 @@ mod tests {
             &self,
             _input: &Self::Input,
             output: &Self::Output,
-        ) -> Result<[f64; 1], Self::ResidualError> {
+        ) -> Result<[f64; 1], Self::Error> {
             Ok([output - self.target])
         }
     }

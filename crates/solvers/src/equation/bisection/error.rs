@@ -18,27 +18,22 @@ pub enum Error {
     #[error("no successful evaluations")]
     NoSuccessfulEvaluation,
 
-    #[error("failed to compute input")]
-    Input(#[source] Box<dyn StdError + Send + Sync>),
+    #[error("problem error")]
+    Problem(#[source] Box<dyn StdError + Send + Sync>),
 
     #[error("model call failed")]
     Model(#[source] Box<dyn StdError + Send + Sync>),
-
-    #[error("failed to compute residual")]
-    Residual(#[source] Box<dyn StdError + Send + Sync>),
 }
 
-impl<IE, ME, RE> From<EvalError<IE, ME, RE>> for Error
+impl<ME, PE> From<EvalError<ME, PE>> for Error
 where
-    IE: StdError + Send + Sync + 'static,
     ME: StdError + Send + Sync + 'static,
-    RE: StdError + Send + Sync + 'static,
+    PE: StdError + Send + Sync + 'static,
 {
-    fn from(err: EvalError<IE, ME, RE>) -> Self {
+    fn from(err: EvalError<ME, PE>) -> Self {
         match err {
-            EvalError::Input(e) => Self::Input(Box::new(e)),
             EvalError::Model(e) => Self::Model(Box::new(e)),
-            EvalError::Residual(e) => Self::Residual(Box::new(e)),
+            EvalError::Problem(e) => Self::Problem(Box::new(e)),
         }
     }
 }

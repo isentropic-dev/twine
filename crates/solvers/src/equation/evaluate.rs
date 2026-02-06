@@ -12,26 +12,19 @@ pub struct Evaluation<I, O, const N: usize> {
 
 /// Errors that can occur when evaluating an equation problem.
 #[derive(Debug, Error)]
-pub enum EvalError<IE, ME, RE> {
-    /// Failed to construct the model input from solver variables.
-    #[error("failed to compute input")]
-    Input(#[source] IE),
+pub enum EvalError<ME, PE> {
     /// The model call failed.
     #[error("model call failed")]
     Model(#[source] ME),
-    /// Failed to compute residuals.
-    #[error("failed to compute residuals")]
-    Residual(#[source] RE),
+    /// Failed to construct input or compute residuals.
+    #[error("problem error")]
+    Problem(#[source] PE),
 }
 
 /// Type alias for the result of [`evaluate`].
 pub type EvaluateResult<M, P, const N: usize> = Result<
     Evaluation<<M as Model>::Input, <M as Model>::Output, N>,
-    EvalError<
-        <P as EquationProblem<N>>::InputError,
-        <M as Model>::Error,
-        <P as EquationProblem<N>>::ResidualError,
-    >,
+    EvalError<<M as Model>::Error, <P as EquationProblem<N>>::Error>,
 >;
 
 /// Evaluates the model in the context of an equation problem.
@@ -51,11 +44,11 @@ where
     M: Model,
     P: EquationProblem<N, Input = M::Input, Output = M::Output>,
 {
-    let input = problem.input(&x).map_err(EvalError::Input)?;
+    let input = problem.input(&x).map_err(EvalError::Problem)?;
     let output = model.call(&input).map_err(EvalError::Model)?;
     let residuals = problem
         .residuals(&input, &output)
-        .map_err(EvalError::Residual)?;
+        .map_err(EvalError::Problem)?;
 
     Ok(Evaluation {
         x,
