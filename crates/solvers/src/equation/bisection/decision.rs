@@ -27,7 +27,7 @@ mod tests {
     use super::*;
 
     fn err() -> Error {
-        Error::Residual(Box::new(std::fmt::Error))
+        Error::Problem(Box::new(std::fmt::Error))
     }
 
     #[test]

@@ -39,14 +39,13 @@ struct Target(f64);
 impl EquationProblem<1> for Target {
     type Input = f64;
     type Output = f64;
-    type InputError = Infallible;
-    type ResidualError = Infallible;
+    type Error = Infallible;
 
-    fn input(&self, x: &[f64; 1]) -> Result<f64, Self::InputError> {
+    fn input(&self, x: &[f64; 1]) -> Result<f64, Self::Error> {
         Ok(x[0])
     }
 
-    fn residuals(&self, _input: &f64, output: &f64) -> Result<[f64; 1], Self::ResidualError> {
+    fn residuals(&self, _input: &f64, output: &f64) -> Result<[f64; 1], Self::Error> {
         Ok([output - self.0])
     }
 }
@@ -69,17 +68,16 @@ use twine_solvers::optimization::golden_section;
 struct Minimum;
 
 impl OptimizationProblem<1> for Minimum {
-    type Goal = Minimize;
     type Input = f64;
     type Output = f64;
-    type InputError = Infallible;
-    type ObjectiveError = Infallible;
+    type Goal = Minimize;
+    type Error = Infallible;
 
-    fn input(&self, x: &[f64; 1]) -> Result<f64, Self::InputError> {
+    fn input(&self, x: &[f64; 1]) -> Result<f64, Self::Error> {
         Ok(x[0])
     }
 
-    fn objective(&self, _input: &f64, output: &f64) -> Result<f64, Self::ObjectiveError> {
+    fn objective(&self, _input: &f64, output: &f64) -> Result<f64, Self::Error> {
         Ok(*output)
     }
 }
