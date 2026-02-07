@@ -11,7 +11,7 @@ pub trait StepIntegrable<Delta> {
     /// The derivative of the type with respect to `Delta`.
     type Derivative;
 
-    /// Computes the next value by stepping forward with a derivative.
+    /// Returns the value after stepping with a derivative and step size.
     #[must_use]
     fn step(&self, derivative: Self::Derivative, delta: Delta) -> Self;
 }
