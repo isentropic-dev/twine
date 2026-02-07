@@ -25,7 +25,7 @@ use twine_core::{Model, OptimizationProblem};
 use super::NegateObjective;
 
 /// Finds the minimum of the objective using golden section search.
-pub fn minimize<M, P>(_model: &M, _problem: P, _bracket: [f64; 2])
+pub fn minimize<M, P>(_model: &M, _problem: &P, _bracket: [f64; 2])
 where
     M: Model,
     P: OptimizationProblem<1, Input = M::Input, Output = M::Output>,
@@ -36,10 +36,10 @@ where
 /// Finds the maximum of the objective using golden section search.
 ///
 /// Negates the objective using [`NegateObjective`] and delegates to [`minimize`].
-pub fn maximize<M, P>(model: &M, problem: P, bracket: [f64; 2])
+pub fn maximize<M, P>(model: &M, problem: &P, bracket: [f64; 2])
 where
     M: Model,
     P: OptimizationProblem<1, Input = M::Input, Output = M::Output>,
 {
-    minimize(model, NegateObjective(problem), bracket);
+    minimize(model, &NegateObjective(problem), bracket);
 }

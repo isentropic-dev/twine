@@ -5,7 +5,7 @@ use twine_core::OptimizationProblem;
 /// Used to implement maximization by minimizing the negated objective.
 pub struct NegateObjective<P>(pub P);
 
-impl<const N: usize, P> OptimizationProblem<N> for NegateObjective<P>
+impl<const N: usize, P> OptimizationProblem<N> for NegateObjective<&P>
 where
     P: OptimizationProblem<N>,
 {
@@ -54,7 +54,7 @@ mod tests {
 
         let original_obj = problem.objective(&input, &output).unwrap();
 
-        let negated = NegateObjective(problem);
+        let negated = NegateObjective(&problem);
         let negated_obj = negated.objective(&input, &output).unwrap();
 
         assert_relative_eq!(original_obj, -2.0);
