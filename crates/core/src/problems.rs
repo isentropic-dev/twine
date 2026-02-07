@@ -4,4 +4,4 @@ mod optimization;
 
 pub use equation::EquationProblem;
 pub use ode::OdeProblem;
-pub use optimization::{MaximizationProblem, MinimizationProblem};
+pub use optimization::{MaximizationProblem, MinimizationProblem, OptimizationProblem};
