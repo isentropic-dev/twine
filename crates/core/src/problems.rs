@@ -1,6 +1,6 @@
-pub mod equation;
-pub mod ode;
-pub mod optimization;
+mod equation;
+mod ode;
+mod optimization;
 
 pub use equation::EquationProblem;
 pub use ode::OdeProblem;

@@ -52,8 +52,8 @@ pub trait OdeProblem {
     /// problem-specific adjustments. For example, this is where discrete controls
     /// (valve openings, mode switches) could be applied in transient simulations.
     ///
-    /// The default implementation returns the input unchanged. Only implement
-    /// this method if your problem requires it.
+    /// The default implementation returns the input unchanged.
+    /// Only implement this method if your problem requires it.
     ///
     /// # Errors
     ///
