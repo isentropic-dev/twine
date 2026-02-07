@@ -1,16 +1,16 @@
-use crate::DerivativeOf;
+use crate::{DerivativeOf, StepIntegrable};
 
 /// Defines an ODE (ordinary differential equation) problem to be solved.
 ///
 /// An ODE problem extracts a state from model input, computes derivatives from
 /// model input and output, and reconstructs model input from an updated state
 /// and step size. This trait enables generic ODE solvers to integrate any model
-/// by working with a state type that implements [`StepIntegrable`](crate::StepIntegrable).
+/// by working with a state type that implements [`StepIntegrable`].
 pub trait OdeProblem {
     type Input;
     type Output;
     type Delta;
-    type State: crate::StepIntegrable<Self::Delta>;
+    type State: StepIntegrable<Self::Delta>;
     type Error: std::error::Error + Send + Sync + 'static;
 
     /// Extracts the state from model input.
