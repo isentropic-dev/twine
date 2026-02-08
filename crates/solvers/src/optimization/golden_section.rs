@@ -20,26 +20,100 @@
 //! - **Derivative-free**: Slower convergence than gradient-based methods
 //! - **Unimodal assumption**: May find local optimum if multiple extrema exist
 
-use twine_core::{Model, OptimizationProblem};
+mod action;
+mod bracket;
+mod config;
+mod error;
+mod event;
+mod search;
+mod solution;
 
-use super::NegateObjective;
+pub use action::Action;
+pub use config::{Config, ConfigError};
+pub use error::Error;
+pub use event::Event;
+pub use solution::Solution;
+
+use twine_core::{Model, Observer, OptimizationProblem};
+
+use search::search;
 
 /// Finds the minimum of the objective using golden section search.
-pub fn minimize<M, P>(_model: &M, _problem: &P, _bracket: [f64; 2])
+///
+/// # Errors
+///
+/// Returns an error if the model or problem fails during evaluation.
+pub fn minimize<M, P, Obs>(
+    model: &M,
+    problem: &P,
+    bracket: [f64; 2],
+    config: &Config,
+    observer: Obs,
+) -> Result<Solution<M::Input, M::Output>, Error>
+where
+    M: Model,
+    P: OptimizationProblem<1, Input = M::Input, Output = M::Output>,
+    Obs: for<'a> Observer<Event<'a, M, P>, Action>,
+{
+    search(model, problem, bracket, config, observer, |v| v)
+}
+
+/// Finds the minimum of the objective without observer support.
+///
+/// This is a convenience wrapper around [`minimize`] that uses a no-op observer.
+///
+/// # Errors
+///
+/// Returns an error if the model or problem fails during evaluation.
+pub fn minimize_unobserved<M, P>(
+    model: &M,
+    problem: &P,
+    bracket: [f64; 2],
+    config: &Config,
+) -> Result<Solution<M::Input, M::Output>, Error>
 where
     M: Model,
     P: OptimizationProblem<1, Input = M::Input, Output = M::Output>,
 {
-    todo!("golden section minimize implementation")
+    minimize(model, problem, bracket, config, ())
 }
 
 /// Finds the maximum of the objective using golden section search.
 ///
-/// Negates the objective using [`NegateObjective`] and delegates to [`minimize`].
-pub fn maximize<M, P>(model: &M, problem: &P, bracket: [f64; 2])
+/// # Errors
+///
+/// Returns an error if the model or problem fails during evaluation.
+pub fn maximize<M, P, Obs>(
+    model: &M,
+    problem: &P,
+    bracket: [f64; 2],
+    config: &Config,
+    observer: Obs,
+) -> Result<Solution<M::Input, M::Output>, Error>
+where
+    M: Model,
+    P: OptimizationProblem<1, Input = M::Input, Output = M::Output>,
+    Obs: for<'a> Observer<Event<'a, M, P>, Action>,
+{
+    search(model, problem, bracket, config, observer, |v| -v)
+}
+
+/// Finds the maximum of the objective without observer support.
+///
+/// This is a convenience wrapper around [`maximize`] that uses a no-op observer.
+///
+/// # Errors
+///
+/// Returns an error if the model or problem fails during evaluation.
+pub fn maximize_unobserved<M, P>(
+    model: &M,
+    problem: &P,
+    bracket: [f64; 2],
+    config: &Config,
+) -> Result<Solution<M::Input, M::Output>, Error>
 where
     M: Model,
     P: OptimizationProblem<1, Input = M::Input, Output = M::Output>,
 {
-    minimize(model, &NegateObjective(problem), bracket);
+    maximize(model, problem, bracket, config, ())
 }
