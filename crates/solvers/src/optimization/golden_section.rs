@@ -31,7 +31,7 @@ mod solution;
 pub use action::Action;
 pub use config::{Config, ConfigError};
 pub use error::Error;
-pub use event::Event;
+pub use event::{Event, Point};
 pub use solution::Solution;
 
 use twine_core::{Model, Observer, OptimizationProblem};
