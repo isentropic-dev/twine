@@ -2,8 +2,6 @@
 
 Rust framework for numerical problem solving. See README.md for usage examples.
 
-AI-assisted contributions are welcome when the agent's context includes this file.
-
 ## Crates
 
 - **twine-core** (`crates/core`): Shared traits and types
