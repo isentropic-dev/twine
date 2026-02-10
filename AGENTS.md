@@ -43,6 +43,10 @@ Actions steer behavior (stop early, assume sign/worse for recovery).
 - Config validation at entry, not per-iteration
 - `Solution` contains: status, solver variable, objective/residual, snapshot (input+output), iters
 
+## Workflow notes
+
+Feature branches may include temporary workflow docs (e.g. TODO.md). Do not merge them to main.
+
 ## Testing
 
 Use `approx::assert_relative_eq!` for floating point comparisons.
