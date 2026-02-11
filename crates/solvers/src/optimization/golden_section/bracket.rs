@@ -25,7 +25,6 @@ pub(super) struct GoldenBracket {
     pub(super) inner_right: f64,
 }
 
-#[allow(dead_code)]
 impl GoldenBracket {
     /// Creates a bracket from bounds with interior points positioned by the golden ratio.
     ///
@@ -67,6 +66,20 @@ impl GoldenBracket {
         self.left = self.inner_left;
         self.inner_left = self.inner_right;
         self.inner_right = self.left + INV_PHI * self.width();
+    }
+
+    /// Returns x for new `inner_left` after shrinking right (without mutating).
+    pub(super) fn new_inner_left(&self) -> f64 {
+        let new_right = self.inner_right;
+        let new_width = new_right - self.left;
+        self.left + (1.0 - INV_PHI) * new_width
+    }
+
+    /// Returns x for new `inner_right` after shrinking left (without mutating).
+    pub(super) fn new_inner_right(&self) -> f64 {
+        let new_left = self.inner_left;
+        let new_width = self.right - new_left;
+        new_left + INV_PHI * new_width
     }
 }
 
