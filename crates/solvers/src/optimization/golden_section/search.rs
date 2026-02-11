@@ -3,11 +3,11 @@ use twine_core::{Model, Observer, OptimizationProblem, Snapshot};
 use crate::optimization::evaluate::evaluate;
 
 use super::{
+    Action, Config, Error, Event, Point, Solution,
     bracket::GoldenBracket,
-    init::{init, InitResult},
+    init::{InitResult, init},
     solution::Status,
     state::ShrinkDirection,
-    Action, Config, Error, Event, Point, Solution,
 };
 
 /// Core golden section search implementation.
@@ -43,17 +43,15 @@ where
 
         let direction = state.next_action(&transform);
         let (eval_x, other) = match direction {
-            ShrinkDirection::ShrinkLeft(x) => (x, state.left()),
-            ShrinkDirection::ShrinkRight(x) => (x, state.right()),
+            ShrinkDirection::ShrinkLeft(x) => (x, state.right()),
+            ShrinkDirection::ShrinkRight(x) => (x, state.left()),
         };
 
         let outcome = eval_and_observe(model, problem, eval_x, other, &mut observer)?;
 
         let (point, snapshot) = match outcome {
             EvalOutcome::Continue { point, snapshot } => (point, Some(snapshot)),
-            EvalOutcome::AssumeWorse => {
-                (Point::new(eval_x, transform(f64::INFINITY)), None)
-            }
+            EvalOutcome::AssumeWorse => (Point::new(eval_x, transform(f64::INFINITY)), None),
             EvalOutcome::StopEarly => {
                 return Ok(state.into_solution(Status::StoppedByObserver, iter));
             }
@@ -73,7 +71,10 @@ where
 // ============================================================================
 
 enum EvalOutcome<I, O> {
-    Continue { point: Point, snapshot: Snapshot<I, O> },
+    Continue {
+        point: Point,
+        snapshot: Snapshot<I, O>,
+    },
     AssumeWorse,
     StopEarly,
 }

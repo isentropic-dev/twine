@@ -1,9 +1,9 @@
 use twine_core::{Model, Observer, OptimizationProblem};
 
-use crate::optimization::evaluate::{evaluate, EvalError, Evaluation};
+use crate::optimization::evaluate::{EvalError, Evaluation, evaluate};
 
 use super::{
-    bracket::GoldenBracket, solution::Status, state::State, Action, Error, Event, Point, Solution,
+    Action, Error, Event, Point, Solution, bracket::GoldenBracket, solution::Status, state::State,
 };
 
 pub(super) enum InitResult<I, O> {
@@ -76,7 +76,11 @@ where
                 Some(Action::AssumeWorse) => {
                     let worse = Point::new(right_pt.x, transform(f64::INFINITY));
                     Ok(InitResult::Continue(State::new(
-                        *bracket, left_pt, worse, left_pt, left_eval.snapshot,
+                        *bracket,
+                        left_pt,
+                        worse,
+                        left_pt,
+                        left_eval.snapshot,
                     )))
                 }
                 None => {
@@ -93,7 +97,11 @@ where
             }
         }
 
-        Outcome::OneFailed { ok_eval, failed_x, err } => {
+        Outcome::OneFailed {
+            ok_eval,
+            failed_x,
+            err,
+        } => {
             let ok_pt = Point::from(&ok_eval);
             let action = Event::emit_failure(failed_x, ok_pt, &err, observer);
             match action {
@@ -112,7 +120,11 @@ where
                         (worse, ok_pt)
                     };
                     Ok(InitResult::Continue(State::new(
-                        *bracket, left_pt, right_pt, ok_pt, ok_eval.snapshot,
+                        *bracket,
+                        left_pt,
+                        right_pt,
+                        ok_pt,
+                        ok_eval.snapshot,
                     )))
                 }
                 None => Err(err.into()),
@@ -124,9 +136,11 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
     use std::convert::Infallible;
 
     use approx::assert_relative_eq;
+    use thiserror::Error;
 
     struct IdentityModel;
 
@@ -166,8 +180,8 @@ mod tests {
         let problem = ObjectiveIsOutput;
         let bracket = GoldenBracket::new([0.0, 10.0]);
 
-        let result = init(&model, &problem, &bracket, &mut (), &identity_transform)
-            .expect("should succeed");
+        let result =
+            init(&model, &problem, &bracket, &mut (), &identity_transform).expect("should succeed");
 
         let state = match result {
             InitResult::Continue(s) => s,
@@ -188,8 +202,14 @@ mod tests {
 
         let mut observer = |_: &Event<'_, _, _>| Some(Action::StopEarly);
 
-        let result = init(&model, &problem, &bracket, &mut observer, &identity_transform)
-            .expect("should succeed");
+        let result = init(
+            &model,
+            &problem,
+            &bracket,
+            &mut observer,
+            &identity_transform,
+        )
+        .expect("should succeed");
 
         assert!(matches!(result, InitResult::StopEarly(_)));
     }
@@ -202,8 +222,14 @@ mod tests {
 
         let mut observer = |_: &Event<'_, _, _>| Some(Action::AssumeWorse);
 
-        let result = init(&model, &problem, &bracket, &mut observer, &identity_transform)
-            .expect("should succeed");
+        let result = init(
+            &model,
+            &problem,
+            &bracket,
+            &mut observer,
+            &identity_transform,
+        )
+        .expect("should succeed");
 
         let state = match result {
             InitResult::Continue(s) => s,
@@ -216,8 +242,6 @@ mod tests {
     }
 
     // --- One failed tests ---
-
-    use thiserror::Error;
 
     #[derive(Debug, Error)]
     #[error("fails above {threshold}")]
@@ -236,7 +260,9 @@ mod tests {
 
         fn call(&self, x: &f64) -> Result<f64, Self::Error> {
             if *x > self.threshold {
-                Err(ThresholdError { threshold: self.threshold })
+                Err(ThresholdError {
+                    threshold: self.threshold,
+                })
             } else {
                 Ok(*x)
             }
@@ -269,8 +295,14 @@ mod tests {
             }
         };
 
-        let result = init(&model, &problem, &bracket, &mut observer, &identity_transform)
-            .expect("should recover");
+        let result = init(
+            &model,
+            &problem,
+            &bracket,
+            &mut observer,
+            &identity_transform,
+        )
+        .expect("should recover");
 
         let state = match result {
             InitResult::Continue(s) => s,
@@ -296,8 +328,14 @@ mod tests {
             }
         };
 
-        let result = init(&model, &problem, &bracket, &mut observer, &identity_transform)
-            .expect("should succeed");
+        let result = init(
+            &model,
+            &problem,
+            &bracket,
+            &mut observer,
+            &identity_transform,
+        )
+        .expect("should succeed");
 
         assert!(matches!(result, InitResult::StopEarly(_)));
     }

@@ -6,7 +6,7 @@ use thiserror::Error;
 use twine_core::{Model, OptimizationProblem};
 
 use super::{
-    Action, Config, Error, Event, Status, maximize_unobserved, minimize, minimize_unobserved,
+    Action, Config, Error, Event, Point, Status, maximize_unobserved, minimize, minimize_unobserved,
 };
 
 /// A simple polynomial: f(x) = x³ - 3x.
@@ -108,8 +108,8 @@ fn assume_worse_discards_from_best() {
 
     let config = Config::new(1, 1e-12, 1e-12).unwrap();
 
-    let solution = minimize(&model, &problem, [0.0, 10.0], &config, observer)
-        .expect("should complete");
+    let solution =
+        minimize(&model, &problem, [0.0, 10.0], &config, observer).expect("should complete");
 
     assert_eq!(solution.status, Status::MaxIters);
 
@@ -152,8 +152,8 @@ fn assume_worse_steers_search() {
 
     let config = Config::new(20, 1e-12, 1e-12).unwrap();
 
-    let solution = minimize(&model, &problem, [0.0, 10.0], &config, observer)
-        .expect("should complete");
+    let solution =
+        minimize(&model, &problem, [0.0, 10.0], &config, observer).expect("should complete");
 
     // Init left (~3.82) is the only low-x point not marked AssumeWorse.
     // All other low-x evaluations get score = infinity, steering search right.
@@ -224,8 +224,8 @@ fn assume_worse_steers_away_from_true_minimum() {
 
     let config = Config::new(30, 1e-12, 1e-12).unwrap();
 
-    let solution = minimize(&model, &problem, [0.0, 10.0], &config, observer)
-        .expect("should complete");
+    let solution =
+        minimize(&model, &problem, [0.0, 10.0], &config, observer).expect("should complete");
 
     // Search was steered away from x > 6.
     // Without steering, solution.x would be ~5. With steering, it should be < 5.
@@ -333,4 +333,77 @@ fn loop_failure_without_action_errors() {
     let result = minimize(&model, &problem, [0.0, 10.0], &Config::default(), observer);
 
     assert!(matches!(result, Err(Error::Model(_))));
+}
+
+#[test]
+fn event_other_is_always_better_interior_point() {
+    // Verify the invariant: event.other() is always the better of the two
+    // interior points (the one the solver would keep if forced to choose).
+    //
+    // We track both interior points across iterations and assert that
+    // other matches the one with lower objective (for minimization).
+
+    use std::cell::RefCell;
+
+    let model = Cubic;
+    let problem = ObjectiveOutput;
+
+    // Track interior points: (left, right) after each state update.
+    // Init: left ~3.82 (obj ~-8.47), right ~6.18 (obj ~217.5)
+    // After init, left is better.
+    let interior_points: RefCell<Option<(Point, Point)>> = RefCell::new(None);
+
+    let observer = |event: &Event<'_, _, _>| {
+        let point = match event {
+            Event::Evaluated { point, .. } => *point,
+            _ => panic!("unexpected failure event"),
+        };
+        let other = event.other();
+
+        let mut points = interior_points.borrow_mut();
+
+        if let Some((left, right)) = *points {
+            // Determine which interior point is better (lower objective for minimize).
+            let better = if left.objective <= right.objective {
+                left
+            } else {
+                right
+            };
+
+            // These are the same Point copied, not computed approximations.
+            #[allow(clippy::float_cmp)]
+            let eq = other == better;
+            assert!(
+                eq,
+                "other should be better point: {other:?}, better={better:?}, left={left:?}, right={right:?}",
+            );
+
+            // Update points: figure out which side was replaced.
+            // The new point replaces the worse side.
+            if left.objective <= right.objective {
+                // Left was better, right gets replaced, old left becomes new right.
+                *points = Some((point, left));
+            } else {
+                // Right was better, left gets replaced, old right becomes new left.
+                *points = Some((right, point));
+            }
+        } else {
+            // First event (init right). other is init left.
+            // Set initial state: left = other, right = point.
+            *points = Some((other, point));
+        }
+
+        None
+    };
+
+    let config = Config::new(20, 1e-6, 1e-6).unwrap();
+    let solution =
+        minimize(&model, &problem, [-2.0, 2.0], &config, observer).expect("should complete");
+
+    // Sanity check: we ran multiple iterations (invariant was checked each time).
+    assert!(
+        solution.iters >= 10,
+        "expected multiple iterations, got {}",
+        solution.iters
+    );
 }
