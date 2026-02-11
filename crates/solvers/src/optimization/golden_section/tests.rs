@@ -9,16 +9,17 @@ use super::{
     Action, Config, Error, Event, Status, maximize_unobserved, minimize, minimize_unobserved,
 };
 
-/// A simple polynomial: f(x) = x³ - 4x.
-struct Polynomial;
+/// A simple polynomial: f(x) = x³ - 3x.
+/// Local min at x = 1 (value = -2), local max at x = -1 (value = 2).
+struct Cubic;
 
-impl Model for Polynomial {
+impl Model for Cubic {
     type Input = f64;
     type Output = f64;
     type Error = Infallible;
 
     fn call(&self, x: &f64) -> Result<f64, Self::Error> {
-        Ok(x.powi(3) - 4.0 * x)
+        Ok(x.powi(3) - 3.0 * x)
     }
 }
 
@@ -40,33 +41,27 @@ impl OptimizationProblem<1> for ObjectiveOutput {
 }
 
 #[test]
-fn minimizes_polynomial() {
-    let model = Polynomial;
+fn minimizes_cubic() {
+    let model = Cubic;
     let problem = ObjectiveOutput;
-
-    // Local minimum at x = 2/sqrt(3) ≈ 1.1547.
-    let expected_x = 2.0 / 3.0_f64.sqrt();
 
     let solution = minimize_unobserved(&model, &problem, [-2.0, 2.0], &Config::default())
         .expect("should converge");
 
     assert_eq!(solution.status, Status::Converged);
-    assert_relative_eq!(solution.x, expected_x, epsilon = 1e-8);
+    assert_relative_eq!(solution.x, 1.0, epsilon = 1e-8);
 }
 
 #[test]
-fn maximizes_polynomial() {
-    let model = Polynomial;
+fn maximizes_cubic() {
+    let model = Cubic;
     let problem = ObjectiveOutput;
-
-    // Local maximum at x = -2/sqrt(3) ≈ -1.1547.
-    let expected_x = -2.0 / 3.0_f64.sqrt();
 
     let solution = maximize_unobserved(&model, &problem, [-2.0, 2.0], &Config::default())
         .expect("should converge");
 
     assert_eq!(solution.status, Status::Converged);
-    assert_relative_eq!(solution.x, expected_x, epsilon = 1e-8);
+    assert_relative_eq!(solution.x, -1.0, epsilon = 1e-8);
 }
 
 /// Identity model: f(x) = x.
@@ -185,7 +180,7 @@ impl Model for Quadratic {
 
 #[test]
 fn observer_can_stop_early() {
-    let model = Polynomial;
+    let model = Cubic;
     let problem = ObjectiveOutput;
 
     let mut eval_count = 0;
