@@ -1,5 +1,2 @@
-mod negate;
-
-pub use negate::NegateObjective;
-
+pub mod evaluate;
 pub mod golden_section;

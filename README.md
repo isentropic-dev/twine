@@ -12,7 +12,7 @@ Define a model:
 use std::convert::Infallible;
 use twine_core::Model;
 
-/// A simple polynomial: f(x) = x³ - 4x
+/// A simple polynomial: f(x) = x³ - 3x
 struct Polynomial;
 
 impl Model for Polynomial {
@@ -21,7 +21,7 @@ impl Model for Polynomial {
     type Error = Infallible;
 
     fn call(&self, x: &f64) -> Result<f64, Self::Error> {
-        Ok(x.powi(3) - 4.0 * x)
+        Ok(x.powi(3) - 3.0 * x)
     }
 }
 ```
@@ -51,10 +51,10 @@ impl EquationProblem<1> for Target {
 }
 
 let solution = bisection::solve_unobserved(
-    &Polynomial, &Target(0.0), [1.0, 3.0], &bisection::Config::default(),
+    &Polynomial, &Target(-2.0), [0.0, 2.0], &bisection::Config::default(),
 ).unwrap();
 
-// solution.x = 2.0 (a root of x³ - 4x)
+// solution.x = 1.0 (where x³ - 3x = -2)
 ```
 
 Find the minimum or maximum by defining an optimization problem with the same model:
@@ -82,8 +82,8 @@ impl OptimizationProblem<1> for ObjectiveOutput {
 }
 
 // Use with any optimization solver
-// golden_section::minimize(&Polynomial, ObjectiveOutput, [-2.0, 2.0]) → x ≈ 1.0
-// golden_section::maximize(&Polynomial, ObjectiveOutput, [-2.0, 2.0]) → x ≈ -1.0
+// golden_section::minimize(&Polynomial, ObjectiveOutput, [-2.0, 2.0]) → x = 1.0
+// golden_section::maximize(&Polynomial, ObjectiveOutput, [-2.0, 2.0]) → x = -1.0
 // Same model, same problem, same bracket, just minimize vs maximize
 ```
 
