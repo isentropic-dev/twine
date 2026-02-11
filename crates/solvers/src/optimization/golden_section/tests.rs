@@ -236,8 +236,6 @@ fn assume_worse_steers_away_from_true_minimum() {
     );
 }
 
-// --- Phase 5: Loop failure handling ---
-
 /// Model that fails when x exceeds a threshold.
 struct ThresholdModel {
     threshold: f64,
