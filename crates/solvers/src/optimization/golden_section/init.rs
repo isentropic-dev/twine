@@ -11,10 +11,15 @@ pub(super) enum InitResult<I, O> {
     StopEarly(Solution<I, O>),
 }
 
+#[allow(clippy::too_many_lines)]
 /// Initialize state by evaluating both interior points.
 ///
 /// Only the second point (or failure) triggers an observer event.
 /// This is intentional: we need a valid `other` point for the event.
+///
+/// If both evaluations fail, we emit one failure event (with a synthetic
+/// `other`) for observer awareness, then return an error. Recovery isn't
+/// possible: `AssumeWorse` needs one valid point, `StopEarly` needs a snapshot.
 pub(super) fn init<M, P, Obs, F>(
     model: &M,
     problem: &P,
@@ -41,7 +46,14 @@ where
     let right = evaluate(model, problem, [bracket.inner_right]);
 
     let outcome = match (left, right) {
-        (Err(e), Err(_)) => return Err(e.into()),
+        (Err(left_err), Err(_)) => {
+            // Emit event so observer is notified, even though recovery isn't
+            // possible (AssumeWorse needs one valid point, StopEarly needs a
+            // snapshot). Use synthetic `other` since both failed.
+            let synthetic_other = Point::new(bracket.inner_right, f64::NAN);
+            Event::emit_failure(bracket.inner_left, synthetic_other, &left_err, observer);
+            return Err(left_err.into());
+        }
         (Ok(l), Ok(r)) => Outcome::BothOk(l, r),
         (Ok(ok), Err(e)) => Outcome::OneFailed {
             ok_eval: ok,
@@ -351,5 +363,23 @@ mod tests {
         let result = init(&model, &problem, &bracket, &mut (), &identity_transform);
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn both_failed_notifies_observer() {
+        let model = FailsAbove { threshold: -1.0 };
+        let problem = ObjectiveIsOutput;
+        let bracket = GoldenBracket::new([0.0, 10.0]);
+
+        let mut notified = false;
+        let mut observer = |event: &Event<'_, _, _>| {
+            if matches!(event, Event::ModelFailed { .. }) {
+                notified = true;
+            }
+            None
+        };
+
+        let _ = init(&model, &problem, &bracket, &mut observer, &identity_transform);
+        assert!(notified, "observer should be notified when both fail");
     }
 }
