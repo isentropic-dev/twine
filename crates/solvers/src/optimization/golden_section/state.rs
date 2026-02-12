@@ -86,7 +86,7 @@ impl<I, O> State<I, O> {
     /// Update best if this point has better score. Only call with real evaluations.
     pub(super) fn maybe_update_best<F: Fn(f64) -> f64>(
         &mut self,
-        point: &Point,
+        point: Point,
         transform: &F,
         snapshot: Snapshot<I, O>,
     ) {
@@ -94,7 +94,7 @@ impl<I, O> State<I, O> {
         let best_score = transform(self.best_point.objective);
 
         if point_score < best_score {
-            self.best_point = *point;
+            self.best_point = point;
             self.best_snapshot = snapshot;
         }
     }
