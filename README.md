@@ -12,7 +12,7 @@ Define a model:
 use std::convert::Infallible;
 use twine_core::Model;
 
-/// A simple polynomial: f(x) = x² - 4
+/// A simple polynomial: f(x) = x³ - 3x
 struct Polynomial;
 
 impl Model for Polynomial {
@@ -21,7 +21,7 @@ impl Model for Polynomial {
     type Error = Infallible;
 
     fn call(&self, x: &f64) -> Result<f64, Self::Error> {
-        Ok(x * x - 4.0)
+        Ok(x.powi(3) - 3.0 * x)
     }
 }
 ```
@@ -51,23 +51,23 @@ impl EquationProblem<1> for Target {
 }
 
 let solution = bisection::solve_unobserved(
-    &Polynomial, &Target(0.0), [0.0, 5.0], &bisection::Config::default(),
+    &Polynomial, &Target(-2.0), [0.0, 2.0], &bisection::Config::default(),
 ).unwrap();
 
-// solution.x ≈ 2.0 (a root of x² - 4)
+// solution.x = 1.0 (where x³ - 3x = -2)
 ```
 
-Find the minimum by defining an optimization problem with the same model:
+Find the minimum or maximum by defining an optimization problem with the same model:
 
 ```rust
 use std::convert::Infallible;
-use twine_core::MinimizationProblem;
-use twine_solvers::optimization::golden_section;
+use twine_core::OptimizationProblem;
 
-/// Minimize the model output.
-struct Minimum;
+/// Define an objective from the model input and output.
+/// Solvers choose whether to minimize or maximize.
+struct ObjectiveOutput;
 
-impl MinimizationProblem<1> for Minimum {
+impl OptimizationProblem<1> for ObjectiveOutput {
     type Input = f64;
     type Output = f64;
     type Error = Infallible;
@@ -81,11 +81,10 @@ impl MinimizationProblem<1> for Minimum {
     }
 }
 
-let solution = golden_section::solve_unobserved(
-    &Polynomial, &Minimum, [-5.0, 5.0], &golden_section::Config::default(),
-).unwrap();
-
-// solution.x ≈ 0.0 (same model, different question)
+// Use with any optimization solver
+// golden_section::minimize(&Polynomial, ObjectiveOutput, [-2.0, 2.0]) → x = 1.0
+// golden_section::maximize(&Polynomial, ObjectiveOutput, [-2.0, 2.0]) → x = -1.0
+// Same model, same problem, same bracket, just minimize vs maximize
 ```
 
 These examples use a simple polynomial, but the same pattern works with any `Model`, including large, multi-physics engineering systems.
@@ -116,7 +115,7 @@ impl<E: HasResidual, A: CanStopEarly> Observer<E, A> for GoodEnough {
 
 let observer = GoodEnough { tolerance: 0.1, min_iters: 5, iter: 0 };
 let solution = bisection::solve(
-    &Polynomial, &Target(0.0), [0.0, 5.0], &bisection::Config::default(), observer,
+    &Polynomial, &Target(0.0), [0.0, 3.0], &bisection::Config::default(), observer,
 ).unwrap();
 
 // iter 1: residual = 2.500000
