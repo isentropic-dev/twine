@@ -59,7 +59,7 @@ where
 
         state.apply(direction, point);
         if let Some(snap) = snapshot {
-            state.maybe_update_best(&point, &transform, snap);
+            state.maybe_update_best(point, &transform, snap);
         }
     }
 
