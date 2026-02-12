@@ -1,2 +1,2 @@
-pub mod evaluate;
+pub(crate) mod evaluate;
 pub mod golden_section;
