@@ -379,7 +379,13 @@ mod tests {
             None
         };
 
-        let _ = init(&model, &problem, &bracket, &mut observer, &identity_transform);
+        let _ = init(
+            &model,
+            &problem,
+            &bracket,
+            &mut observer,
+            &identity_transform,
+        );
         assert!(notified, "observer should be notified when both fail");
     }
 }
