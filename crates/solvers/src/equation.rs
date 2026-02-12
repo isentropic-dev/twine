@@ -1,4 +1,5 @@
-pub(crate) mod evaluate;
-pub(crate) use evaluate::{EvalError, EvaluateResult, Evaluation, evaluate};
+mod evaluate;
+
+pub use evaluate::{EvalError, EvaluateResult, Evaluation, evaluate};
 
 pub mod bisection;

@@ -1,2 +1,5 @@
-pub(crate) mod evaluate;
+mod evaluate;
+
+pub use evaluate::{EvalError, EvaluateResult, Evaluation, evaluate};
+
 pub mod golden_section;
