@@ -1,0 +1,20 @@
+[package]
+name = "twine-observers"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Reusable observers for the Twine framework."
+keywords = ["twine", "framework", "observers", "plotting"]
+
+[dependencies]
+twine-core = { workspace = true }
+
+# Plotting dependencies (behind feature gate)
+eframe = { version = "0.31", optional = true }
+egui_plot = { version = "0.31", optional = true }
+
+[features]
+plot = ["dep:eframe", "dep:egui_plot"]
