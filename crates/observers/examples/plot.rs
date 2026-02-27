@@ -7,17 +7,17 @@
 //!
 //! ```text
 //! cargo run --example plot --features plot -- bisect
-//! cargo run --example plot --features plot -- minimize
+//! cargo run --example plot --features plot -- maximize
 //! cargo run --example plot --features plot -- ode
 //! ```
 //!
 //! # Modes
 //!
 //! - **bisect** — Find the Dottie number (the unique fixed point of cos x).
-//!   Shows signed residual and bracket width converging to zero.
+//!   Shows x and residual converging as bisection homes in on ≈ 0.7391.
 //!
-//! - **minimize** — Find the minimum of x⁴ − 4x² on \[0, 3\].
-//!   Shows both interior points chasing the minimum at x = √2.
+//! - **maximize** — Find the maximum of sin(x) on \[0, π\].
+//!   Shows evaluated points on the curve clustering around (π/2, 1).
 //!
 //! - **ode** — Integrate an undamped simple harmonic oscillator with forward
 //!   Euler. Overlays the analytical solution to show energy drift over time —
@@ -35,11 +35,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mode = std::env::args().nth(1).unwrap_or_else(|| "bisect".into());
     match mode.as_str() {
         "bisect" => bisect(),
-        "minimize" => minimize(),
+        "maximize" => maximize(),
         "ode" => ode(),
         other => {
             eprintln!("Unknown mode: {other}");
-            eprintln!("Usage: plot [bisect|minimize|ode]");
+            eprintln!("Usage: plot [bisect|maximize|ode]");
             std::process::exit(1);
         }
     }
@@ -86,8 +86,8 @@ impl EquationProblem<1> for CosMinusX {
 /// directly.
 fn bisect() -> Result<(), Box<dyn Error>> {
     let mut iter = 0_u32;
+    let mut xs: Vec<[f64; 2]> = Vec::new();
     let mut residuals: Vec<[f64; 2]> = Vec::new();
-    let mut brackets: Vec<[f64; 2]> = Vec::new();
 
     bisection::solve(
         &Passthrough,
@@ -98,11 +98,9 @@ fn bisect() -> Result<(), Box<dyn Error>> {
             let n = f64::from(iter);
             iter += 1;
 
+            xs.push([n, event.x()]);
             if let Ok(eval) = event.result() {
                 residuals.push([n, eval.residuals[0]]);
-            }
-            if let bisection::Event::Midpoint { bracket, .. } = event {
-                brackets.push([n, bracket.width()]);
             }
 
             None
@@ -111,29 +109,25 @@ fn bisect() -> Result<(), Box<dyn Error>> {
 
     show_traces(
         "Bisection: cos(x) = x  →  Dottie number ≈ 0.7391",
-        vec![
-            ("Residual".into(), residuals),
-            ("Bracket width".into(), brackets),
-        ],
+        vec![("x".into(), xs), ("Residual".into(), residuals)],
         true,
     )?;
 
     Ok(())
 }
 
-// --- Minimize ----------------------------------------------------------------
+// --- Maximize ----------------------------------------------------------------
 
-/// Model that evaluates f(x) = x⁴ − 4x².
-struct Quartic;
+/// Model that evaluates sin(x).
+struct Sine;
 
-impl Model for Quartic {
+impl Model for Sine {
     type Input = f64;
     type Output = f64;
     type Error = Infallible;
 
     fn call(&self, input: &f64) -> Result<f64, Infallible> {
-        let x = *input;
-        Ok(x.powi(4) - 4.0 * x.powi(2))
+        Ok(input.sin())
     }
 }
 
@@ -154,21 +148,20 @@ impl OptimizationProblem<1> for DirectObjective {
     }
 }
 
-/// Minimize x⁴ − 4x² on [0, 3] and plot where golden section samples the
-/// function.
+/// Maximize sin(x) on [0, π] and plot where golden section samples the curve.
 ///
-/// The x-axis is the evaluated x value and the y-axis is the objective, so
-/// you're watching the function itself being probed. Points cluster around the
-/// minimum as the two interior points squeeze together.
-fn minimize() -> Result<(), Box<dyn Error>> {
+/// The x-axis is the evaluated x value and the y-axis is sin(x), so you're
+/// watching the sine curve being probed. Points cluster around the maximum at
+/// (π/2, 1) as the two interior points squeeze together.
+fn maximize() -> Result<(), Box<dyn Error>> {
     let mut points: Vec<[f64; 2]> = Vec::new();
 
-    golden_section::minimize(
-        &Quartic,
+    golden_section::maximize(
+        &Sine,
         &DirectObjective,
-        [0.0, 3.0],
+        [0.0, std::f64::consts::PI],
         &golden_section::Config::default(),
-        |event: &golden_section::Event<'_, Quartic, DirectObjective>| {
+        |event: &golden_section::Event<'_, Sine, DirectObjective>| {
             if let golden_section::Event::Evaluated { point, .. } = event {
                 points.push([point.x, point.objective]);
             }
@@ -178,7 +171,7 @@ fn minimize() -> Result<(), Box<dyn Error>> {
     )?;
 
     show_traces(
-        "Minimize: x⁴ − 4x²  →  minimum at (√2, −4) ≈ (1.414, −4)",
+        "Maximize: sin(x) on [0, π]  →  maximum at (π/2, 1) ≈ (1.571, 1)",
         vec![("Evaluated points".into(), points)],
         false,
     )?;
