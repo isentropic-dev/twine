@@ -131,13 +131,16 @@ impl CanAssumeWorse for golden_section::Action {
 
 #[cfg(test)]
 mod tests {
-    use std::convert::Infallible;
+    use super::*;
+
+    use std::{convert::Infallible, error::Error, fmt};
 
     use approx::assert_relative_eq;
     use twine_core::{EquationProblem, Model, OptimizationProblem};
-    use twine_solvers::optimization::golden_section::{self, Point};
-
-    use super::{HasObjective, HasResidual};
+    use twine_solvers::{
+        equation::bisection,
+        optimization::golden_section::{self, Point},
+    };
 
     // --- Minimal stubs ---
 
@@ -156,13 +159,13 @@ mod tests {
     #[derive(Debug)]
     struct Failure;
 
-    impl std::fmt::Display for Failure {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    impl fmt::Display for Failure {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             write!(f, "failure")
         }
     }
 
-    impl std::error::Error for Failure {}
+    impl Error for Failure {}
 
     struct FailingModel;
 
@@ -226,8 +229,6 @@ mod tests {
 
     #[test]
     fn bisection_residual_ok() {
-        use twine_solvers::equation::bisection;
-
         // Drive the solver one step to get a real event with a valid residual.
         // LinearProblem: residual = output = input = x, so residual ≠ NAN.
         let model = Identity;
@@ -251,8 +252,6 @@ mod tests {
 
     #[test]
     fn bisection_residual_nan_on_model_error() {
-        use twine_solvers::equation::bisection;
-
         // FailingModel always errors, so every event result is Err → NAN.
         let model = FailingModel;
         let problem = LinearProblem;
