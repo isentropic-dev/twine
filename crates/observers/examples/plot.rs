@@ -154,13 +154,13 @@ impl OptimizationProblem<1> for DirectObjective {
     }
 }
 
-/// Minimize x⁴ − 4x² on [0, 3] and plot both interior points converging.
+/// Minimize x⁴ − 4x² on [0, 3] and plot where golden section samples the
+/// function.
 ///
-/// The `other` point in each golden section event is always the current best,
-/// so plotting both `point.objective` and `other.objective` shows the two
-/// interior points chasing the minimum together.
+/// The x-axis is the evaluated x value and the y-axis is the objective, so
+/// you're watching the function itself being probed. Points cluster around the
+/// minimum as the two interior points squeeze together.
 fn minimize() -> Result<(), Box<dyn Error>> {
-    let mut iter = 0_u32;
     let mut current: Vec<[f64; 2]> = Vec::new();
     let mut best: Vec<[f64; 2]> = Vec::new();
 
@@ -170,12 +170,9 @@ fn minimize() -> Result<(), Box<dyn Error>> {
         [0.0, 3.0],
         &golden_section::Config::default(),
         |event: &golden_section::Event<'_, Quartic, DirectObjective>| {
-            let n = f64::from(iter);
-            iter += 1;
-
             if let golden_section::Event::Evaluated { point, other, .. } = event {
-                current.push([n, point.objective]);
-                best.push([n, other.objective]);
+                current.push([point.x, point.objective]);
+                best.push([other.x, other.objective]);
             }
 
             None
@@ -183,9 +180,9 @@ fn minimize() -> Result<(), Box<dyn Error>> {
     )?;
 
     show_traces(
-        "Minimize: x⁴ − 4x²  →  minimum at x = √2 ≈ 1.414",
+        "Minimize: x⁴ − 4x²  →  minimum at (√2, −4) ≈ (1.414, −4)",
         vec![
-            ("Current point".into(), current),
+            ("Evaluated point".into(), current),
             ("Best so far".into(), best),
         ],
         true,
