@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 
-members = ["crates/core", "crates/solvers"]
+members = ["crates/core", "crates/observers", "crates/solvers"]
 
 [workspace.package]
 version = "0.5.0"
@@ -15,3 +15,4 @@ readme = "README.md"
 approx = "0.5.1"
 thiserror = "2.0.12"
 twine-core = { version = "0.5.0", path = "crates/core" }
+twine-observers = { version = "0.5.0", path = "crates/observers" }
