@@ -17,5 +17,8 @@ twine-solvers = { workspace = true }
 eframe = { version = "0.31", optional = true }
 egui_plot = { version = "0.31", optional = true }
 
+[dev-dependencies]
+approx = { workspace = true }
+
 [features]
 plot = ["dep:eframe", "dep:egui_plot"]

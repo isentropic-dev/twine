@@ -133,6 +133,7 @@ impl CanAssumeWorse for golden_section::Action {
 mod tests {
     use std::convert::Infallible;
 
+    use approx::assert_relative_eq;
     use twine_core::{EquationProblem, Model, OptimizationProblem};
     use twine_solvers::optimization::golden_section::{self, Point};
 
@@ -282,7 +283,7 @@ mod tests {
                 output: &output,
                 other: Point::new(0.5, 4.0),
             };
-        assert_eq!(event.objective(), 7.5);
+        assert_relative_eq!(event.objective(), 7.5);
     }
 
     #[test]
