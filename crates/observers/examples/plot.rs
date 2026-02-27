@@ -161,8 +161,7 @@ impl OptimizationProblem<1> for DirectObjective {
 /// you're watching the function itself being probed. Points cluster around the
 /// minimum as the two interior points squeeze together.
 fn minimize() -> Result<(), Box<dyn Error>> {
-    let mut current: Vec<[f64; 2]> = Vec::new();
-    let mut best: Vec<[f64; 2]> = Vec::new();
+    let mut points: Vec<[f64; 2]> = Vec::new();
 
     golden_section::minimize(
         &Quartic,
@@ -170,9 +169,8 @@ fn minimize() -> Result<(), Box<dyn Error>> {
         [0.0, 3.0],
         &golden_section::Config::default(),
         |event: &golden_section::Event<'_, Quartic, DirectObjective>| {
-            if let golden_section::Event::Evaluated { point, other, .. } = event {
-                current.push([point.x, point.objective]);
-                best.push([other.x, other.objective]);
+            if let golden_section::Event::Evaluated { point, .. } = event {
+                points.push([point.x, point.objective]);
             }
 
             None
@@ -181,11 +179,8 @@ fn minimize() -> Result<(), Box<dyn Error>> {
 
     show_traces(
         "Minimize: x⁴ − 4x²  →  minimum at (√2, −4) ≈ (1.414, −4)",
-        vec![
-            ("Evaluated point".into(), current),
-            ("Best so far".into(), best),
-        ],
-        true,
+        vec![("Evaluated points".into(), points)],
+        false,
     )?;
 
     Ok(())
