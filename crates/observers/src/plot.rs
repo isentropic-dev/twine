@@ -202,6 +202,7 @@ mod tests {
     use super::*;
     use twine_core::Observer;
 
+    #[derive(Clone, Copy)]
     struct Event {
         x: Option<f64>,
         a: Option<f64>,
