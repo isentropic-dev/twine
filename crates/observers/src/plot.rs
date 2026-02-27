@@ -32,7 +32,7 @@ type Extractor<E> = Box<dyn Fn(&E) -> Option<f64>>;
 ///
 /// let solution = solver::solve(&model, &problem, bracket, &config, &mut observer);
 ///
-/// observer.show("Solver trace"); // blocks until the window is closed
+/// observer.show("Solver trace")?; // blocks until the window is closed
 /// ```
 pub struct PlotObserver<E> {
     x_extractor: Extractor<E>,
@@ -79,12 +79,9 @@ impl<E> PlotObserver<E> {
 
     /// Opens a blocking egui window that displays all collected traces.
     ///
-    /// This call blocks until the window is closed by the user.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the native window cannot be created (e.g. no display available).
-    pub fn show(self, title: &str) {
+    /// Returns an error if the native window cannot be created.
+    /// Blocks until the window is closed by the user.
+    pub fn show(self, title: &str) -> Result<(), eframe::Error> {
         let options = eframe::NativeOptions::default();
         let title = title.to_string();
         let traces: Vec<(String, Vec<[f64; 2]>)> = self
@@ -98,7 +95,6 @@ impl<E> PlotObserver<E> {
             options,
             Box::new(move |_cc| Ok(Box::new(PlotApp { traces }))),
         )
-        .expect("failed to start egui window");
     }
 }
 
@@ -130,5 +126,73 @@ impl eframe::App for PlotApp {
                 }
             });
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use twine_core::Observer;
+
+    struct Event {
+        x: Option<f64>,
+        a: Option<f64>,
+        b: Option<f64>,
+    }
+
+    fn observer() -> PlotObserver<Event> {
+        PlotObserver::new(|e: &Event| e.x)
+            .trace("a", |e| e.a)
+            .trace("b", |e| e.b)
+    }
+
+    fn points(obs: &PlotObserver<Event>, trace: usize) -> &[[f64; 2]] {
+        &obs.traces[trace].points
+    }
+
+    // Helper to call observe without needing to specify the action type at each call site.
+    fn feed(obs: &mut PlotObserver<Event>, event: Event) {
+        let _: Option<()> = obs.observe(&event);
+    }
+
+    #[test]
+    fn records_point_when_both_x_and_y_are_some() {
+        let mut obs = observer();
+        feed(&mut obs, Event { x: Some(1.0), a: Some(2.0), b: Some(3.0) });
+        assert_eq!(points(&obs, 0), [[1.0, 2.0]]);
+        assert_eq!(points(&obs, 1), [[1.0, 3.0]]);
+    }
+
+    #[test]
+    fn skips_all_traces_when_x_is_none() {
+        let mut obs = observer();
+        feed(&mut obs, Event { x: None, a: Some(1.0), b: Some(2.0) });
+        assert!(points(&obs, 0).is_empty());
+        assert!(points(&obs, 1).is_empty());
+    }
+
+    #[test]
+    fn skips_only_affected_trace_when_y_is_none() {
+        let mut obs = observer();
+        feed(&mut obs, Event { x: Some(1.0), a: None, b: Some(3.0) });
+        assert!(points(&obs, 0).is_empty());
+        assert_eq!(points(&obs, 1), [[1.0, 3.0]]);
+    }
+
+    #[test]
+    fn accumulates_points_across_multiple_events() {
+        let mut obs = observer();
+        feed(&mut obs, Event { x: Some(1.0), a: Some(10.0), b: Some(20.0) });
+        feed(&mut obs, Event { x: Some(2.0), a: Some(11.0), b: Some(21.0) });
+        feed(&mut obs, Event { x: Some(3.0), a: Some(12.0), b: Some(22.0) });
+        assert_eq!(points(&obs, 0), [[1.0, 10.0], [2.0, 11.0], [3.0, 12.0]]);
+        assert_eq!(points(&obs, 1), [[1.0, 20.0], [2.0, 21.0], [3.0, 22.0]]);
+    }
+
+    #[test]
+    fn never_returns_an_action() {
+        let mut obs: PlotObserver<Event> = PlotObserver::new(|e: &Event| e.x);
+        let action: Option<()> = obs.observe(&Event { x: Some(1.0), a: None, b: None });
+        assert!(action.is_none());
     }
 }
