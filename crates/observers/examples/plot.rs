@@ -9,6 +9,7 @@
 //! cargo run --example plot --features plot -- bisect
 //! cargo run --example plot --features plot -- maximize
 //! cargo run --example plot --features plot -- ode
+//! cargo run --example plot --features plot -- ode 0.2
 //! ```
 //!
 //! # Modes
@@ -19,9 +20,9 @@
 //! - **maximize** — Find the maximum of sin(x) on \[0, π\].
 //!   Shows evaluated points on the curve clustering around (π/2, 1).
 //!
-//! - **ode** — Integrate an undamped simple harmonic oscillator with forward
-//!   Euler. Overlays the analytical solution to show energy drift over time —
-//!   a vivid illustration of why step size matters.
+//! - **ode [dt]** — Integrate a damped oscillator with forward Euler over 30
+//!   seconds. Overlays the analytical solution; drift accumulates with larger
+//!   step sizes. Try `0.05` (default), `0.2`, `0.5` to see the difference.
 
 use std::{convert::Infallible, error::Error};
 
@@ -36,10 +37,22 @@ fn main() -> Result<(), Box<dyn Error>> {
     match mode.as_str() {
         "bisect" => bisect(),
         "maximize" => maximize(),
-        "ode" => ode(),
+        "ode" => {
+            let dt = std::env::args()
+                .nth(2)
+                .as_deref()
+                .map(str::parse::<f64>)
+                .transpose()
+                .unwrap_or_else(|_| {
+                    eprintln!("Invalid step size — expected a number, e.g. 0.1");
+                    std::process::exit(1);
+                })
+                .unwrap_or(0.05);
+            ode(dt)
+        }
         other => {
             eprintln!("Unknown mode: {other}");
-            eprintln!("Usage: plot [bisect|maximize|ode]");
+            eprintln!("Usage: plot [bisect|maximize|ode [dt]]");
             std::process::exit(1);
         }
     }
@@ -299,7 +312,7 @@ impl OdeProblem for OscProblem {
 ///
 /// [`PlotObserver`] is used here directly since euler events carry no lifetime
 /// parameters.
-fn ode() -> Result<(), Box<dyn Error>> {
+fn ode(dt: f64) -> Result<(), Box<dyn Error>> {
     let zeta = 0.1_f64;
     let omega0 = 1.0_f64;
     let omega_d = (omega0.powi(2) - zeta.powi(2)).sqrt();
@@ -329,10 +342,15 @@ fn ode() -> Result<(), Box<dyn Error>> {
             })
             .with_legend();
 
-    // dt=0.05, 600 steps → 30 seconds ≈ 5 full cycles.
-    euler::solve(&model, &OscProblem, initial, 0.05_f64, 600, &mut observer)?;
+    // Simulate 30 seconds regardless of step size.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    // TODO: remove once we have a cleaner way to derive step count from duration
+    let steps = (30.0 / dt).round() as usize;
+    euler::solve(&model, &OscProblem, initial, dt, steps, &mut observer)?;
 
-    observer.show("ODE: Damped oscillator (ζ=0.1) — Euler vs. analytical")?;
+    observer.show(&format!(
+        "ODE: Damped oscillator (ζ=0.1, dt={dt}) — Euler vs. analytical"
+    ))?;
 
     Ok(())
 }
