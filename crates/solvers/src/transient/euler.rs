@@ -323,6 +323,75 @@ mod tests {
         assert_relative_eq!(solution.history[0].input.position.0, 5.0);
     }
 
+    /// Problem that clamps position to a maximum value in `finalize_step`.
+    struct ClampedMotionProblem {
+        max_position: f64,
+    }
+
+    impl OdeProblem for ClampedMotionProblem {
+        type Input = Input;
+        type Output = Output;
+        type Delta = f64;
+        type State = Position;
+        type Error = Infallible;
+
+        fn state(&self, input: &Self::Input) -> Result<Self::State, Self::Error> {
+            Ok(input.position)
+        }
+
+        fn derivative(
+            &self,
+            _input: &Self::Input,
+            output: &Self::Output,
+        ) -> Result<DerivativeOf<Self::State, Self::Delta>, Self::Error> {
+            Ok(output.velocity)
+        }
+
+        fn build_input(
+            &self,
+            base: &Self::Input,
+            state: &Self::State,
+            delta: &Self::Delta,
+        ) -> Result<Self::Input, Self::Error> {
+            Ok(Input {
+                position: *state,
+                time: base.time + delta,
+            })
+        }
+
+        fn finalize_step(
+            &self,
+            mut next_input: Self::Input,
+            _prev_input: &Self::Input,
+            _prev_output: &Self::Output,
+            _step_delta: &Self::Delta,
+        ) -> Result<Self::Input, Self::Error> {
+            next_input.position.0 = next_input.position.0.min(self.max_position);
+            Ok(next_input)
+        }
+    }
+
+    #[test]
+    fn finalize_step_is_called_and_applied() {
+        // Model moves at v=10, but finalize_step clamps position to 0.5.
+        // After the first step (dt=0.1): raw position = 1.0, clamped to 0.5.
+        // Subsequent steps integrate from the clamped position, so position
+        // stays at 0.5 for all remaining steps.
+        let model = ConstantVelocityModel { velocity: 10.0 };
+        let problem = ClampedMotionProblem { max_position: 0.5 };
+        let initial = Input {
+            position: Position(0.0),
+            time: 0.0,
+        };
+
+        let solution = solve_unobserved(&model, &problem, initial, 0.1, 5).expect("should solve");
+
+        assert_eq!(solution.status, Status::Complete);
+        for snapshot in &solution.history[1..] {
+            assert_relative_eq!(snapshot.input.position.0, 0.5);
+        }
+    }
+
     #[test]
     fn step_numbers_start_at_zero() {
         let model = ConstantVelocityModel { velocity: 1.0 };
