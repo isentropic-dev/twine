@@ -121,7 +121,7 @@ impl eframe::App for PlotApp {
         egui::CentralPanel::default().show(ctx, |ui| {
             Plot::new("plot_observer").show(ui, |plot_ui| {
                 for (name, points) in &self.traces {
-                    let plot_points = PlotPoints::new(points.clone());
+                    let plot_points = PlotPoints::from_iter(points.iter().copied());
                     plot_ui.line(Line::new(plot_points).name(name));
                 }
             });
