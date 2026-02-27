@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 readme.workspace = true
 description = "Reusable observers for the Twine framework."
-keywords = ["twine", "framework", "observers", "plotting"]
+keywords = ["twine", "framework", "observers", "plot", "numerical"]
 
 [dependencies]
 twine-core = { workspace = true }
