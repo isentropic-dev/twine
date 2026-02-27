@@ -148,13 +148,21 @@ impl OptimizationProblem<1> for DirectObjective {
     }
 }
 
-/// Maximize sin(x) on [0, π] and plot where golden section samples the curve.
+/// Maximize sin(x) on [0, π] and show where golden section samples the curve.
 ///
-/// The x-axis is the evaluated x value and the y-axis is sin(x), so you're
-/// watching the sine curve being probed. Points cluster around the maximum at
-/// (π/2, 1) as the two interior points squeeze together.
+/// Golden section converges quickly, so the evaluations are sparse. A dense
+/// background trace shows the full sine curve for context; the evaluated points
+/// sit on top of it, converging toward the peak at (π/2, 1).
 fn maximize() -> Result<(), Box<dyn Error>> {
-    let mut points: Vec<[f64; 2]> = Vec::new();
+    // Dense background curve for context.
+    let curve: Vec<[f64; 2]> = (0_u32..=300)
+        .map(|i| {
+            let x = std::f64::consts::PI * f64::from(i) / 300.0;
+            [x, x.sin()]
+        })
+        .collect();
+
+    let mut evaluations: Vec<[f64; 2]> = Vec::new();
 
     golden_section::maximize(
         &Sine,
@@ -163,7 +171,7 @@ fn maximize() -> Result<(), Box<dyn Error>> {
         &golden_section::Config::default(),
         |event: &golden_section::Event<'_, Sine, DirectObjective>| {
             if let golden_section::Event::Evaluated { point, .. } = event {
-                points.push([point.x, point.objective]);
+                evaluations.push([point.x, point.objective]);
             }
 
             None
@@ -172,8 +180,11 @@ fn maximize() -> Result<(), Box<dyn Error>> {
 
     show_traces(
         "Maximize: sin(x) on [0, π]  →  maximum at (π/2, 1) ≈ (1.571, 1)",
-        vec![("Evaluated points".into(), points)],
-        false,
+        vec![
+            ("sin(x)".into(), curve),
+            ("Evaluated points".into(), evaluations),
+        ],
+        true,
     )?;
 
     Ok(())
@@ -220,8 +231,9 @@ struct OscOutput {
     d_velocity: f64,
 }
 
-/// Model for the simple harmonic oscillator: ẋ = v, v̇ = −ω₀²x.
+/// Model for the damped harmonic oscillator: ẋ = v, v̇ = −2ζω₀v − ω₀²x.
 struct OscModel {
+    zeta: f64,
     omega0: f64,
 }
 
@@ -233,7 +245,8 @@ impl Model for OscModel {
     fn call(&self, input: &OscInput) -> Result<OscOutput, Infallible> {
         Ok(OscOutput {
             d_position: input.state.velocity,
-            d_velocity: -self.omega0.powi(2) * input.state.position,
+            d_velocity: -2.0 * self.zeta * self.omega0 * input.state.velocity
+                - self.omega0.powi(2) * input.state.position,
         })
     }
 }
@@ -276,18 +289,22 @@ impl OdeProblem for OscProblem {
     }
 }
 
-/// Integrate an undamped SHO with forward Euler and compare to the analytical
-/// solution cos(t).
+/// Integrate a damped oscillator with forward Euler and compare to the
+/// analytical solution.
 ///
-/// Forward Euler introduces a small energy gain at every step. Over many steps
-/// this accumulates visibly: the numerical amplitude grows while the analytical
-/// solution stays bounded. The longer the simulation runs, the more dramatic
-/// the divergence.
+/// With ζ=0.1 the system oscillates through several cycles before settling.
+/// Euler tracks the shape well but accumulates a small phase and amplitude
+/// error over time — visible by the end of the run as the two traces drift
+/// slightly apart.
 ///
 /// [`PlotObserver`] is used here directly since euler events carry no lifetime
 /// parameters.
 fn ode() -> Result<(), Box<dyn Error>> {
-    let model = OscModel { omega0: 1.0 };
+    let zeta = 0.1_f64;
+    let omega0 = 1.0_f64;
+    let omega_d = (omega0.powi(2) - zeta.powi(2)).sqrt();
+
+    let model = OscModel { zeta, omega0 };
     let initial = OscInput {
         state: OscState {
             position: 1.0,
@@ -296,21 +313,26 @@ fn ode() -> Result<(), Box<dyn Error>> {
         t: 0.0,
     };
 
+    // Analytical solution for x(0)=1, v(0)=0:
+    // x(t) = e^(-ζt) * [cos(ω_d·t) + (ζ/ω_d)·sin(ω_d·t)]
+    let analytical = move |t: f64| {
+        (-zeta * t).exp() * ((omega_d * t).cos() + (zeta / omega_d) * (omega_d * t).sin())
+    };
+
     let mut observer =
         PlotObserver::new(|event: &euler::Event<OscInput, OscOutput>| Some(event.snapshot.input.t))
             .trace("Euler (numerical)", |event| {
                 Some(event.snapshot.input.state.position)
             })
-            .trace("Analytical cos(t)", |event| {
-                Some(event.snapshot.input.t.cos())
+            .trace("Analytical", move |event| {
+                Some(analytical(event.snapshot.input.t))
             })
             .with_legend();
 
-    // dt=0.1, 500 steps → 50 seconds. Energy grows by (1 + dt²)^steps ≈ 142x,
-    // so amplitude grows by √142 ≈ 12x. Unmistakable.
-    euler::solve(&model, &OscProblem, initial, 0.1_f64, 500, &mut observer)?;
+    // dt=0.05, 600 steps → 30 seconds ≈ 5 full cycles.
+    euler::solve(&model, &OscProblem, initial, 0.05_f64, 600, &mut observer)?;
 
-    observer.show("ODE: Undamped SHO — Euler energy drift vs. analytical cos(t)")?;
+    observer.show("ODE: Damped oscillator (ζ=0.1) — Euler vs. analytical")?;
 
     Ok(())
 }
