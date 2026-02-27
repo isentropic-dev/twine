@@ -3042,6 +3042,7 @@ dependencies = [
  "eframe",
  "egui_plot",
  "twine-core",
+ "twine-solvers",
 ]
 
 [[package]]

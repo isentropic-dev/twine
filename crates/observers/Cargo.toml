@@ -11,6 +11,7 @@ keywords = ["twine", "framework", "observers", "plotting"]
 
 [dependencies]
 twine-core = { workspace = true }
+twine-solvers = { workspace = true }
 
 # Plotting dependencies (behind feature gate)
 eframe = { version = "0.31", optional = true }

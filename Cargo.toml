@@ -16,3 +16,4 @@ approx = "0.5.1"
 thiserror = "2.0.12"
 twine-core = { version = "0.5.0", path = "crates/core" }
 twine-observers = { version = "0.5.0", path = "crates/observers" }
+twine-solvers = { version = "0.5.0", path = "crates/solvers" }
