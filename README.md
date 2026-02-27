@@ -126,13 +126,13 @@ let solution = bisection::solve(
 // solution.status = StoppedByObserver
 ```
 
-`GoodEnough` is not tied to bisection. It works with any solver whose events expose a residual and whose actions support early stopping.
+`GoodEnough` is not tied to bisection. It works with any solver whose events expose a residual and whose actions support early stopping. The real power shows up in domain-specific observers — for example, an observer that recognizes a thermodynamic constraint violation and tells the solver to search elsewhere, turning an unsolvable problem into a solvable one.
 
 ## Crates
 
 - **`twine-core`**: The `Model` trait, Problem traits, and the `Observer` trait.
 - **`twine-solvers`**: Solver algorithms organized by problem type (e.g., `equation::bisection`, `optimization::golden_section`).
-- **`twine-observers`**: Capability traits for solver events and actions, plus ready-to-use `Observer` implementations for plotting, logging, and persistence.
+- **`twine-observers`**: Capability traits for cross-solver observers (e.g., `HasResidual`, `CanStopEarly`) and visualization tools like `PlotObserver`.
 
 ## Twine Models
 
