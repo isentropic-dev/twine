@@ -3,7 +3,7 @@
 //! See [`PlotObserver`] for usage.
 
 use eframe::egui;
-use egui_plot::{Line, Plot, PlotPoints};
+use egui_plot::{Legend, Line, Plot, PlotPoints};
 use twine_core::Observer;
 
 type Extractor<E> = Box<dyn Fn(&E) -> Option<f64>>;
@@ -37,6 +37,7 @@ type Extractor<E> = Box<dyn Fn(&E) -> Option<f64>>;
 pub struct PlotObserver<E> {
     x_extractor: Extractor<E>,
     traces: Vec<Trace<E>>,
+    legend: bool,
 }
 
 struct Trace<E> {
@@ -57,7 +58,15 @@ impl<E> PlotObserver<E> {
         Self {
             x_extractor: Box::new(x_extractor),
             traces: Vec::new(),
+            legend: false,
         }
+    }
+
+    /// Enables a legend that labels each trace by name.
+    #[must_use]
+    pub fn with_legend(mut self) -> Self {
+        self.legend = true;
+        self
     }
 
     /// Adds a named y-axis trace with its own extractor.
@@ -94,10 +103,11 @@ impl<E> PlotObserver<E> {
             .map(|t| (t.name, t.points))
             .collect();
 
+        let legend = self.legend;
         eframe::run_native(
             &title,
             options,
-            Box::new(move |_cc| Ok(Box::new(PlotApp { traces }))),
+            Box::new(move |_cc| Ok(Box::new(PlotApp { traces, legend }))),
         )
     }
 }
@@ -150,25 +160,34 @@ impl<E, A> Observer<E, A> for &mut PlotObserver<E> {
 /// # Errors
 ///
 /// Returns an error if the native window cannot be created.
-pub fn show_traces(title: &str, traces: Vec<(String, Vec<[f64; 2]>)>) -> Result<(), eframe::Error> {
+pub fn show_traces(
+    title: &str,
+    traces: Vec<(String, Vec<[f64; 2]>)>,
+    legend: bool,
+) -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions::default();
     let title = title.to_string();
     eframe::run_native(
         &title,
         options,
-        Box::new(move |_cc| Ok(Box::new(PlotApp { traces }))),
+        Box::new(move |_cc| Ok(Box::new(PlotApp { traces, legend }))),
     )
 }
 
 /// The egui [`eframe::App`] that renders the collected traces.
 struct PlotApp {
     traces: Vec<(String, Vec<[f64; 2]>)>,
+    legend: bool,
 }
 
 impl eframe::App for PlotApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            Plot::new("plot_observer").show(ui, |plot_ui| {
+            let mut plot = Plot::new("plot_observer");
+            if self.legend {
+                plot = plot.legend(Legend::default());
+            }
+            plot.show(ui, |plot_ui| {
                 for (name, points) in &self.traces {
                     let plot_points: PlotPoints = points.iter().copied().collect();
                     plot_ui.line(Line::new(plot_points).name(name));

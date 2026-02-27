@@ -115,6 +115,7 @@ fn bisect() -> Result<(), Box<dyn Error>> {
             ("Residual".into(), residuals),
             ("Bracket width".into(), brackets),
         ],
+        true,
     )?;
 
     Ok(())
@@ -187,6 +188,7 @@ fn minimize() -> Result<(), Box<dyn Error>> {
             ("Current point".into(), current),
             ("Best so far".into(), best),
         ],
+        true,
     )?;
 
     Ok(())
@@ -316,7 +318,8 @@ fn ode() -> Result<(), Box<dyn Error>> {
             })
             .trace("Analytical cos(t)", |event| {
                 Some(event.snapshot.input.t.cos())
-            });
+            })
+            .with_legend();
 
     // dt=0.1, 500 steps → 50 seconds. Energy grows by (1 + dt²)^steps ≈ 142x,
     // so amplitude grows by √142 ≈ 12x. Unmistakable.
