@@ -22,3 +22,7 @@ approx = { workspace = true }
 
 [features]
 plot = ["dep:eframe", "dep:egui_plot"]
+
+[[example]]
+name = "plot"
+required-features = ["plot"]

@@ -23,8 +23,8 @@
 //!
 //! # Features
 //!
-//! - `plot` — Enables [`PlotObserver`] for visualizing solver behavior via egui.
-//!   This feature adds dependencies on `eframe` and `egui_plot`.
+//! - `plot` — Enables [`PlotObserver`] and [`show_traces`] for visualizing solver
+//!   behavior via egui. This feature adds dependencies on `eframe` and `egui_plot`.
 //!
 //! [`Observer`]: twine_core::Observer
 //! [`HasResidual`]: traits::HasResidual
@@ -38,4 +38,4 @@ pub mod traits;
 mod plot;
 
 #[cfg(feature = "plot")]
-pub use plot::PlotObserver;
+pub use plot::{PlotObserver, show_traces};

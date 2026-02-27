@@ -3039,6 +3039,7 @@ version = "0.5.0"
 name = "twine-observers"
 version = "0.5.0"
 dependencies = [
+ "approx",
  "eframe",
  "egui_plot",
  "twine-core",
