@@ -166,10 +166,12 @@ fn maximize() -> Result<(), Box<dyn Error>> {
     obs.label_size(16.0);
 
     // Pre-load the background sine curve as trace 0.
-    // 2000 points keeps the curve smooth even when zoomed into the region
-    // where the final evaluations cluster near π/2.
+    // Use a cubic remap u³ (u ∈ [-1, 1]) to cluster points near the peak
+    // at π/2, where zooming in would otherwise reveal line segments.
+    // The cubic has zero slope at u=0, so sample density is highest there.
     for i in 0_u32..=2000 {
-        let x = std::f64::consts::PI * f64::from(i) / 2000.0;
+        let u = f64::from(i) / 1000.0 - 1.0;
+        let x = std::f64::consts::FRAC_PI_2 * (1.0 + u.powi(3));
         obs.record(x, [Some(x.sin()), None]);
     }
 
