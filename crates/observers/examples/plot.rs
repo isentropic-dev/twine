@@ -176,7 +176,7 @@ fn maximize() -> Result<(), Box<dyn Error>> {
     let mut iter = 1_u32;
     // Loosen tolerance from 1e-12 → 1e-6 so the search terminates with
     // roughly half as many evaluations.
-    let config = golden_section::Config::new(100, 1e-6, 1e-6).unwrap();
+    let config = golden_section::Config::new(100, 1e-5, 1e-5).unwrap();
     golden_section::maximize(
         &Sine,
         &DirectObjective,
