@@ -94,10 +94,6 @@ impl EquationProblem<1> for CosMinusX {
 
 /// Find the Dottie number via bisection and plot convergence.
 ///
-/// Bisection events carry lifetime parameters, so we collect data manually in
-/// a closure using [`PlotObserver::record`] rather than implementing
-/// [`Plottable`][twine_observers::Plottable] on the event type.
-///
 /// The residual is plotted on a log y-axis because it spans many orders of
 /// magnitude as bisection converges.
 fn bisect() -> Result<(), Box<dyn Error>> {
