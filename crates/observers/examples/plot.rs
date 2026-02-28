@@ -163,6 +163,7 @@ impl OptimizationProblem<1> for DirectObjective {
 /// numbered in evaluation order so the solver's sampling strategy is visible.
 fn maximize() -> Result<(), Box<dyn Error>> {
     let mut obs = PlotObserver::<2>::new(["sin(x)", "Evaluated points"]);
+    obs.label_size(16.0);
 
     // Pre-load the background sine curve as trace 0.
     for i in 0_u32..=300 {
