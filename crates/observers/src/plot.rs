@@ -1,183 +1,231 @@
 //! Plotting observer for visualizing solver behavior.
 //!
-//! See [`PlotObserver`] for usage.
+//! See [`PlotObserver`] and [`Plottable`] for usage.
 
 use eframe::egui;
 use egui_plot::{Legend, Line, Plot, PlotPoints};
 use twine_core::Observer;
 
-type Extractor<E> = Box<dyn Fn(&E) -> Option<f64>>;
-
-/// An observer that collects trace data during solving and displays it via egui.
+/// Configuration for rendering a [`PlotObserver`] result.
 ///
-/// `PlotObserver` extracts x and y values from solver events using closures,
-/// accumulates the data as the solver runs, and then renders an interactive
-/// plot window when [`show`][PlotObserver::show] is called.
-///
-/// A point is only recorded when **both** the x and y extractors return
-/// `Some(f64)`. Either extractor returning `None` causes that event to be
-/// silently skipped for that trace.
-///
-/// The observer never returns an action; it is purely passive and does not
-/// influence solver behavior.
+/// Construct with [`ShowConfig::new`] and chain builder methods as needed.
+/// All fields are independent with sensible defaults.
 ///
 /// # Example
 ///
 /// ```ignore
-/// use twine_observers::PlotObserver;
-///
-/// let mut observer = PlotObserver::new(|event: &MyEvent| Some(event.iteration as f64))
-///     .trace("Residual", |event| Some(event.residual))
-///     .trace("Step size", |event| event.step_size);
-///
-/// let solution = solver::solve(&model, &problem, bracket, &config, &mut observer);
-///
-/// observer.show("Solver trace")?; // blocks until the window is closed
+/// obs.show(ShowConfig::new().title("Bisection").legend().log_y())?;
 /// ```
-pub struct PlotObserver<E> {
-    x_extractor: Extractor<E>,
-    traces: Vec<Trace<E>>,
+pub struct ShowConfig {
+    title: Option<String>,
     legend: bool,
+    log_y: bool,
 }
 
-struct Trace<E> {
-    name: String,
-    y_extractor: Extractor<E>,
-    points: Vec<[f64; 2]>,
-}
-
-impl<E> PlotObserver<E> {
-    /// Creates a new `PlotObserver` with the given x-axis extractor.
-    ///
-    /// The closure is called for every solver event. If it returns `None` the
-    /// event is skipped entirely (no trace point is recorded for any trace).
-    pub fn new<X>(x_extractor: X) -> Self
-    where
-        X: Fn(&E) -> Option<f64> + 'static,
-    {
+impl ShowConfig {
+    /// Creates a new `ShowConfig` with defaults: no title, no legend, linear scale.
+    #[must_use]
+    pub fn new() -> Self {
         Self {
-            x_extractor: Box::new(x_extractor),
-            traces: Vec::new(),
+            title: None,
             legend: false,
+            log_y: false,
         }
     }
 
-    /// Enables a legend that labels each trace by name.
+    /// Sets the window title.
     #[must_use]
-    pub fn with_legend(mut self) -> Self {
+    pub fn title(mut self, title: impl Into<String>) -> Self {
+        self.title = Some(title.into());
+        self
+    }
+
+    /// Enables a legend labeling each trace by name.
+    #[must_use]
+    pub fn legend(mut self) -> Self {
         self.legend = true;
         self
     }
 
-    /// Adds a named y-axis trace with its own extractor.
+    /// Enables a logarithmic y-axis (base 10).
     ///
-    /// Each call to `.trace()` registers one line on the plot. The closure
-    /// receives the same event as the x-extractor; returning `None` skips the
-    /// point for this trace while leaving other traces unaffected.
+    /// y values are transformed with log₁₀ before plotting. Non-positive
+    /// values are silently skipped.
     #[must_use]
-    pub fn trace<Y>(mut self, name: impl Into<String>, y_extractor: Y) -> Self
-    where
-        Y: Fn(&E) -> Option<f64> + 'static,
-    {
-        self.traces.push(Trace {
-            name: name.into(),
-            y_extractor: Box::new(y_extractor),
-            points: Vec::new(),
-        });
+    pub fn log_y(mut self) -> Self {
+        self.log_y = true;
         self
     }
+}
 
-    /// Opens a blocking egui window that displays all collected traces.
+impl Default for ShowConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Extracts plottable data from a solver event.
+///
+/// Implement this on your event type to use [`PlotObserver`] directly as a
+/// solver observer (the "direct path"). Return `None` from [`x`][Plottable::x]
+/// to skip the event entirely; return `None` in a trace slot to skip that
+/// trace for the event.
+///
+/// This trait is most useful when your event type is defined in your own crate,
+/// which lets you satisfy the orphan rule. For standard library event types
+/// (e.g. `bisection::Event`), use the closure path via
+/// [`PlotObserver::record`] instead.
+///
+/// # Example — direct path with a local event type
+///
+/// ```ignore
+/// // In your crate, where MyEvent is local:
+/// impl Plottable<2> for MyEvent {
+///     fn x(&self) -> Option<f64> {
+///         Some(self.iteration as f64)
+///     }
+///
+///     fn traces(&self) -> [Option<f64>; 2] {
+///         [Some(self.residual), self.step_size]
+///     }
+/// }
+///
+/// let mut obs = PlotObserver::<2>::new(["Residual", "Step size"]);
+/// my_solver::solve(&model, &problem, config, &mut obs)?;
+/// obs.show(ShowConfig::new().title("My solver").legend())?;
+/// ```
+pub trait Plottable<const N: usize> {
+    /// The x-axis value for this event, or `None` to skip recording entirely.
+    fn x(&self) -> Option<f64>;
+
+    /// The y-axis values for each trace.
+    ///
+    /// `None` in a slot skips that trace for this event while leaving others
+    /// unaffected.
+    fn traces(&self) -> [Option<f64>; N];
+}
+
+/// An observer that collects trace data during solving and displays it via egui.
+///
+/// The const generic `N` is the number of traces. Create with
+/// [`PlotObserver::new`], passing the trace names. Record data by either:
+///
+/// - **Direct path** — Implement [`Plottable<N>`][Plottable] on your event
+///   type and pass `&mut PlotObserver` as the solver observer. Works when the
+///   event type is local to your crate.
+/// - **Closure path** — Wrap `&mut PlotObserver` in a closure and call
+///   [`record`][PlotObserver::record] manually. Use this for standard library
+///   event types (e.g. `bisection::Event`) that carry lifetime parameters or
+///   are foreign to your crate.
+///
+/// Call [`show`][PlotObserver::show] with a [`ShowConfig`] to render the result.
+///
+/// # Example — direct path
+///
+/// ```ignore
+/// // Requires Plottable<2> impl on MyEvent (see Plottable docs).
+/// let mut obs = PlotObserver::<2>::new(["Residual", "Step size"]);
+/// my_solver::solve(&model, &problem, config, &mut obs)?;
+/// obs.show(ShowConfig::new().title("My solver").legend())?;
+/// ```
+///
+/// # Example — closure path
+///
+/// ```ignore
+/// let mut obs = PlotObserver::<2>::new(["x", "Residual"]);
+/// let mut iter = 0u32;
+///
+/// bisection::solve(&model, &problem, bracket, &config, |event: &bisection::Event<'_, _, _>| {
+///     obs.record(
+///         f64::from(iter),
+///         [Some(event.x()), event.result().ok().map(|e| e.residuals[0])],
+///     );
+///     iter += 1;
+///     None
+/// })?;
+///
+/// obs.show(ShowConfig::new().title("Bisection").legend())?;
+/// ```
+pub struct PlotObserver<const N: usize> {
+    names: [String; N],
+    data: [Vec<[f64; 2]>; N],
+}
+
+impl<const N: usize> PlotObserver<N> {
+    /// Creates a new `PlotObserver` with the given trace names.
+    pub fn new(names: [&str; N]) -> Self {
+        Self {
+            names: names.map(str::to_owned),
+            data: std::array::from_fn(|_| Vec::new()),
+        }
+    }
+
+    /// Records a single data point across all traces.
+    ///
+    /// For each trace slot, `None` skips recording for that trace while
+    /// leaving other traces unaffected.
+    pub fn record(&mut self, x: f64, traces: [Option<f64>; N]) {
+        for (i, y) in traces.into_iter().enumerate() {
+            if let Some(y) = y {
+                self.data[i].push([x, y]);
+            }
+        }
+    }
+
+    /// Opens a blocking egui window displaying all collected traces.
     ///
     /// Blocks until the window is closed by the user.
     ///
     /// # Errors
     ///
     /// Returns an error if the native window cannot be created.
-    pub fn show(self, title: &str) -> Result<(), eframe::Error> {
+    pub fn show(self, config: ShowConfig) -> Result<(), eframe::Error> {
         let options = eframe::NativeOptions::default();
-        let title = title.to_string();
-        let traces: Vec<(String, Vec<[f64; 2]>)> = self
-            .traces
-            .into_iter()
-            .map(|t| (t.name, t.points))
-            .collect();
+        let title = config.title.unwrap_or_default();
+        let traces: Vec<(String, Vec<[f64; 2]>)> = self.names.into_iter().zip(self.data).collect();
 
-        let legend = self.legend;
         eframe::run_native(
             &title,
             options,
-            Box::new(move |_cc| Ok(Box::new(PlotApp { traces, legend }))),
+            Box::new(move |_cc| {
+                Ok(Box::new(PlotApp {
+                    traces,
+                    legend: config.legend,
+                    log_y: config.log_y,
+                }))
+            }),
         )
     }
 }
 
-impl<E, A> Observer<E, A> for PlotObserver<E> {
+impl<const N: usize, E, A> Observer<E, A> for PlotObserver<N>
+where
+    E: Plottable<N>,
+{
     fn observe(&mut self, event: &E) -> Option<A> {
-        if let Some(x) = (self.x_extractor)(event) {
-            for trace in &mut self.traces {
-                if let Some(y) = (trace.y_extractor)(event) {
-                    trace.points.push([x, y]);
-                }
-            }
+        if let Some(x) = event.x() {
+            self.record(x, event.traces());
         }
         None
     }
 }
 
-/// Allows `&mut PlotObserver<E>` to be passed to solvers that take an observer
+/// Allows `&mut PlotObserver<N>` to be passed to solvers that take an observer
 /// by value, so [`PlotObserver::show`] can be called after the solve completes.
-impl<E, A> Observer<E, A> for &mut PlotObserver<E> {
+impl<const N: usize, E, A> Observer<E, A> for &mut PlotObserver<N>
+where
+    E: Plottable<N>,
+{
     fn observe(&mut self, event: &E) -> Option<A> {
         (*self).observe(event)
     }
 }
 
-/// Displays pre-collected trace data in an interactive plot window.
-///
-/// Useful when you cannot pass a [`PlotObserver`] directly to a solver —
-/// for example, when solver events carry lifetime parameters that prevent
-/// satisfying the solver's `for<'a> Observer<Event<'a, ...>, ...>` bound.
-/// In that case, collect data manually in a closure, then call this function.
-///
-/// Opens a blocking egui window. Returns an error if the window cannot be
-/// created. Blocks until the user closes the window.
-///
-/// # Example
-///
-/// ```ignore
-/// use twine_observers::show_traces;
-///
-/// let mut points: Vec<[f64; 2]> = Vec::new();
-/// solver::solve(&model, &problem, bracket, &config, |event| {
-///     points.push([event.x(), event.residual()]);
-///     None
-/// })?;
-///
-/// show_traces("My solver", vec![("Residual".into(), points)])?;
-/// ```
-///
-/// # Errors
-///
-/// Returns an error if the native window cannot be created.
-pub fn show_traces(
-    title: &str,
-    traces: Vec<(String, Vec<[f64; 2]>)>,
-    legend: bool,
-) -> Result<(), eframe::Error> {
-    let options = eframe::NativeOptions::default();
-    let title = title.to_string();
-    eframe::run_native(
-        &title,
-        options,
-        Box::new(move |_cc| Ok(Box::new(PlotApp { traces, legend }))),
-    )
-}
-
-/// The egui [`eframe::App`] that renders the collected traces.
+/// The egui [`eframe::App`] that renders collected traces.
 struct PlotApp {
     traces: Vec<(String, Vec<[f64; 2]>)>,
     legend: bool,
+    log_y: bool,
 }
 
 impl eframe::App for PlotApp {
@@ -187,9 +235,21 @@ impl eframe::App for PlotApp {
             if self.legend {
                 plot = plot.legend(Legend::default());
             }
+            if self.log_y {
+                plot = plot.y_axis_label("log₁₀");
+            }
+            let log_y = self.log_y;
             plot.show(ui, |plot_ui| {
                 for (name, points) in &self.traces {
-                    let plot_points: PlotPoints = points.iter().copied().collect();
+                    let plot_points: PlotPoints = if log_y {
+                        points
+                            .iter()
+                            .filter(|p| p[1] > 0.0)
+                            .map(|p| [p[0], p[1].log10()])
+                            .collect()
+                    } else {
+                        points.iter().copied().collect()
+                    };
                     plot_ui.line(Line::new(plot_points).name(name));
                 }
             });
@@ -209,24 +269,32 @@ mod tests {
         b: Option<f64>,
     }
 
-    fn observer() -> PlotObserver<Event> {
-        PlotObserver::new(|e: &Event| e.x)
-            .trace("a", |e| e.a)
-            .trace("b", |e| e.b)
+    impl Plottable<2> for Event {
+        fn x(&self) -> Option<f64> {
+            self.x
+        }
+
+        fn traces(&self) -> [Option<f64>; 2] {
+            [self.a, self.b]
+        }
     }
 
-    fn points(obs: &PlotObserver<Event>, trace: usize) -> &[[f64; 2]] {
-        &obs.traces[trace].points
+    fn make_observer() -> PlotObserver<2> {
+        PlotObserver::new(["a", "b"])
+    }
+
+    fn points(obs: &PlotObserver<2>, trace: usize) -> &[[f64; 2]] {
+        &obs.data[trace]
     }
 
     // Helper to call observe without needing to specify the action type at each call site.
-    fn feed(obs: &mut PlotObserver<Event>, event: Event) {
+    fn feed(obs: &mut PlotObserver<2>, event: Event) {
         let _: Option<()> = obs.observe(&event);
     }
 
     #[test]
     fn records_point_when_both_x_and_y_are_some() {
-        let mut obs = observer();
+        let mut obs = make_observer();
         feed(
             &mut obs,
             Event {
@@ -241,7 +309,7 @@ mod tests {
 
     #[test]
     fn skips_all_traces_when_x_is_none() {
-        let mut obs = observer();
+        let mut obs = make_observer();
         feed(
             &mut obs,
             Event {
@@ -256,7 +324,7 @@ mod tests {
 
     #[test]
     fn skips_only_affected_trace_when_y_is_none() {
-        let mut obs = observer();
+        let mut obs = make_observer();
         feed(
             &mut obs,
             Event {
@@ -271,7 +339,7 @@ mod tests {
 
     #[test]
     fn accumulates_points_across_multiple_events() {
-        let mut obs = observer();
+        let mut obs = make_observer();
         feed(
             &mut obs,
             Event {
@@ -302,12 +370,21 @@ mod tests {
 
     #[test]
     fn never_returns_an_action() {
-        let mut obs: PlotObserver<Event> = PlotObserver::new(|e: &Event| e.x);
+        let mut obs: PlotObserver<2> = PlotObserver::new(["a", "b"]);
         let action: Option<()> = obs.observe(&Event {
             x: Some(1.0),
             a: None,
             b: None,
         });
         assert!(action.is_none());
+    }
+
+    #[test]
+    fn record_direct_call_stores_points() {
+        let mut obs: PlotObserver<2> = PlotObserver::new(["a", "b"]);
+        obs.record(1.0, [Some(10.0), None]);
+        obs.record(2.0, [None, Some(20.0)]);
+        assert_eq!(points(&obs, 0), [[1.0, 10.0]]);
+        assert_eq!(points(&obs, 1), [[2.0, 20.0]]);
     }
 }
