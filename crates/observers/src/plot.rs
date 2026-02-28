@@ -2,7 +2,7 @@
 //!
 //! See [`PlotObserver`] and [`ShowConfig`] for usage.
 
-use eframe::egui;
+use eframe::egui::{self, Vec2b};
 use egui_plot::{Legend, Line, Plot, PlotPoint, PlotPoints, Text};
 
 /// Configuration for rendering a [`PlotObserver`] result.
@@ -153,6 +153,7 @@ impl<const N: usize> PlotObserver<N> {
                     label_size: self.label_size,
                     legend: config.legend,
                     log_y: config.log_y,
+                    plot_rect: None,
                 }))
             }),
         )
@@ -166,6 +167,8 @@ struct PlotApp {
     label_size: f32,
     legend: bool,
     log_y: bool,
+    /// Plot inner rect from the previous frame, used for axis-hover zoom constraints.
+    plot_rect: Option<egui::Rect>,
 }
 
 impl eframe::App for PlotApp {
@@ -178,8 +181,38 @@ impl eframe::App for PlotApp {
             if self.log_y {
                 plot = plot.y_axis_label("log₁₀");
             }
+
+            // Determine zoom axes based on where the pointer is relative to the
+            // plot inner rect from the previous frame. One-frame lag is imperceptible.
+            let allow_zoom: Vec2b = match self.plot_rect {
+                Some(rect) => {
+                    let pointer = ctx.input(|i| i.pointer.latest_pos());
+                    match pointer {
+                        // Pointer left of the plot area: over the y-axis gutter.
+                        Some(p)
+                            if p.x < rect.left()
+                                && p.y >= rect.top()
+                                && p.y <= rect.bottom() =>
+                        {
+                            [false, true].into()
+                        }
+                        // Pointer below the plot area: over the x-axis gutter.
+                        Some(p)
+                            if p.y > rect.bottom()
+                                && p.x >= rect.left()
+                                && p.x <= rect.right() =>
+                        {
+                            [true, false].into()
+                        }
+                        // Inside the plot area or anywhere else: zoom both axes.
+                        _ => true.into(),
+                    }
+                }
+                None => true.into(),
+            };
+
             let log_y = self.log_y;
-            plot.show(ui, |plot_ui| {
+            let response = plot.allow_zoom(allow_zoom).show(ui, |plot_ui| {
                 for (name, points) in &self.traces {
                     let plot_points: PlotPoints = if log_y {
                         points
@@ -202,6 +235,8 @@ impl eframe::App for PlotApp {
                     );
                 }
             });
+
+            self.plot_rect = Some(*response.transform.frame());
         });
     }
 }
