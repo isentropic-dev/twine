@@ -95,7 +95,7 @@ Solvers are domain-agnostic and know nothing about what your model represents. O
 
 ```rust
 use twine_core::Observer;
-use twine_observers::{HasResidual, CanStopEarly};
+use twine_observers::traits::{HasResidual, CanStopEarly};
 
 /// Logs each iteration and stops early when the residual is good enough.
 struct GoodEnough { tolerance: f64, min_iters: usize, iter: usize }
