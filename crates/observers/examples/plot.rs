@@ -94,8 +94,8 @@ impl EquationProblem<1> for CosMinusX {
 
 /// Find the Dottie number via bisection and plot convergence.
 ///
-/// The residual is plotted on a log y-axis because it spans many orders of
-/// magnitude as bisection converges.
+/// Both x and the residual are plotted on a linear scale, showing
+/// convergence toward the root.
 fn bisect() -> Result<(), Box<dyn Error>> {
     let mut obs = PlotObserver::<2>::new(["x", "Residual"]);
     let mut iter = 0_u32;
@@ -117,8 +117,7 @@ fn bisect() -> Result<(), Box<dyn Error>> {
     obs.show(
         ShowConfig::new()
             .title("Bisection: cos(x) = x  →  Dottie number ≈ 0.7391")
-            .legend()
-            .log_y(),
+            .legend(),
     )?;
 
     Ok(())
