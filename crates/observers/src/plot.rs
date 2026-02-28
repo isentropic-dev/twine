@@ -91,6 +91,7 @@ pub struct PlotObserver<const N: usize> {
     names: [String; N],
     data: [Vec<[f64; 2]>; N],
     labels: Vec<(f64, f64, String)>,
+    label_size: f32,
 }
 
 impl<const N: usize> PlotObserver<N> {
@@ -100,6 +101,7 @@ impl<const N: usize> PlotObserver<N> {
             names: names.map(str::to_owned),
             data: std::array::from_fn(|_| Vec::new()),
             labels: Vec::new(),
+            label_size: 14.0,
         }
     }
 
@@ -118,9 +120,15 @@ impl<const N: usize> PlotObserver<N> {
     /// Places a text label at an arbitrary plot coordinate.
     ///
     /// Labels are rendered on top of all traces when [`show`][PlotObserver::show]
-    /// is called.
+    /// is called. Font size is controlled by [`label_size`][PlotObserver::label_size].
     pub fn label(&mut self, x: f64, y: f64, text: impl Into<String>) {
         self.labels.push((x, y, text.into()));
+    }
+
+    /// Sets the font size for all text labels. Default is `14.0`.
+    pub fn label_size(&mut self, size: f32) -> &mut Self {
+        self.label_size = size;
+        self
     }
 
     /// Opens a blocking egui window displaying all collected traces.
@@ -142,6 +150,7 @@ impl<const N: usize> PlotObserver<N> {
                 Ok(Box::new(PlotApp {
                     traces,
                     labels: self.labels,
+                    label_size: self.label_size,
                     legend: config.legend,
                     log_y: config.log_y,
                 }))
@@ -154,6 +163,7 @@ impl<const N: usize> PlotObserver<N> {
 struct PlotApp {
     traces: Vec<(String, Vec<[f64; 2]>)>,
     labels: Vec<(f64, f64, String)>,
+    label_size: f32,
     legend: bool,
     log_y: bool,
 }
@@ -184,8 +194,11 @@ impl eframe::App for PlotApp {
                 }
                 for (x, y, text) in &self.labels {
                     plot_ui.text(
-                        Text::new(PlotPoint::new(*x, *y), text)
-                            .anchor(egui::Align2::LEFT_BOTTOM),
+                        Text::new(
+                            PlotPoint::new(*x, *y),
+                            egui::RichText::new(text).size(self.label_size),
+                        )
+                        .anchor(egui::Align2::LEFT_BOTTOM),
                     );
                 }
             });
