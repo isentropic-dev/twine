@@ -29,7 +29,7 @@ use std::{convert::Infallible, error::Error};
 use twine_core::{
     DerivativeOf, EquationProblem, Model, OdeProblem, OptimizationProblem, StepIntegrable,
 };
-use twine_observers::{PlotObserver, show_traces};
+use twine_observers::{PlotObserver, ShowConfig};
 use twine_solvers::{equation::bisection, optimization::golden_section, transient::euler};
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -94,13 +94,11 @@ impl EquationProblem<1> for CosMinusX {
 
 /// Find the Dottie number via bisection and plot convergence.
 ///
-/// Bisection events carry lifetime parameters, so we collect data manually in a
-/// closure and pass it to [`show_traces`] rather than using [`PlotObserver`]
-/// directly.
+/// Both x and the residual are plotted on a linear scale, showing
+/// convergence toward the root.
 fn bisect() -> Result<(), Box<dyn Error>> {
+    let mut obs = PlotObserver::<2>::new(["x", "Residual"]);
     let mut iter = 0_u32;
-    let mut xs: Vec<[f64; 2]> = Vec::new();
-    let mut residuals: Vec<[f64; 2]> = Vec::new();
 
     bisection::solve(
         &Passthrough,
@@ -110,20 +108,16 @@ fn bisect() -> Result<(), Box<dyn Error>> {
         |event: &bisection::Event<'_, Passthrough, CosMinusX>| {
             let n = f64::from(iter);
             iter += 1;
-
-            xs.push([n, event.x()]);
-            if let Ok(eval) = event.result() {
-                residuals.push([n, eval.residuals[0]]);
-            }
-
+            let residual = event.result().as_ref().ok().map(|e| e.residuals[0].abs());
+            obs.record(n, [Some(event.x()), residual]);
             None
         },
     )?;
 
-    show_traces(
-        "Bisection: cos(x) = x  →  Dottie number ≈ 0.7391",
-        vec![("x".into(), xs), ("Residual".into(), residuals)],
-        true,
+    obs.show(
+        ShowConfig::new()
+            .title("Bisection: cos(x) = x  →  Dottie number ≈ 0.7391")
+            .legend(),
     )?;
 
     Ok(())
@@ -167,15 +161,13 @@ impl OptimizationProblem<1> for DirectObjective {
 /// background trace shows the full sine curve for context; the evaluated points
 /// sit on top of it, converging toward the peak at (π/2, 1).
 fn maximize() -> Result<(), Box<dyn Error>> {
-    // Dense background curve for context.
-    let curve: Vec<[f64; 2]> = (0_u32..=300)
-        .map(|i| {
-            let x = std::f64::consts::PI * f64::from(i) / 300.0;
-            [x, x.sin()]
-        })
-        .collect();
+    let mut obs = PlotObserver::<2>::new(["sin(x)", "Evaluated points"]);
 
-    let mut evaluations: Vec<[f64; 2]> = Vec::new();
+    // Pre-load the background sine curve as trace 0.
+    for i in 0_u32..=300 {
+        let x = std::f64::consts::PI * f64::from(i) / 300.0;
+        obs.record(x, [Some(x.sin()), None]);
+    }
 
     golden_section::maximize(
         &Sine,
@@ -184,20 +176,16 @@ fn maximize() -> Result<(), Box<dyn Error>> {
         &golden_section::Config::default(),
         |event: &golden_section::Event<'_, Sine, DirectObjective>| {
             if let golden_section::Event::Evaluated { point, .. } = event {
-                evaluations.push([point.x, point.objective]);
+                obs.record(point.x, [None, Some(point.objective)]);
             }
-
             None
         },
     )?;
 
-    show_traces(
-        "Maximize: sin(x) on [0, π]  →  maximum at (π/2, 1) ≈ (1.571, 1)",
-        vec![
-            ("sin(x)".into(), curve),
-            ("Evaluated points".into(), evaluations),
-        ],
-        true,
+    obs.show(
+        ShowConfig::new()
+            .title("Maximize: sin(x) on [0, π]  →  maximum at (π/2, 1) ≈ (1.571, 1)")
+            .legend(),
     )?;
 
     Ok(())
@@ -309,9 +297,6 @@ impl OdeProblem for OscProblem {
 /// Euler tracks the shape well but accumulates a small phase and amplitude
 /// error over time — visible by the end of the run as the two traces drift
 /// slightly apart.
-///
-/// [`PlotObserver`] is used here directly since euler events carry no lifetime
-/// parameters.
 fn ode(dt: f64) -> Result<(), Box<dyn Error>> {
     let zeta = 0.1_f64;
     let omega0 = 1.0_f64;
@@ -327,30 +312,43 @@ fn ode(dt: f64) -> Result<(), Box<dyn Error>> {
     };
 
     // Analytical solution for x(0)=1, v(0)=0:
-    // x(t) = e^(-ζt) * [cos(ω_d·t) + (ζ/ω_d)·sin(ω_d·t)]
+    // x(t) = e^(-ζt) · [cos(ω_d·t) + (ζ/ω_d)·sin(ω_d·t)]
     let analytical = move |t: f64| {
         (-zeta * t).exp() * ((omega_d * t).cos() + (zeta / omega_d) * (omega_d * t).sin())
     };
 
-    let mut observer =
-        PlotObserver::new(|event: &euler::Event<OscInput, OscOutput>| Some(event.snapshot.input.t))
-            .trace("Euler (numerical)", |event| {
-                Some(event.snapshot.input.state.position)
-            })
-            .trace("Analytical", move |event| {
-                Some(analytical(event.snapshot.input.t))
-            })
-            .with_legend();
+    let mut obs = PlotObserver::<2>::new(["Euler (numerical)", "Analytical"]);
 
     // Simulate 30 seconds regardless of step size.
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     // TODO: remove once we have a cleaner way to derive step count from duration
     let steps = (30.0 / dt).round() as usize;
-    euler::solve(&model, &OscProblem, initial, dt, steps, &mut observer)?;
+    euler::solve(
+        &model,
+        &OscProblem,
+        initial,
+        dt,
+        steps,
+        |event: &euler::Event<OscInput, OscOutput>| {
+            let t = event.snapshot.input.t;
+            obs.record(
+                t,
+                [
+                    Some(event.snapshot.input.state.position),
+                    Some(analytical(t)),
+                ],
+            );
+            None
+        },
+    )?;
 
-    observer.show(&format!(
-        "ODE: Damped oscillator (ζ=0.1, dt={dt}) — Euler vs. analytical"
-    ))?;
+    obs.show(
+        ShowConfig::new()
+            .title(&format!(
+                "ODE: Damped oscillator (ζ=0.1, dt={dt}) — Euler vs. analytical"
+            ))
+            .legend(),
+    )?;
 
     Ok(())
 }
