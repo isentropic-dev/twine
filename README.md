@@ -95,7 +95,7 @@ Solvers are domain-agnostic and know nothing about what your model represents. O
 
 ```rust
 use twine_core::Observer;
-use twine_observers::{HasResidual, CanStopEarly};
+use twine_observers::traits::{HasResidual, CanStopEarly};
 
 /// Logs each iteration and stops early when the residual is good enough.
 struct GoodEnough { tolerance: f64, min_iters: usize, iter: usize }
@@ -126,7 +126,7 @@ let solution = bisection::solve(
 // solution.status = StoppedByObserver
 ```
 
-`GoodEnough` is not tied to bisection. It works with any solver whose events expose a residual and whose actions support early stopping. The real power shows up in domain-specific observers — for example, an observer that recognizes a thermodynamic constraint violation and tells the solver to search elsewhere, turning an unsolvable problem into a solvable one.
+`GoodEnough` is just an example, but notice what makes it work: it's generic over `E: HasResidual` and `A: CanStopEarly`, not over bisection specifically. Any observer written against capability traits like these works across all solvers that expose them, not just bisection. The real power shows up in domain-specific observers — for example, an observer that recognizes a thermodynamic constraint violation and tells the solver to search elsewhere, turning an unsolvable problem into a solvable one.
 
 ## Crates
 
