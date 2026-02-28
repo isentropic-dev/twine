@@ -27,10 +27,6 @@ Solvers are generic over `Model` and `Problem`.
 - Public API: `solve`/`minimize`/`maximize` (with observer) and `*_unobserved` variants
 - Config validation at entry, not per-iteration
 
-## Workflow
-
-Feature branches may include temporary workflow docs (e.g. TODO.md). Do not merge them to main.
-
 ## Testing
 
 Use `approx::assert_relative_eq!` for floating point comparisons.
