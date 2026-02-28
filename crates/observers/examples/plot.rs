@@ -166,17 +166,24 @@ fn maximize() -> Result<(), Box<dyn Error>> {
     obs.label_size(16.0);
 
     // Pre-load the background sine curve as trace 0.
-    for i in 0_u32..=300 {
-        let x = std::f64::consts::PI * f64::from(i) / 300.0;
+    // Use a cubic remap u³ (u ∈ [-1, 1]) to cluster points near the peak
+    // at π/2, where zooming in would otherwise reveal line segments.
+    // The cubic has zero slope at u=0, so sample density is highest there.
+    for i in 0_u32..=2000 {
+        let u = f64::from(i) / 1000.0 - 1.0;
+        let x = std::f64::consts::FRAC_PI_2 * (1.0 + u.powi(3));
         obs.record(x, [Some(x.sin()), None]);
     }
 
     let mut iter = 1_u32;
+    // Loosen tolerance from 1e-12 → 1e-6 so the search terminates with
+    // roughly half as many evaluations.
+    let config = golden_section::Config::new(100, 1e-5, 1e-5).unwrap();
     golden_section::maximize(
         &Sine,
         &DirectObjective,
         [0.0, std::f64::consts::PI],
-        &golden_section::Config::default(),
+        &config,
         |event: &golden_section::Event<'_, Sine, DirectObjective>| {
             if let golden_section::Event::Evaluated { point, .. } = event {
                 obs.record(point.x, [None, Some(point.objective)]);
@@ -349,7 +356,7 @@ fn ode(dt: f64) -> Result<(), Box<dyn Error>> {
 
     obs.show(
         ShowConfig::new()
-            .title(&format!(
+            .title(format!(
                 "ODE: Damped oscillator (ζ=0.1, dt={dt}) — Euler vs. analytical"
             ))
             .legend(),
