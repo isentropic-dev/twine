@@ -153,10 +153,20 @@ impl<const N: usize> PlotObserver<N> {
                     label_size: self.label_size,
                     legend: config.legend,
                     log_y: config.log_y,
+                    plot_rect: None,
                 }))
             }),
         )
     }
+}
+
+/// Which axis gutter the cursor is hovering over.
+#[derive(Clone, Copy)]
+enum Gutter {
+    /// Left gutter — zooms the y-axis.
+    Y,
+    /// Bottom gutter — zooms the x-axis.
+    X,
 }
 
 /// The egui [`eframe::App`] that renders collected traces.
@@ -166,11 +176,51 @@ struct PlotApp {
     label_size: f32,
     legend: bool,
     log_y: bool,
+    /// Inner plot rect from the previous frame, used for gutter hit-testing.
+    plot_rect: Option<egui::Rect>,
 }
 
 impl eframe::App for PlotApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
+            // Determine which gutter (if any) the cursor is over, using the
+            // inner plot rect captured from the previous frame.
+            let gutter = self.plot_rect.and_then(|plot_rect| {
+                let cursor = ctx.input(|i| i.pointer.latest_pos())?;
+                if cursor.x < plot_rect.left()
+                    && (plot_rect.top()..=plot_rect.bottom()).contains(&cursor.y)
+                {
+                    Some(Gutter::Y)
+                } else if cursor.y > plot_rect.bottom()
+                    && (plot_rect.left()..=plot_rect.right()).contains(&cursor.x)
+                {
+                    Some(Gutter::X)
+                } else {
+                    None
+                }
+            });
+
+            // Read scroll delta only when needed — consuming it from the
+            // input state signals intent to the rest of egui.
+            let scroll_delta = if gutter.is_some() {
+                ctx.input(|i| i.smooth_scroll_delta)
+            } else {
+                egui::Vec2::ZERO
+            };
+
+            // Compute the zoom factor to apply this frame, if any.
+            // Guard on non-zero delta to avoid disabling auto-bounds spuriously.
+            let zoom = gutter.and_then(|g| {
+                if scroll_delta.y == 0.0 {
+                    return None;
+                }
+                let f = (scroll_delta.y / 200.0).exp();
+                Some(match g {
+                    Gutter::Y => egui::Vec2::new(1.0, f),
+                    Gutter::X => egui::Vec2::new(f, 1.0),
+                })
+            });
+
             let mut plot = Plot::new("plot_observer");
             if self.legend {
                 plot = plot.legend(Legend::default());
@@ -178,8 +228,18 @@ impl eframe::App for PlotApp {
             if self.log_y {
                 plot = plot.y_axis_label("log₁₀");
             }
+            // When the cursor is over a gutter, disable scroll-to-pan so the
+            // plot doesn't consume the scroll events we're using for zoom.
+            if gutter.is_some() {
+                plot = plot.allow_scroll(false);
+            }
+
             let log_y = self.log_y;
-            plot.show(ui, |plot_ui| {
+            let label_size = self.label_size;
+            let response = plot.show(ui, |plot_ui| {
+                if let Some(factor) = zoom {
+                    plot_ui.zoom_bounds_around_hovered(factor);
+                }
                 for (name, points) in &self.traces {
                     let plot_points: PlotPoints = if log_y {
                         points
@@ -196,12 +256,16 @@ impl eframe::App for PlotApp {
                     plot_ui.text(
                         Text::new(
                             PlotPoint::new(*x, *y),
-                            egui::RichText::new(text).size(self.label_size),
+                            egui::RichText::new(text).size(label_size),
                         )
                         .anchor(egui::Align2::LEFT_BOTTOM),
                     );
                 }
+                // Capture the inner plot rect for gutter hit-testing next frame.
+                *plot_ui.transform().frame()
             });
+
+            self.plot_rect = Some(response.inner);
         });
     }
 }
