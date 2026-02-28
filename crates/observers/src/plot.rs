@@ -3,7 +3,7 @@
 //! See [`PlotObserver`] and [`ShowConfig`] for usage.
 
 use eframe::egui;
-use egui_plot::{Legend, Line, Plot, PlotPoints};
+use egui_plot::{Legend, Line, Plot, PlotPoint, PlotPoints, Text};
 
 /// Configuration for rendering a [`PlotObserver`] result.
 ///
@@ -90,6 +90,8 @@ impl Default for ShowConfig {
 pub struct PlotObserver<const N: usize> {
     names: [String; N],
     data: [Vec<[f64; 2]>; N],
+    labels: Vec<(f64, f64, String)>,
+    label_size: f32,
 }
 
 impl<const N: usize> PlotObserver<N> {
@@ -98,6 +100,8 @@ impl<const N: usize> PlotObserver<N> {
         Self {
             names: names.map(str::to_owned),
             data: std::array::from_fn(|_| Vec::new()),
+            labels: Vec::new(),
+            label_size: 14.0,
         }
     }
 
@@ -111,6 +115,20 @@ impl<const N: usize> PlotObserver<N> {
                 self.data[i].push([x, y]);
             }
         }
+    }
+
+    /// Places a text label at an arbitrary plot coordinate.
+    ///
+    /// Labels are rendered on top of all traces when [`show`][PlotObserver::show]
+    /// is called. Font size is controlled by [`label_size`][PlotObserver::label_size].
+    pub fn label(&mut self, x: f64, y: f64, text: impl Into<String>) {
+        self.labels.push((x, y, text.into()));
+    }
+
+    /// Sets the font size for all text labels. Default is `14.0`.
+    pub fn label_size(&mut self, size: f32) -> &mut Self {
+        self.label_size = size;
+        self
     }
 
     /// Opens a blocking egui window displaying all collected traces.
@@ -131,6 +149,8 @@ impl<const N: usize> PlotObserver<N> {
             Box::new(move |_cc| {
                 Ok(Box::new(PlotApp {
                     traces,
+                    labels: self.labels,
+                    label_size: self.label_size,
                     legend: config.legend,
                     log_y: config.log_y,
                 }))
@@ -142,6 +162,8 @@ impl<const N: usize> PlotObserver<N> {
 /// The egui [`eframe::App`] that renders collected traces.
 struct PlotApp {
     traces: Vec<(String, Vec<[f64; 2]>)>,
+    labels: Vec<(f64, f64, String)>,
+    label_size: f32,
     legend: bool,
     log_y: bool,
 }
@@ -169,6 +191,15 @@ impl eframe::App for PlotApp {
                         points.iter().copied().collect()
                     };
                     plot_ui.line(Line::new(plot_points).name(name));
+                }
+                for (x, y, text) in &self.labels {
+                    plot_ui.text(
+                        Text::new(
+                            PlotPoint::new(*x, *y),
+                            egui::RichText::new(text).size(self.label_size),
+                        )
+                        .anchor(egui::Align2::LEFT_BOTTOM),
+                    );
                 }
             });
         });
@@ -220,5 +251,16 @@ mod tests {
         obs.record(2.0, [None, Some(20.0)]);
         assert_eq!(points(&obs, 0), [[1.0, 10.0]]);
         assert_eq!(points(&obs, 1), [[2.0, 20.0]]);
+    }
+
+    #[test]
+    fn accumulates_labels_across_multiple_calls() {
+        let mut obs = make_observer();
+        obs.label(1.0, 2.0, "a");
+        obs.label(3.0, 4.0, "b");
+        assert_eq!(
+            obs.labels,
+            vec![(1.0, 2.0, "a".to_owned()), (3.0, 4.0, "b".to_owned())]
+        );
     }
 }

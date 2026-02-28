@@ -159,9 +159,11 @@ impl OptimizationProblem<1> for DirectObjective {
 ///
 /// Golden section converges quickly, so the evaluations are sparse. A dense
 /// background trace shows the full sine curve for context; the evaluated points
-/// sit on top of it, converging toward the peak at (π/2, 1).
+/// sit on top of it, converging toward the peak at (π/2, 1). Each point is
+/// numbered in evaluation order so the solver's sampling strategy is visible.
 fn maximize() -> Result<(), Box<dyn Error>> {
     let mut obs = PlotObserver::<2>::new(["sin(x)", "Evaluated points"]);
+    obs.label_size(16.0);
 
     // Pre-load the background sine curve as trace 0.
     for i in 0_u32..=300 {
@@ -169,6 +171,7 @@ fn maximize() -> Result<(), Box<dyn Error>> {
         obs.record(x, [Some(x.sin()), None]);
     }
 
+    let mut iter = 1_u32;
     golden_section::maximize(
         &Sine,
         &DirectObjective,
@@ -177,6 +180,8 @@ fn maximize() -> Result<(), Box<dyn Error>> {
         |event: &golden_section::Event<'_, Sine, DirectObjective>| {
             if let golden_section::Event::Evaluated { point, .. } = event {
                 obs.record(point.x, [None, Some(point.objective)]);
+                obs.label(point.x, point.objective, iter.to_string());
+                iter += 1;
             }
             None
         },
