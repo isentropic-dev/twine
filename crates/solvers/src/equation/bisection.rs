@@ -30,7 +30,7 @@ use eval_context::EvalContext;
 /// evaluating midpoints and shrinking the bracket.
 ///
 /// Endpoint evaluation failures are hard errors — if either endpoint fails,
-/// the solver returns immediately with the error.
+/// the solver returns immediately with [`Error::Model`] or [`Error::Problem`].
 /// For control over endpoint evaluation (e.g., domain-specific error
 /// recovery or noise filtering), evaluate endpoints yourself and use
 /// [`solve_from_bracket`].

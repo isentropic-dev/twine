@@ -1,8 +1,8 @@
-use twine_core::{EquationProblem, Model, Observer};
+use twine_core::{EquationProblem, Model};
 
-use crate::equation::{EvalError, bracket::Bracket};
+use crate::equation::bracket::Bracket;
 
-use super::{Action, Point};
+use super::Point;
 
 /// Events emitted by the bisection solver during the midpoint loop.
 ///
@@ -76,36 +76,6 @@ where
             Self::Evaluated { bracket, .. }
             | Self::ModelFailed { bracket, .. }
             | Self::ProblemFailed { bracket, .. } => bracket,
-        }
-    }
-
-    /// Emits a failure event and returns the observer's action.
-    pub(super) fn emit_failure<Obs>(
-        x: f64,
-        bracket: &Bracket,
-        error: &EvalError<M::Error, P::Error>,
-        observer: &mut Obs,
-    ) -> Option<Action>
-    where
-        Obs: for<'a> Observer<Event<'a, M, P>, Action>,
-    {
-        match error {
-            EvalError::Model(e) => {
-                let event = Event::ModelFailed {
-                    x,
-                    error: e,
-                    bracket,
-                };
-                observer.observe(&event)
-            }
-            EvalError::Problem(e) => {
-                let event = Event::ProblemFailed {
-                    x,
-                    error: e,
-                    bracket,
-                };
-                observer.observe(&event)
-            }
         }
     }
 }

@@ -1,6 +1,6 @@
 use twine_core::{EquationProblem, Model, Observer};
 
-use crate::equation::{Evaluation, bracket::Bracket, evaluate};
+use crate::equation::{EvalError, Evaluation, bracket::Bracket, evaluate};
 
 use super::{Action, Decision, Event, Point};
 
@@ -65,9 +65,36 @@ where
                 (kept_eval, decision)
             }
             Err(error) => {
-                let action = Event::emit_failure(x, bracket, &error, self.observer);
+                let action = Self::observe_failure(x, bracket, &error, self.observer);
                 let decision = Decision::new(action, Err(error.into()));
                 (None, decision)
+            }
+        }
+    }
+
+    /// Emits a failure event and returns the observer's action.
+    fn observe_failure(
+        x: f64,
+        bracket: &Bracket,
+        error: &EvalError<M::Error, P::Error>,
+        observer: &mut Obs,
+    ) -> Option<Action> {
+        match error {
+            EvalError::Model(e) => {
+                let event = Event::ModelFailed {
+                    x,
+                    error: e,
+                    bracket,
+                };
+                observer.observe(&event)
+            }
+            EvalError::Problem(e) => {
+                let event = Event::ProblemFailed {
+                    x,
+                    error: e,
+                    bracket,
+                };
+                observer.observe(&event)
             }
         }
     }
