@@ -9,6 +9,9 @@ pub enum BracketError {
     /// Endpoints are equal, giving zero width.
     #[error("zero width")]
     ZeroWidth,
+    /// Left endpoint is greater than right endpoint.
+    #[error("left > right")]
+    Inverted,
     /// Residual signs do not bracket a root.
     #[error("no sign change")]
     NoSignChange,
@@ -24,12 +27,51 @@ pub struct Bracket {
 }
 
 impl Bracket {
-    /// Creates a validated bracket with known residual signs.
+    /// Creates a validated bracket from left and right endpoint–sign pairs.
+    ///
+    /// Left must be strictly less than right.
     ///
     /// # Errors
     ///
-    /// Returns `BracketError::NoSignChange` if the signs do not bracket a root.
-    pub(crate) fn new(
+    /// Returns [`BracketError::NonFinite`] if either endpoint is non-finite,
+    /// [`BracketError::ZeroWidth`] if the endpoints are equal,
+    /// [`BracketError::Inverted`] if left > right, or
+    /// [`BracketError::NoSignChange`] if the signs are the same.
+    pub fn new(left: (f64, Sign), right: (f64, Sign)) -> Result<Self, BracketError> {
+        let (left, left_sign) = left;
+        let (right, right_sign) = right;
+
+        if !left.is_finite() || !right.is_finite() {
+            return Err(BracketError::NonFinite);
+        }
+
+        // Exact equality is intentional — zero-width brackets are invalid.
+        #[allow(clippy::float_cmp)]
+        if left == right {
+            return Err(BracketError::ZeroWidth);
+        }
+
+        if left > right {
+            return Err(BracketError::Inverted);
+        }
+
+        if left_sign == right_sign {
+            return Err(BracketError::NoSignChange);
+        }
+
+        Ok(Self {
+            left,
+            right,
+            left_sign,
+            right_sign,
+        })
+    }
+
+    /// Creates a bracket from pre-validated, pre-ordered bounds and signs.
+    ///
+    /// This skips endpoint validation (finiteness, ordering) since `Bounds`
+    /// already enforces those invariants. Only validates sign opposition.
+    pub(crate) fn from_bounds(
         bounds: Bounds,
         left_sign: Sign,
         right_sign: Sign,
@@ -124,6 +166,7 @@ impl Bounds {
             return Err(BracketError::NonFinite);
         }
 
+        // Exact equality is intentional — zero-width brackets are invalid.
         #[allow(clippy::float_cmp)]
         if left == right {
             return Err(BracketError::ZeroWidth);
@@ -179,20 +222,41 @@ mod tests {
     }
 
     #[test]
-    fn new_bracket_rejects_no_sign_change() {
-        let bounds = Bounds::new([0.0, 1.0]).expect("valid bounds");
-        let err = Bracket::new(bounds, Sign::Positive, Sign::Positive);
-        assert!(matches!(err, Err(BracketError::NoSignChange)));
+    fn new_rejects_non_finite() {
+        assert!(matches!(
+            Bracket::new((f64::NAN, Sign::Negative), (1.0, Sign::Positive)),
+            Err(BracketError::NonFinite)
+        ));
+    }
+
+    #[test]
+    fn new_rejects_zero_width() {
+        assert!(matches!(
+            Bracket::new((2.0, Sign::Negative), (2.0, Sign::Positive)),
+            Err(BracketError::ZeroWidth)
+        ));
+    }
+
+    #[test]
+    fn new_rejects_inverted() {
+        assert!(matches!(
+            Bracket::new((10.0, Sign::Negative), (0.0, Sign::Positive)),
+            Err(BracketError::Inverted)
+        ));
+    }
+
+    #[test]
+    fn new_rejects_no_sign_change() {
+        assert!(matches!(
+            Bracket::new((0.0, Sign::Positive), (1.0, Sign::Positive)),
+            Err(BracketError::NoSignChange)
+        ));
     }
 
     #[test]
     fn shrink_shifts_bounds() {
-        let mut bracket = Bracket::new(
-            Bounds::new([0.0, 2.0]).expect("valid bounds"),
-            Sign::Negative,
-            Sign::Positive,
-        )
-        .expect("valid bracket");
+        let mut bracket =
+            Bracket::new((0.0, Sign::Negative), (2.0, Sign::Positive)).expect("valid bracket");
 
         bracket.shrink(1.0, Sign::Negative);
         let [left, right] = bracket.as_array();

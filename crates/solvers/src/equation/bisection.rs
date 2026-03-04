@@ -4,11 +4,13 @@ mod decision;
 mod error;
 mod eval_context;
 mod event;
+mod point;
 
 pub use action::Action;
 pub use config::{Config, ConfigError};
 pub use error::Error;
 pub use event::Event;
+pub use point::Point;
 
 pub use crate::equation::{
     bracket::{Bracket, BracketError, Sign},
@@ -17,48 +19,38 @@ pub use crate::equation::{
 
 use twine_core::{EquationProblem, Model, Observer};
 
-use crate::equation::{best::Best, bracket::Bounds};
+use crate::equation::{best::Best, bracket::Bounds, evaluate};
 
 use decision::Decision;
 use eval_context::EvalContext;
 
 /// Finds a root of the equation using the bisection method.
 ///
-/// # Algorithm
+/// Evaluates both endpoints to establish a bracket, then iterates by
+/// evaluating midpoints and shrinking the bracket.
 ///
-/// 1. Evaluate the left and right endpoints.
-/// 2. Validate that the endpoints bracket a root using residual signs.
-/// 3. Iterate: evaluate the midpoint, shrink the bracket, and update the best evaluation.
-///
-/// Convergence is reported when either:
-/// - The best residual magnitude is within `config.residual_tol` (absolute only), or
-/// - The bracket width satisfies `x_abs_tol + x_rel_tol * |mid|`.
+/// Endpoint evaluation failures are hard errors — if either endpoint fails,
+/// the solver returns immediately with the error.
+/// For control over endpoint evaluation (e.g., domain-specific error
+/// recovery or noise filtering), evaluate endpoints yourself and use
+/// [`solve_from_bracket`].
 ///
 /// # Observer
 ///
-/// The observer receives an [`Event`] for each evaluation and may:
-/// - Return `Action::StopEarly` to stop and return the best evaluation so far.
-/// - Return `Action::AssumeResidualSign(Sign)` to recover from evaluation
-///   failures by providing a residual sign for bracket updates.
-///   When this action is used on a successful evaluation, that evaluation is
-///   not considered for the best solution.
-///
-/// # Notes
-///
-/// The returned [`Solution`] always reflects the best successful evaluation
-/// seen so far (by residual magnitude).
-/// Iteration counts correspond to the number of midpoint evaluations performed.
+/// The observer receives an [`Event`] for each **midpoint** evaluation.
+/// Endpoint evaluations are not observed.
+/// See [`solve_from_bracket`] for details on observer actions.
 ///
 /// # Errors
 ///
 /// Returns an error if the bracket is invalid, the config is invalid,
-/// or the model or problem returns an unrecovered error during evaluation.
+/// or an endpoint or midpoint evaluation fails without observer recovery.
 pub fn solve<M, P, Obs>(
     model: &M,
     problem: &P,
     bracket: [f64; 2],
     config: &Config,
-    mut observer: Obs,
+    observer: Obs,
 ) -> Result<Solution<M::Input, M::Output>, Error>
 where
     M: Model,
@@ -74,63 +66,31 @@ where
     let [left, right] = bounds.as_array();
 
     let mut best = Best::empty();
-    let mut ctx = EvalContext::new(model, problem, &mut observer);
 
-    // Resolve left endpoint.
-    let (left_eval, left_decision) = ctx.left_endpoint(left);
-    if let Some(eval) = left_eval {
-        best.update(eval);
-    }
-    let left_sign = match left_decision {
-        Decision::Continue(sign) => sign,
-        Decision::StopEarly => return finish(best, Status::StoppedByObserver, 0),
-        Decision::Error(error) => return Err(error),
-    };
-
-    // Resolve right endpoint.
-    let (right_eval, right_decision) = ctx.right_endpoint(right);
-    if let Some(eval) = right_eval {
-        best.update(eval);
-    }
-    let right_sign = match right_decision {
-        Decision::Continue(sign) => sign,
-        Decision::StopEarly => return finish(best, Status::StoppedByObserver, 0),
-        Decision::Error(error) => return Err(error),
-    };
-
-    // Validate bracket signs now that both endpoints are known.
-    let mut bracket = Bracket::new(bounds, left_sign, right_sign)?;
-
-    if best.is_residual_converged(config.residual_tol) {
-        return finish(best, Status::Converged, 0);
-    }
-
-    // Iterate by shrinking the bracket with midpoint evaluations.
-    for iter in 1..=config.max_iters {
-        if bracket.is_x_converged(config.x_abs_tol, config.x_rel_tol) {
-            return finish(best, Status::Converged, iter - 1);
-        }
-
-        // Evaluate the midpoint and update the bracket.
-        let mid = bracket.midpoint();
-        let (mid_eval, mid_decision) = ctx.midpoint(mid, &bracket);
-        if let Some(eval) = mid_eval {
+    // Evaluate left endpoint.
+    let left_sign = match evaluate(model, problem, [left]) {
+        Ok(eval) => {
+            let sign = Sign::of(eval.residuals[0]);
             best.update(eval);
+            sign
         }
-        match mid_decision {
-            Decision::Continue(sign) => bracket.shrink(mid, sign),
-            Decision::StopEarly => {
-                return finish(best, Status::StoppedByObserver, iter);
-            }
-            Decision::Error(error) => return Err(error),
-        }
+        Err(error) => return Err(error.into()),
+    };
 
-        if best.is_residual_converged(config.residual_tol) {
-            return finish(best, Status::Converged, iter);
+    // Evaluate right endpoint.
+    let right_sign = match evaluate(model, problem, [right]) {
+        Ok(eval) => {
+            let sign = Sign::of(eval.residuals[0]);
+            best.update(eval);
+            sign
         }
-    }
+        Err(error) => return Err(error.into()),
+    };
 
-    finish(best, Status::MaxIters, config.max_iters)
+    // Validate bracket signs.
+    let bracket = Bracket::from_bounds(bounds, left_sign, right_sign)?;
+
+    solve_from_bracket_inner(model, problem, bracket, config, best, observer)
 }
 
 /// Runs bisection without observation.
@@ -152,6 +112,101 @@ where
     P: EquationProblem<1, Input = M::Input, Output = M::Output>,
 {
     solve(model, problem, bracket, config, ())
+}
+
+/// Finds a root using bisection with a pre-validated bracket.
+///
+/// This skips endpoint evaluation — the caller is responsible for evaluating
+/// the endpoints and constructing a valid [`Bracket`] with known residual
+/// signs.
+/// This is useful when endpoint evaluation requires domain-specific handling
+/// (e.g., error recovery, noise filtering) that the solver's observer protocol
+/// doesn't cover.
+///
+/// # Observer
+///
+/// The observer receives an [`Event`] for each midpoint evaluation and may:
+/// - Return [`Action::StopEarly`] to stop and return the best evaluation so far.
+/// - Return [`Action::AssumeResidualSign`] to recover from evaluation failures
+///   by providing a residual sign for bracket updates.
+///   When this action is used on a successful evaluation, that evaluation is
+///   not considered for the best solution.
+///
+/// # Notes
+///
+/// The returned [`Solution`] reflects the best successful midpoint evaluation
+/// seen during the solve.
+/// Endpoint evaluations are not tracked — if no midpoint succeeds, this
+/// returns [`Error::NoSuccessfulEvaluation`].
+///
+/// # Errors
+///
+/// Returns an error if the config is invalid or the model or problem returns
+/// an unrecovered error during evaluation.
+pub fn solve_from_bracket<M, P, Obs>(
+    model: &M,
+    problem: &P,
+    bracket: Bracket,
+    config: &Config,
+    observer: Obs,
+) -> Result<Solution<M::Input, M::Output>, Error>
+where
+    M: Model,
+    M::Input: Clone,
+    M::Output: Clone,
+    P: EquationProblem<1, Input = M::Input, Output = M::Output>,
+    Obs: for<'a> Observer<Event<'a, M, P>, Action>,
+{
+    config.validate()?;
+    solve_from_bracket_inner(model, problem, bracket, config, Best::empty(), observer)
+}
+
+/// Core midpoint loop shared by `solve` and `solve_from_bracket`.
+fn solve_from_bracket_inner<M, P, Obs>(
+    model: &M,
+    problem: &P,
+    mut bracket: Bracket,
+    config: &Config,
+    mut best: Best<M::Input, M::Output>,
+    mut observer: Obs,
+) -> Result<Solution<M::Input, M::Output>, Error>
+where
+    M: Model,
+    M::Input: Clone,
+    M::Output: Clone,
+    P: EquationProblem<1, Input = M::Input, Output = M::Output>,
+    Obs: for<'a> Observer<Event<'a, M, P>, Action>,
+{
+    if best.is_residual_converged(config.residual_tol) {
+        return finish(best, Status::Converged, 0);
+    }
+
+    let mut ctx = EvalContext::new(model, problem, &mut observer);
+
+    for iter in 1..=config.max_iters {
+        if bracket.is_x_converged(config.x_abs_tol, config.x_rel_tol) {
+            return finish(best, Status::Converged, iter - 1);
+        }
+
+        let mid = bracket.midpoint();
+        let (mid_eval, mid_decision) = ctx.midpoint(mid, &bracket);
+        if let Some(eval) = mid_eval {
+            best.update(eval);
+        }
+        match mid_decision {
+            Decision::Continue(sign) => bracket.shrink(mid, sign),
+            Decision::StopEarly => {
+                return finish(best, Status::StoppedByObserver, iter);
+            }
+            Decision::Error(error) => return Err(error),
+        }
+
+        if best.is_residual_converged(config.residual_tol) {
+            return finish(best, Status::Converged, iter);
+        }
+    }
+
+    finish(best, Status::MaxIters, config.max_iters)
 }
 
 /// Converts a best tracker into a solution or a "no successful evaluation" error.
@@ -239,6 +294,8 @@ mod tests {
         }
     }
 
+    // --- solve tests (full lifecycle) ---
+
     #[test]
     fn finds_square_root() {
         let model = SquareModel;
@@ -266,27 +323,14 @@ mod tests {
     }
 
     #[test]
-    fn observer_can_stop_iteration() {
-        let model = SquareModel;
+    fn solve_errors_on_endpoint_failure() {
+        // Model fails everywhere — endpoints can't be evaluated.
+        let model = ThresholdModel { threshold: -1.0 };
         let problem = TargetOutputProblem { target: 9.0 };
 
-        let mut midpoint_count = 0usize;
-        let observer = |event: &Event<'_, _, _>| {
-            if matches!(event, Event::Midpoint { .. }) {
-                midpoint_count += 1;
-                if midpoint_count >= 3 {
-                    return Some(Action::StopEarly);
-                }
-            }
-            None
-        };
+        let result = solve_unobserved(&model, &problem, [0.0, 10.0], &Config::default());
 
-        let solution = solve(&model, &problem, [0.0, 10.0], &Config::default(), observer)
-            .expect("should stop cleanly");
-
-        assert_eq!(solution.status, Status::StoppedByObserver);
-        assert_eq!(solution.iters, 3);
-        assert_eq!(midpoint_count, 3);
+        assert!(matches!(result, Err(Error::Model(_))));
     }
 
     #[test]
@@ -304,100 +348,7 @@ mod tests {
         assert_eq!(solution.status, Status::MaxIters);
         assert_eq!(solution.iters, 0);
         // x=2 gives residual |4-9|=5, x=10 gives |100-9|=91
-        // So best endpoint should be x=2
         assert_relative_eq!(solution.x, 2.0);
-    }
-
-    #[test]
-    fn observer_can_recover_from_eval_failure() {
-        // Model fails above x=7, root is at x=3 (for target=9)
-        let model = ThresholdModel { threshold: 7.0 };
-        let problem = TargetOutputProblem { target: 9.0 };
-
-        // Initial bracket [0, 10] would fail at right endpoint (x=10 > threshold=7)
-        // Observer tells solver to use a positive residual for failed points
-        // (points above threshold would have large positive residuals: x^2 - 9 > 0)
-        let observer = |event: &Event<'_, _, _>| {
-            let is_err = event.result().is_err();
-            if is_err {
-                // Failed points are above threshold, so residual would be positive
-                Some(Action::assume_positive())
-            } else {
-                None
-            }
-        };
-
-        let solution = solve(&model, &problem, [0.0, 10.0], &Config::default(), observer)
-            .expect("should recover and solve");
-
-        assert_eq!(solution.status, Status::Converged);
-        assert_relative_eq!(solution.x, 3.0, epsilon = 1e-10);
-    }
-
-    #[test]
-    fn midpoint_failure_assumes_sign() {
-        // Model fails above x=3.5, root is at x=3 (for target=9)
-        // Initial bracket [0, 3.5] is valid, midpoint=1.75 is valid
-        // But as bisection homes in from the left, midpoints > 3.5 will fail
-        let model = ThresholdModel { threshold: 3.5 };
-        let problem = TargetOutputProblem { target: 9.0 };
-
-        let mut recovery_count = 0usize;
-        let observer = |event: &Event<'_, _, _>| {
-            let is_err = event.result().is_err();
-            if is_err {
-                recovery_count += 1;
-                // Failed points are above threshold, so residual would be positive
-                Some(Action::assume_positive())
-            } else {
-                None
-            }
-        };
-
-        // Bracket: left residual at x=0 is 0-9=-9, right residual at x=3.5 is 12.25-9=3.25
-        // Different signs, so valid bracket
-        let solution = solve(&model, &problem, [0.0, 3.5], &Config::default(), observer)
-            .expect("should recover and solve");
-
-        assert_eq!(solution.status, Status::Converged);
-        assert_relative_eq!(solution.x, 3.0, epsilon = 1e-10);
-    }
-
-    #[test]
-    fn assume_residual_sign_discards_eval() {
-        let model = SquareModel;
-        let problem = TargetOutputProblem { target: 9.0 };
-
-        let observer = |event: &Event<'_, _, _>| match event {
-            Event::Left { .. } => Some(Action::assume_negative()),
-            Event::Right { .. } | Event::Midpoint { .. } => None,
-        };
-
-        let config = Config {
-            max_iters: 0,
-            ..Config::default()
-        };
-
-        let solution = solve(&model, &problem, [2.0, 10.0], &config, observer)
-            .expect("should return best endpoint");
-
-        assert_eq!(solution.status, Status::MaxIters);
-        assert_relative_eq!(solution.x, 10.0);
-    }
-
-    #[test]
-    fn errors_when_no_successful_evaluations() {
-        let model = ThresholdModel { threshold: -1.0 };
-        let problem = TargetOutputProblem { target: 9.0 };
-
-        let observer = |event: &Event<'_, _, _>| match event {
-            Event::Left { .. } => Some(Action::assume_negative()),
-            Event::Right { .. } | Event::Midpoint { .. } => Some(Action::assume_positive()),
-        };
-
-        let result = solve(&model, &problem, [0.0, 10.0], &Config::default(), observer);
-
-        assert!(matches!(result, Err(Error::NoSuccessfulEvaluation)));
     }
 
     #[test]
@@ -416,5 +367,116 @@ mod tests {
 
         assert_eq!(solution.status, Status::Converged);
         assert_eq!(solution.iters, 0);
+    }
+
+    // --- solve_from_bracket tests (midpoint loop only) ---
+
+    #[test]
+    fn from_bracket_finds_root() {
+        let model = SquareModel;
+        let problem = TargetOutputProblem { target: 9.0 };
+
+        // x=0: residual = 0-9 = -9 (negative)
+        // x=10: residual = 100-9 = 91 (positive)
+        let bracket =
+            Bracket::new((0.0, Sign::Negative), (10.0, Sign::Positive)).expect("valid bracket");
+
+        let solution = solve_from_bracket(&model, &problem, bracket, &Config::default(), ())
+            .expect("should solve");
+
+        assert_eq!(solution.status, Status::Converged);
+        assert_relative_eq!(solution.x, 3.0, epsilon = 1e-10);
+    }
+
+    #[test]
+    fn observer_can_stop_iteration() {
+        let model = SquareModel;
+        let problem = TargetOutputProblem { target: 9.0 };
+
+        let bracket =
+            Bracket::new((0.0, Sign::Negative), (10.0, Sign::Positive)).expect("valid bracket");
+
+        let mut eval_count = 0usize;
+        let observer = |_event: &Event<'_, _, _>| {
+            eval_count += 1;
+            if eval_count >= 3 {
+                Some(Action::StopEarly)
+            } else {
+                None
+            }
+        };
+
+        let solution = solve_from_bracket(&model, &problem, bracket, &Config::default(), observer)
+            .expect("should stop cleanly");
+
+        assert_eq!(solution.status, Status::StoppedByObserver);
+        assert_eq!(solution.iters, 3);
+        assert_eq!(eval_count, 3);
+    }
+
+    #[test]
+    fn midpoint_failure_assumes_sign() {
+        // Model fails above x=3.5, root is at x=3 (for target=9)
+        let model = ThresholdModel { threshold: 3.5 };
+        let problem = TargetOutputProblem { target: 9.0 };
+
+        // x=0: residual = -9 (negative), x=3.5: residual = 3.25 (positive)
+        let bracket =
+            Bracket::new((0.0, Sign::Negative), (3.5, Sign::Positive)).expect("valid bracket");
+
+        let mut recovery_count = 0usize;
+        let observer = |event: &Event<'_, _, _>| {
+            if matches!(event, Event::ModelFailed { .. }) {
+                recovery_count += 1;
+                Some(Action::assume_positive())
+            } else {
+                None
+            }
+        };
+
+        let solution = solve_from_bracket(&model, &problem, bracket, &Config::default(), observer)
+            .expect("should recover and solve");
+
+        assert_eq!(solution.status, Status::Converged);
+        assert_relative_eq!(solution.x, 3.0, epsilon = 1e-10);
+    }
+
+    #[test]
+    fn assume_residual_sign_discards_eval() {
+        let model = SquareModel;
+        let problem = TargetOutputProblem { target: 9.0 };
+
+        // x=2: residual = -5 (negative), x=10: residual = 91 (positive)
+        let bracket =
+            Bracket::new((2.0, Sign::Negative), (10.0, Sign::Positive)).expect("valid bracket");
+
+        // Assume positive on every midpoint — always shrink from the right.
+        // The actual eval is discarded, so best stays empty.
+        let observer = |_event: &Event<'_, _, _>| Some(Action::assume_positive());
+
+        let config = Config {
+            max_iters: 3,
+            ..Config::default()
+        };
+
+        let result = solve_from_bracket(&model, &problem, bracket, &config, observer);
+
+        assert!(matches!(result, Err(Error::NoSuccessfulEvaluation)));
+    }
+
+    #[test]
+    fn errors_when_no_successful_evaluations() {
+        let model = ThresholdModel { threshold: -1.0 };
+        let problem = TargetOutputProblem { target: 9.0 };
+
+        let bracket =
+            Bracket::new((0.0, Sign::Negative), (10.0, Sign::Positive)).expect("valid bracket");
+
+        // Model fails everywhere, observer assumes signs to keep going.
+        let observer = |_event: &Event<'_, _, _>| Some(Action::assume_positive());
+
+        let result = solve_from_bracket(&model, &problem, bracket, &Config::default(), observer);
+
+        assert!(matches!(result, Err(Error::NoSuccessfulEvaluation)));
     }
 }

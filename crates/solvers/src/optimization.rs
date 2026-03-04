@@ -13,6 +13,6 @@
 
 mod evaluate;
 
-pub use evaluate::{EvalError, EvaluateResult, Evaluation, evaluate};
+pub use evaluate::{EvalError, Evaluation, evaluate};
 
 pub mod golden_section;
