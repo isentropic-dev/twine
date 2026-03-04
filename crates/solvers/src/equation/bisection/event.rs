@@ -1,8 +1,6 @@
 use twine_core::{EquationProblem, Model};
 
-use crate::equation::EvaluateResult;
-
-use super::Bracket;
+use crate::equation::{EvaluateResult, bracket::Bracket};
 
 /// Event emitted by the bisection solver for each evaluation.
 pub enum Event<'a, M, P>

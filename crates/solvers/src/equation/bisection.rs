@@ -1,24 +1,24 @@
 mod action;
-mod best;
-mod bracket;
 mod config;
 mod decision;
 mod error;
 mod eval_context;
 mod event;
-mod solution;
 
 pub use action::Action;
-pub use bracket::{Bracket, BracketError, Sign};
 pub use config::{Config, ConfigError};
 pub use error::Error;
 pub use event::Event;
-pub use solution::{Solution, Status};
+
+pub use crate::equation::{
+    bracket::{Bracket, BracketError, Sign},
+    solution::{Solution, Status},
+};
 
 use twine_core::{EquationProblem, Model, Observer};
 
-use best::Best;
-use bracket::Bounds;
+use crate::equation::{best::Best, bracket::Bounds};
+
 use decision::Decision;
 use eval_context::EvalContext;
 
@@ -83,7 +83,7 @@ where
     }
     let left_sign = match left_decision {
         Decision::Continue(sign) => sign,
-        Decision::StopEarly => return best.finish(Status::StoppedByObserver, 0),
+        Decision::StopEarly => return finish(best, Status::StoppedByObserver, 0),
         Decision::Error(error) => return Err(error),
     };
 
@@ -94,7 +94,7 @@ where
     }
     let right_sign = match right_decision {
         Decision::Continue(sign) => sign,
-        Decision::StopEarly => return best.finish(Status::StoppedByObserver, 0),
+        Decision::StopEarly => return finish(best, Status::StoppedByObserver, 0),
         Decision::Error(error) => return Err(error),
     };
 
@@ -102,13 +102,13 @@ where
     let mut bracket = Bracket::new(bounds, left_sign, right_sign)?;
 
     if best.is_residual_converged(config.residual_tol) {
-        return best.finish(Status::Converged, 0);
+        return finish(best, Status::Converged, 0);
     }
 
     // Iterate by shrinking the bracket with midpoint evaluations.
     for iter in 1..=config.max_iters {
         if bracket.is_x_converged(config.x_abs_tol, config.x_rel_tol) {
-            return best.finish(Status::Converged, iter - 1);
+            return finish(best, Status::Converged, iter - 1);
         }
 
         // Evaluate the midpoint and update the bracket.
@@ -120,17 +120,17 @@ where
         match mid_decision {
             Decision::Continue(sign) => bracket.shrink(mid, sign),
             Decision::StopEarly => {
-                return best.finish(Status::StoppedByObserver, iter);
+                return finish(best, Status::StoppedByObserver, iter);
             }
             Decision::Error(error) => return Err(error),
         }
 
         if best.is_residual_converged(config.residual_tol) {
-            return best.finish(Status::Converged, iter);
+            return finish(best, Status::Converged, iter);
         }
     }
 
-    best.finish(Status::MaxIters, config.max_iters)
+    finish(best, Status::MaxIters, config.max_iters)
 }
 
 /// Runs bisection without observation.
@@ -152,6 +152,12 @@ where
     P: EquationProblem<1, Input = M::Input, Output = M::Output>,
 {
     solve(model, problem, bracket, config, ())
+}
+
+/// Converts a best tracker into a solution or a "no successful evaluation" error.
+fn finish<I, O>(best: Best<I, O>, status: Status, iters: usize) -> Result<Solution<I, O>, Error> {
+    best.into_solution(status, iters)
+        .ok_or(Error::NoSuccessfulEvaluation)
 }
 
 #[cfg(test)]

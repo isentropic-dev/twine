@@ -2,9 +2,9 @@ use std::error::Error as StdError;
 
 use thiserror::Error;
 
-use crate::equation::EvalError;
+use crate::equation::{EvalError, bracket::BracketError};
 
-use super::{bracket::BracketError, config::ConfigError};
+use super::config::ConfigError;
 
 /// Errors that can occur during bisection solving.
 #[derive(Debug, Error)]

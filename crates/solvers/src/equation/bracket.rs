@@ -29,7 +29,7 @@ impl Bracket {
     /// # Errors
     ///
     /// Returns `BracketError::NoSignChange` if the signs do not bracket a root.
-    pub(super) fn new(
+    pub(crate) fn new(
         bounds: Bounds,
         left_sign: Sign,
         right_sign: Sign,
@@ -72,7 +72,7 @@ impl Bracket {
     }
 
     /// Shrinks the bracket using a new endpoint and its residual sign.
-    pub(super) fn shrink(&mut self, x: f64, sign: Sign) {
+    pub(crate) fn shrink(&mut self, x: f64, sign: Sign) {
         if self.left_sign == sign {
             self.left = x;
             self.left_sign = sign;
@@ -104,9 +104,9 @@ impl Sign {
     }
 }
 
-/// Ordered finite bounds for a bisection bracket.
+/// Ordered finite bounds for a bracket.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(super) struct Bounds {
+pub(crate) struct Bounds {
     left: f64,
     right: f64,
 }
@@ -117,7 +117,7 @@ impl Bounds {
     /// # Errors
     ///
     /// Returns `BracketError` if endpoints are non-finite or zero width.
-    pub(super) fn new(bracket: [f64; 2]) -> Result<Self, BracketError> {
+    pub(crate) fn new(bracket: [f64; 2]) -> Result<Self, BracketError> {
         let [left, right] = bracket;
 
         if !left.is_finite() || !right.is_finite() {
@@ -140,7 +140,7 @@ impl Bounds {
     }
 
     /// Returns the bounds as an array.
-    pub(super) fn as_array(&self) -> [f64; 2] {
+    pub(crate) fn as_array(&self) -> [f64; 2] {
         [self.left, self.right]
     }
 }

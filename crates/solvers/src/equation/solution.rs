@@ -11,7 +11,7 @@ pub enum Status {
     StoppedByObserver,
 }
 
-/// The result of a bisection solve.
+/// The result of an equation solve.
 #[derive(Debug, Clone)]
 pub struct Solution<I, O> {
     /// Final solver status.
