@@ -21,8 +21,8 @@ pub enum EvalError<ME, PE> {
     Problem(#[source] PE),
 }
 
-/// Type alias for the result of [`evaluate`].
-pub type EvaluateResult<M, P, const N: usize> = Result<
+/// Result type for [`evaluate`], reducing signature complexity.
+type EvaluateResult<M, P, const N: usize> = Result<
     Evaluation<<M as Model>::Input, <M as Model>::Output, N>,
     EvalError<<M as Model>::Error, <P as EquationProblem<N>>::Error>,
 >;

@@ -1,23 +1,24 @@
 use crate::equation::Evaluation;
 
-use super::{Error, Solution, Status};
+use super::solution::{Solution, Status};
 
 /// Tracks the best evaluation encountered so far.
 ///
 /// The best evaluation is defined by minimum residual magnitude.
-/// The `Option` lets us represent the state before any successful evaluation.
-pub(super) struct Best<I, O> {
+/// The bracket can shrink without any successful evaluation (via observer
+/// recovery), so `None` is a normal operating state — not an error condition.
+pub(crate) struct Best<I, O> {
     eval: Option<Evaluation<I, O, 1>>,
 }
 
 impl<I, O> Best<I, O> {
     /// Creates an empty best tracker.
-    pub(super) fn empty() -> Self {
+    pub(crate) fn empty() -> Self {
         Self { eval: None }
     }
 
     /// Updates the best evaluation if the residual magnitude improves.
-    pub(super) fn update(&mut self, eval: Evaluation<I, O, 1>) {
+    pub(crate) fn update(&mut self, eval: Evaluation<I, O, 1>) {
         if let Some(best) = self.eval.as_ref()
             && eval.residuals[0].abs() >= best.residuals[0].abs()
         {
@@ -27,20 +28,18 @@ impl<I, O> Best<I, O> {
     }
 
     /// Returns true if the best residual meets the tolerance.
-    pub(super) fn is_residual_converged(&self, residual_tol: f64) -> bool {
+    pub(crate) fn is_residual_converged(&self, residual_tol: f64) -> bool {
         self.eval
             .as_ref()
             .is_some_and(|eval| eval.residuals[0].abs() <= residual_tol)
     }
 
-    /// Finalizes the solver using the best available evaluation.
+    /// Builds a solution from the best evaluation.
     ///
-    /// # Errors
-    ///
-    /// Returns `Error::NoSuccessfulEvaluation` if no successful evaluation is stored.
-    pub(super) fn finish(self, status: Status, iters: usize) -> Result<Solution<I, O>, Error> {
-        let eval = self.eval.ok_or(Error::NoSuccessfulEvaluation)?;
-        Ok(Solution {
+    /// Returns `None` if no successful evaluation has been recorded.
+    pub(crate) fn into_solution(self, status: Status, iters: usize) -> Option<Solution<I, O>> {
+        let eval = self.eval?;
+        Some(Solution {
             status,
             x: eval.x[0],
             residual: eval.residuals[0],
@@ -74,7 +73,7 @@ mod tests {
         best.update(eval(3.0, 1.0));
 
         let solution = best
-            .finish(Status::StoppedByObserver, 0)
+            .into_solution(Status::StoppedByObserver, 0)
             .expect("best eval");
 
         assert_relative_eq!(solution.x, 3.0);
@@ -88,7 +87,7 @@ mod tests {
         best.update(eval(2.0, 2.0));
 
         let solution = best
-            .finish(Status::StoppedByObserver, 0)
+            .into_solution(Status::StoppedByObserver, 0)
             .expect("best eval");
 
         assert_relative_eq!(solution.x, 1.0);
@@ -96,7 +95,7 @@ mod tests {
     }
 
     #[test]
-    fn residual_converged_requires_best() {
+    fn residual_converged_requires_eval() {
         let best: Best<(), ()> = Best::empty();
         assert!(!best.is_residual_converged(1e-3));
     }
@@ -111,18 +110,17 @@ mod tests {
     }
 
     #[test]
-    fn finish_errors_without_eval() {
+    fn into_solution_returns_none_without_eval() {
         let best: Best<(), ()> = Best::empty();
-        let err = best.finish(Status::StoppedByObserver, 0);
-        assert!(matches!(err, Err(Error::NoSuccessfulEvaluation)));
+        assert!(best.into_solution(Status::StoppedByObserver, 0).is_none());
     }
 
     #[test]
-    fn finish_builds_solution() {
+    fn into_solution_builds_solution() {
         let mut best = Best::empty();
         best.update(eval(2.0, -1.25));
 
-        let solution = best.finish(Status::Converged, 4).expect("best eval");
+        let solution = best.into_solution(Status::Converged, 4).expect("best eval");
 
         assert_eq!(solution.status, Status::Converged);
         assert_eq!(solution.iters, 4);

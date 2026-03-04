@@ -1,4 +1,6 @@
-use super::{Action, Error, Sign};
+use crate::equation::bracket::Sign;
+
+use super::{Action, Error};
 
 /// Control flow outcomes for a single evaluation.
 #[derive(Debug)]

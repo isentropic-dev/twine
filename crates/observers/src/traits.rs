@@ -78,9 +78,11 @@ where
     P: EquationProblem<1, Input = M::Input, Output = M::Output>,
 {
     fn residual(&self) -> f64 {
-        match self.result() {
-            Ok(eval) => eval.residuals[0],
-            Err(_) => f64::NAN,
+        match self {
+            bisection::Event::Evaluated { point, .. } => point.residual,
+            bisection::Event::ModelFailed { .. } | bisection::Event::ProblemFailed { .. } => {
+                f64::NAN
+            }
         }
     }
 }
@@ -209,6 +211,22 @@ mod tests {
         }
     }
 
+    struct FailingEqProblem;
+
+    impl EquationProblem<1> for FailingEqProblem {
+        type Input = f64;
+        type Output = f64;
+        type Error = Failure;
+
+        fn input(&self, x: &[f64; 1]) -> Result<f64, Failure> {
+            Ok(x[0])
+        }
+
+        fn residuals(&self, _: &f64, _: &f64) -> Result<[f64; 1], Failure> {
+            Err(Failure)
+        }
+    }
+
     struct FailingOptProblem;
 
     impl OptimizationProblem<1> for FailingOptProblem {
@@ -227,46 +245,52 @@ mod tests {
 
     // --- HasResidual for bisection::Event ---
 
-    #[test]
-    fn bisection_residual_ok() {
-        // Drive the solver one step to get a real event with a valid residual.
-        // LinearProblem: residual = output = input = x, so residual ≠ NAN.
-        let model = Identity;
-        let problem = LinearProblem;
-        let mut residual_seen = None;
-        let _ = bisection::solve(
-            &model,
-            &problem,
-            [-1.0, 1.0],
-            &bisection::Config::default(),
-            |event: &bisection::Event<'_, Identity, LinearProblem>| {
-                if residual_seen.is_none() {
-                    residual_seen = Some(event.residual());
-                }
-                None
-            },
-        );
-        let r = residual_seen.expect("at least one event emitted");
-        assert!(r.is_finite(), "expected finite residual, got {r}");
+    fn test_bracket() -> bisection::Bracket {
+        bisection::Bracket::new(
+            (0.0, bisection::Sign::Negative),
+            (1.0, bisection::Sign::Positive),
+        )
+        .unwrap()
     }
 
     #[test]
-    fn bisection_residual_nan_on_model_error() {
-        // FailingModel always errors, so every event result is Err → NAN.
-        let model = FailingModel;
-        let problem = LinearProblem;
-        let mut got_nan = false;
-        let _ = bisection::solve(
-            &model,
-            &problem,
-            [-1.0, 1.0],
-            &bisection::Config::default(),
-            |event: &bisection::Event<'_, FailingModel, LinearProblem>| {
-                got_nan = event.residual().is_nan();
-                Some(bisection::Action::StopEarly)
-            },
-        );
-        assert!(got_nan);
+    fn bisection_residual_evaluated() {
+        let input = 1.0_f64;
+        let output = 1.0_f64;
+        let bracket = test_bracket();
+        let event: bisection::Event<'_, Identity, LinearProblem> = bisection::Event::Evaluated {
+            point: bisection::Point::new(1.0, 0.5),
+            input: &input,
+            output: &output,
+            bracket: &bracket,
+        };
+        assert_relative_eq!(event.residual(), 0.5);
+    }
+
+    #[test]
+    fn bisection_residual_nan_on_model_failed() {
+        let error = Failure;
+        let bracket = test_bracket();
+        let event: bisection::Event<'_, FailingModel, LinearProblem> =
+            bisection::Event::ModelFailed {
+                x: 0.5,
+                error: &error,
+                bracket: &bracket,
+            };
+        assert!(event.residual().is_nan());
+    }
+
+    #[test]
+    fn bisection_residual_nan_on_problem_failed() {
+        let error = Failure;
+        let bracket = test_bracket();
+        let event: bisection::Event<'_, Identity, FailingEqProblem> =
+            bisection::Event::ProblemFailed {
+                x: 0.5,
+                error: &error,
+                bracket: &bracket,
+            };
+        assert!(event.residual().is_nan());
     }
 
     // --- HasObjective for golden_section::Event ---

@@ -10,8 +10,11 @@
 //!
 //! [`EquationProblem`]: twine_core::EquationProblem
 
+mod best;
 mod evaluate;
 
-pub use evaluate::{EvalError, EvaluateResult, Evaluation, evaluate};
-
 pub mod bisection;
+pub mod bracket;
+pub mod solution;
+
+pub use evaluate::{EvalError, Evaluation, evaluate};

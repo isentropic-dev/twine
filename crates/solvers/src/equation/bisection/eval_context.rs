@@ -1,8 +1,8 @@
 use twine_core::{EquationProblem, Model, Observer};
 
-use crate::equation::{Evaluation, evaluate};
+use crate::equation::{EvalError, Evaluation, bracket::Bracket, evaluate};
 
-use super::{Action, Bracket, Decision, Event};
+use super::{Action, Decision, Event, Point};
 
 type EvalOutcome<I, O> = (Option<Evaluation<I, O, 1>>, Decision);
 
@@ -38,68 +38,64 @@ where
         }
     }
 
-    /// Evaluates the left endpoint and returns the observer decision.
-    pub(crate) fn left_endpoint(&mut self, x: f64) -> EvalOutcome<M::Input, M::Output> {
-        let result = evaluate(self.model, self.problem, [x]);
-        let action = self.observer.observe(&Event::Left { x, result: &result });
-
-        let (residual, mut eval) = match result {
-            Ok(eval) => (Ok(eval.residuals[0]), Some(eval)),
-            Err(error) => (Err(error.into()), None),
-        };
-
-        let decision = Decision::new(action, residual);
-
-        if matches!(action, Some(Action::AssumeResidualSign(_))) {
-            eval = None;
-        }
-
-        (eval, decision)
-    }
-
-    /// Evaluates the right endpoint and returns the observer decision.
-    pub(crate) fn right_endpoint(&mut self, x: f64) -> EvalOutcome<M::Input, M::Output> {
-        let result = evaluate(self.model, self.problem, [x]);
-        let action = self.observer.observe(&Event::Right { x, result: &result });
-
-        let (residual, mut eval) = match result {
-            Ok(eval) => (Ok(eval.residuals[0]), Some(eval)),
-            Err(error) => (Err(error.into()), None),
-        };
-
-        let decision = Decision::new(action, residual);
-
-        if matches!(action, Some(Action::AssumeResidualSign(_))) {
-            eval = None;
-        }
-
-        (eval, decision)
-    }
-
-    /// Evaluates the midpoint and returns the observer decision.
+    /// Evaluates the midpoint, emits an event, and returns the outcome.
     pub(crate) fn midpoint(
         &mut self,
         x: f64,
         bracket: &Bracket,
     ) -> EvalOutcome<M::Input, M::Output> {
-        let result = evaluate(self.model, self.problem, [x]);
-        let action = self.observer.observe(&Event::Midpoint {
-            x,
-            bracket,
-            result: &result,
-        });
+        match evaluate(self.model, self.problem, [x]) {
+            Ok(eval) => {
+                let point = Point::from(&eval);
+                let event = Event::Evaluated {
+                    point,
+                    input: &eval.snapshot.input,
+                    output: &eval.snapshot.output,
+                    bracket,
+                };
+                let action = self.observer.observe(&event);
+                let decision = Decision::new(action, Ok(point.residual));
 
-        let (residual, mut eval) = match result {
-            Ok(eval) => (Ok(eval.residuals[0]), Some(eval)),
-            Err(error) => (Err(error.into()), None),
-        };
+                let kept_eval = if matches!(action, Some(Action::AssumeResidualSign(_))) {
+                    None
+                } else {
+                    Some(eval)
+                };
 
-        let decision = Decision::new(action, residual);
-
-        if matches!(action, Some(Action::AssumeResidualSign(_))) {
-            eval = None;
+                (kept_eval, decision)
+            }
+            Err(error) => {
+                let action = Self::observe_failure(x, bracket, &error, self.observer);
+                let decision = Decision::new(action, Err(error.into()));
+                (None, decision)
+            }
         }
+    }
 
-        (eval, decision)
+    /// Emits a failure event and returns the observer's action.
+    fn observe_failure(
+        x: f64,
+        bracket: &Bracket,
+        error: &EvalError<M::Error, P::Error>,
+        observer: &mut Obs,
+    ) -> Option<Action> {
+        match error {
+            EvalError::Model(e) => {
+                let event = Event::ModelFailed {
+                    x,
+                    error: e,
+                    bracket,
+                };
+                observer.observe(&event)
+            }
+            EvalError::Problem(e) => {
+                let event = Event::ProblemFailed {
+                    x,
+                    error: e,
+                    bracket,
+                };
+                observer.observe(&event)
+            }
+        }
     }
 }

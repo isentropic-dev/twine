@@ -1,4 +1,4 @@
-use super::bracket::Sign;
+use crate::equation::bracket::Sign;
 
 /// Control actions supported by the bisection solver.
 #[derive(Debug, Clone, Copy, PartialEq)]
